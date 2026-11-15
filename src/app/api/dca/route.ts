@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { DcaError, runDca } from "@/lib/dca.ts";
 import type { DcaRequest } from "@/lib/types.ts";
-import { validateRequest } from "@/lib/validate.ts";
+import { cardanoUnit, normalizeAddress, validateRequest } from "@/lib/validate.ts";
 
 
 export async function POST(request: Request) {
@@ -18,8 +18,9 @@ export async function POST(request: Request) {
   }
 
   const req: DcaRequest = {
-    address: String(body.address).trim(),
+    address: normalizeAddress(String(body.address), body.chain!),
     chain: body.chain!,
+    ...(cardanoUnit(String(body.address), body.chain!) ? { unit: cardanoUnit(String(body.address), body.chain!) } : {}),
     amount: Number(body.amount),
     startMonth: String(body.startMonth),
     endMonth: String(body.endMonth),

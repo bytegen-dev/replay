@@ -8,6 +8,7 @@ import {
   gtTopPool,
   type ResolvedToken,
 } from "./providers.ts";
+import { fillGaps, gtCardanoSeries } from "./gtCardano.ts";
 import { selectAllMonths } from "./select.ts";
 import type { DailyPoint, DcaRequest, DcaResponse, PriceSource, SourceLink } from "./types.ts";
 
@@ -90,6 +91,20 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
     }
   }
 
+  if (source === "none" && req.chain === "cardano" && req.unit) {
+    try {
+      const gt = await gtCardanoSeries(req.address, req.unit, null, from, to);
+      if (gt) {
+        points = gt.points;
+        source = "GeckoTerminal";
+        token = { id: null, symbol: gt.symbol, name: gt.name, price: gt.price };
+        sources.push(...gt.sources);
+      }
+    } catch (e) {
+      warnings.push(`GeckoTerminal unavailable (${e instanceof Error ? e.message : "error"})`);
+    }
+  }
+
   if (source === "none") {
     throw new DcaError(
       404,
@@ -99,13 +114,29 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
     );
   }
 
-  const rows = selectAllMonths(req.startMonth, req.endMonth, points, {
-    basis: req.basis,
-    basisDay: req.basisDay,
-    source,
-    today,
-    earliestAllowed,
-  });
+  const selectOpts = { basis: req.basis, basisDay: req.basisDay, source, today, earliestAllowed };
+  let rows = selectAllMonths(req.startMonth, req.endMonth, points, selectOpts);
+
+  // Cardano: CoinGecko's free tier stops at 365 days, but GeckoTerminal's pools reach further back.
+  // Only ask for them when a month is actually missing, and only to fill those days.
+  if (req.chain === "cardano" && source === "CoinGecko" && rows.some((r) => r.price === null && !r.notes.some((n) => n.code === "future"))) {
+    try {
+      const gt = await gtCardanoSeries(req.address, req.unit, token.symbol ?? token.name, from, to);
+      if (gt) {
+        points = fillGaps(points.map((p) => ({ ...p, source: "CoinGecko" as const })), gt.points);
+        rows = selectAllMonths(req.startMonth, req.endMonth, points, selectOpts);
+        const filled = rows.filter((r) => r.source === "GeckoTerminal");
+        if (filled.length) {
+          sources.push(...gt.sources);
+          warnings.push(
+            `${filled.length} older ${filled.length === 1 ? "month uses" : "months use"} GeckoTerminal pool prices (${filled.map((r) => r.month).join(", ")}). Cardano pools are thin and trade on few days, so check the Note column.`,
+          );
+        }
+      }
+    } catch (e) {
+      warnings.push(`GeckoTerminal pool prices were unavailable (${e instanceof Error ? e.message : "error"}); older months stay n/a.`);
+    }
+  }
 
   let currentPrice = token.price;
   if (currentPrice === null) {

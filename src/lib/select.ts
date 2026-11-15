@@ -88,14 +88,13 @@ export function selectMonthPrice(
   if (target > opts.today) {
     return empty("future", `${target} has not happened yet; no price`);
   }
-  if (opts.earliestAllowed && target < opts.earliestAllowed) {
+  const point = findNearest(byDate, target);
+  if (!point && opts.earliestAllowed && target < opts.earliestAllowed) {
     return empty(
       "out-of-range",
       `No data: ${target} is before ${opts.earliestAllowed}, the oldest day the free CoinGecko tier serves (last 365 days)`,
     );
   }
-
-  const point = findNearest(byDate, target);
   if (!point) {
     return empty("no-data", `No price within ${MAX_OFFSET_DAYS} days of ${target}`);
   }
@@ -114,7 +113,7 @@ export function selectMonthPrice(
     targetDate: target,
     priceDate: point.date,
     price: point.price,
-    source: opts.source,
+    source: point.source ?? opts.source,
     notes,
   };
 }

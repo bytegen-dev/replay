@@ -18,6 +18,8 @@ export interface DailyPoint {
   price: number;
   /** 24h volume in USD, when the source provides it. */
   volume?: number;
+  /** Which source this point came from, when a series mixes sources. Falls back to the run's source. */
+  source?: PriceSource;
 }
 
 export type NoteCode =
@@ -76,4 +78,6 @@ export interface DcaRequest {
   endMonth: string;
   basis: Basis;
   basisDay?: number;
+  /** Cardano only: the full asset id (policy + token name in hex), when the user pasted one. */
+  unit?: string;
 }

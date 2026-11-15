@@ -4,7 +4,9 @@ import { CHAINS, type Chain, type DcaRequest } from "./types.ts";
 export const MAX_MONTHS = 72;
 
 const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
-const CARDANO_POLICY_RE = /^[0-9a-fA-F]{56}$/;
+// A policy ID is 56 hex characters. The full asset ID ("unit") appends the token name in hex (up to 32 bytes).
+const CARDANO_POLICY_RE = /^[0-9a-fA-F]{56}(?:[0-9a-fA-F]{2}){0,32}$/;
+const POLICY_LEN = 56;
 const SOLANA_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 type AddressKind = "evm" | "cardano" | "solana";
@@ -24,6 +26,21 @@ const WRONG_CHAIN_HINT: Record<AddressKind, string> = {
   solana: "That looks like a Solana address. Choose Solana.",
 };
 
+/**
+ * The form we send to the price providers. Cardano: a pasted asset ID (policy + token name) is cut
+ * back to the lowercase 56-character policy ID, the only form CoinGecko looks up. Others: trimmed.
+ */
+export function normalizeAddress(address: string, chain: Chain): string {
+  const a = address.trim();
+  return chain === "cardano" && CARDANO_POLICY_RE.test(a) ? a.slice(0, POLICY_LEN).toLowerCase() : a;
+}
+
+/** The full Cardano asset id (lowercase) when the user pasted policy + token name, otherwise undefined. */
+export function cardanoUnit(address: string, chain: Chain): string | undefined {
+  const a = address.trim();
+  return chain === "cardano" && a.length > POLICY_LEN && CARDANO_POLICY_RE.test(a) ? a.toLowerCase() : undefined;
+}
+
 export function validateAddress(address: string, chain: Chain): string | null {
   const a = address.trim();
   if (!a) return chain === "cardano" ? "Policy ID is required" : "Contract address is required";
@@ -31,7 +48,7 @@ export function validateAddress(address: string, chain: Chain): string | null {
   if (detected && detected !== kindOf(chain)) return WRONG_CHAIN_HINT[detected];
   switch (chain) {
     case "cardano":
-      return CARDANO_POLICY_RE.test(a) ? null : "Cardano policy ID must be 56 hex characters";
+      return CARDANO_POLICY_RE.test(a) ? null : "Enter the 56-character policy ID (the token name in hex may follow it)";
     case "solana":
       return SOLANA_RE.test(a) ? null : "Solana address must be 32-44 base58 characters";
     default:

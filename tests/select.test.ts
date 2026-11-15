@@ -83,14 +83,20 @@ test("future target is n/a", () => {
   assert.equal(row.notes[0].code, "future");
 });
 
-test("target before free-tier window is out-of-range, even if data happened to exist", () => {
-  const row = selectMonthPrice(
-    "2024-12",
-    map([{ date: "2024-12-31", price: 1 }]),
-    opts({ earliestAllowed: "2025-11-14" }),
-  );
+test("target before free-tier window is out-of-range when no source has a price near it", () => {
+  const row = selectMonthPrice("2024-12", map([]), opts({ earliestAllowed: "2025-11-14" }));
   assert.equal(row.price, null);
   assert.equal(row.notes[0].code, "out-of-range");
+});
+
+test("older data from another source is used even before the free window", () => {
+  const row = selectMonthPrice(
+    "2024-12",
+    map([{ date: "2024-12-31", price: 1, source: "GeckoTerminal" }]),
+    opts({ earliestAllowed: "2025-11-14" }),
+  );
+  assert.equal(row.price, 1);
+  assert.equal(row.source, "GeckoTerminal", "a point's own source beats the run's default");
 });
 
 test("low volume is flagged", () => {

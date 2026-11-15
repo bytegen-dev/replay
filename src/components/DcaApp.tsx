@@ -4,6 +4,10 @@ import { AlertTriangle, Check, Copy, FileSpreadsheet, Loader2, Settings, Share2,
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
 import { MonthPicker } from "@/components/MonthPicker";
+import { StockPicker } from "@/components/StockPicker";
+import { TokenDetails } from "@/components/TokenDetails";
+import { TokenSearchInput } from "@/components/TokenSearch";
+import { type XStock } from "@/lib/xstocks.ts";
 import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -97,8 +101,11 @@ async function download(url: string, body: unknown, filename: string) {
 
 export function DcaApp() {
   const [address, setAddress] = useState("");
-  const [chain, setChain] = useState<Chain>("cardano");
-  const [amount, setAmount] = useState("200");
+  const [chain, setChain] = useState<Chain>("ethereum");
+  // "stock" mode picks a tokenized stock (xStock) from a list instead of typing an address; it is always Solana.
+  const [mode, setMode] = useState<"token" | "stock">("token");
+  const [stock, setStock] = useState<XStock | null>(null);
+  const [amount, setAmount] = useState("500");
   // Defaults depend on the current date, so set them after mount (not during prerender).
   const [startMonth, setStartMonth] = useState("");
   const [endMonth, setEndMonth] = useState("");
@@ -145,8 +152,8 @@ export function DcaApp() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const input = {
-      address,
-      chain,
+      address: mode === "stock" ? (stock?.mint ?? "") : address,
+      chain: mode === "stock" ? ("solana" as Chain) : chain,
       amount: Number(amount),
       startMonth,
       endMonth,
@@ -154,6 +161,7 @@ export function DcaApp() {
       ...(basis === "day-of-month" ? { basisDay } : {}),
     };
     const errs = validateRequest(input);
+    if (mode === "stock" && !stock) errs.address = "Pick a stock from the list";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setLoading(true);
@@ -165,7 +173,7 @@ export function DcaApp() {
       const res = await fetch("/api/dca", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...input, address: address.trim() }),
+        body: JSON.stringify({ ...input, address: input.address.trim() }),
       });
       const j = await res.json();
       if (!res.ok) {
@@ -331,22 +339,62 @@ export function DcaApp() {
           ) : (
           <form onSubmit={submit} noValidate className="flex flex-col gap-4">
             <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-4">
+              <div className="min-[480px]:col-span-full">
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  spacing={0}
+                  value={mode}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    setMode(v as "token" | "stock");
+                    setErrors((e) => ({ ...e, address: undefined }));
+                  }}
+                  className="w-full sm:w-72"
+                  aria-label="What to check"
+                >
+                  {(
+                    [
+                      ["token", "Token"],
+                      ["stock", "xStocks"],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <ToggleGroupItem
+                      key={v}
+                      value={v}
+                      className="min-h-11 flex-1 rounded-none border border-border px-2 text-sm sm:h-10 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
               <div className="min-[480px]:col-span-2">
-                <Field id="address" label={chain === "cardano" ? "Policy ID" : "Contract address"} error={errors.address}>
-                  <Input
-                    id="address"
-                    className="h-11 text-base sm:h-10 sm:text-sm"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder={chain === "cardano" ? "56-character policy ID" : chain === "solana" ? "base58 mint address" : "0x..."}
-                    spellCheck={false}
-                    autoComplete="off"
-                    aria-invalid={!!errors.address}
-                  />
-                </Field>
+                {mode === "stock" ? (
+                  <Field id="stock" label="Stock (tokenized, on Solana)" error={errors.address}>
+                    <StockPicker id="stock" value={stock} invalid={!!errors.address} onChange={(s) => (setStock(s), setErrors((e) => ({ ...e, address: undefined })))} />
+                    {stock && <p className="text-xs break-all text-muted-foreground">{stock.mint}</p>}
+                  </Field>
+                ) : (
+                  <Field id="address" label={chain === "cardano" ? "Search or paste policy ID" : "Search or paste contract address"} error={errors.address}>
+                    <TokenSearchInput
+                      id="address"
+                      value={address}
+                      onChange={setAddress}
+                      chain={chain}
+                      invalid={!!errors.address}
+                      placeholder={chain === "cardano" ? "Token name, or a 56-character policy ID" : chain === "solana" ? "Token name, or a base58 mint address" : "Token name, or 0x..."}
+                      onPick={(h) => {
+                        setChain(h.chain);
+                        setAddress(h.address);
+                        setErrors((e) => ({ ...e, address: undefined, chain: undefined }));
+                      }}
+                    />
+                  </Field>
+                )}
               </div>
               <Field id="chain" label="Chain" error={errors.chain}>
-                <Select value={chain} onValueChange={(v) => setChain(v as Chain)}>
+                <Select value={mode === "stock" ? "solana" : chain} disabled={mode === "stock"} onValueChange={(v) => setChain(v as Chain)}>
                   <SelectTrigger id="chain" className="w-full rounded-none">
                     <SelectValue />
                   </SelectTrigger>
@@ -455,6 +503,8 @@ export function DcaApp() {
           )}
         </CardContent>
       </Card>
+
+      <TokenDetails chain={mode === "stock" ? "solana" : chain} address={mode === "stock" ? (stock?.mint ?? "") : address} />
 
       {loading && (
         <div className="flex flex-col gap-4">
@@ -623,7 +673,7 @@ export function DcaApp() {
             })}
           </div>
 
-          <div className="hidden overflow-x-auto border border-border md:block">
+          <div className="hidden overflow-x-auto border border-border bg-background/80 backdrop-blur-xl md:block">
             <p className="sr-only">Monthly buy breakdown table</p>
             <Table className="min-w-[900px]">
               <TableHeader className="sticky top-0 z-10 bg-card">

@@ -92,7 +92,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
         </p>
       )}
 
-      <div className="overflow-x-auto border border-border">
+      <div className="overflow-x-auto border border-border bg-background/80 backdrop-blur-xl">
         <Table className="min-w-[860px]">
           <TableHeader className="bg-card">
             <TableRow className="hover:bg-transparent">

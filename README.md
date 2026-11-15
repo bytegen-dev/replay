@@ -39,6 +39,20 @@ Token math: `tokens = ROUND(amount / price, 0)`. If any single buy would be unde
 
 **Export spreadsheet**: `.xlsx` with `Summary`, `Buys` and `Sources` sheets. The Summary sheet includes the DCA logo. Tokens are `ROUND(amount/price, decimals)`, totals are `SUM`. Blue font = hardcoded input, black = formula. Built server-side from the same table data you see on screen.
 
+## Token details
+
+Once the address is valid, a card appears before you calculate, so a wrong token shows up early. `/api/token-info` merges two free sources: CoinGecko (name, logo, description, market cap, fully diluted value, supply, rank, links) and DexScreener (live price, liquidity and 24h volume summed over the token's pools on that chain, banner, social links). DexScreener does not cover Cardano, so Cardano tokens get the CoinGecko half only. A field a source doesn't provide is left out, never guessed; only `https://` links and images are used. Responses are cached for a few minutes.
+
+## Search or paste
+
+The address box is also the search box. Paste an address or policy ID and it works as a plain input, with the details card appearing below. Type a name or ticker and matching tokens drop down (arrow keys and Enter work); the search runs through DexScreener, across Ethereum, Base, BSC, Arbitrum, Solana and Cardano. Picking a result fills in the chain and address. A complete address from a different chain than the one selected also searches, so pasting it finds the token and switches the chain. Half-typed addresses don't search. Each token's pools are summed into one row, results whose own name and ticker don't match the query are dropped, and the rest are ranked by match quality, then liquidity. Pools under $500 of liquidity are hidden (paste the address to use one anyway). Results can be sorted by market cap (the default), liquidity, 24h volume or best match; a token with no value for the chosen key goes last. The market cap is DexScreener's estimate and can be wrong or missing, so check it against the token's details card. Copycat tokens are common, so the list shows the address, price and liquidity to check against the real one. Search covers whatever DexScreener has indexed, so a token with no DEX pool won't appear.
+
+## xStocks
+
+The **xStocks** switch replaces the address field with a searchable list of tokenized stocks and ETFs on Solana (Backed Finance xStocks, such as Tesla `TSLAx`). Search matches name or ticker, and the trailing `x` is optional. Picking one fills in its mint and fixes the chain to Solana, then everything works as for any other token.
+
+The list is not hardcoded. `/api/xstocks` joins CoinGecko's `xstocks-ecosystem` category with each coin's Solana address and keeps the result for one hour; coins without a valid Solana mint are dropped. It uses your `COINGECKO_API_KEY` if set. These tokens trade on-chain around the clock and often in thin pools, so low-volume warnings are common, and a pool's history may start later than the token's launch (older months then show n/a).
+
 ## Share
 
 **Share** saves the current result (including any prices you edited) and returns a public link like `/r/k3x9a2Qw`. Anyone with the link sees a read-only copy, exactly as it was when saved. The link is unlisted (`noindex`), not private: anyone who has it can open it.
@@ -55,6 +69,10 @@ Token math: `tokens = ROUND(amount / price, 0)`. If any single buy would be unde
 ## Tests
 
 `npm test` runs Node's built-in test runner on the TypeScript files in `tests/` (no extra test dependency): month-end and nearest-day selection, token math, overrides, validation.
+
+## Cardano history
+
+CoinGecko is the primary source for Cardano, but its free tier stops at 365 days. When a month is missing, the app also reads the token's GeckoTerminal pools (up to four, deepest first) and uses them only for days CoinGecko doesn't have. Those rows show Source `GeckoTerminal`, and a warning lists which months they are. Pool candles exist only on days with trades and the pools are thin, so expect `nearest-day` and `low-volume` notes, and some months can still be n/a. With a policy ID alone, the app finds the full asset ID by searching GeckoTerminal for the token's symbol; if you paste the full asset ID (policy plus token name in hex), it uses that directly, which matters when one policy covers several tokens. A paid CoinGecko key still gives the most complete history.
 
 ## Limits
 
