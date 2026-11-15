@@ -1,0 +1,97 @@
+import type { MonthRow } from "./types.ts";
+
+export type Overrides = Record<string, number>;
+
+export interface BuyRow extends MonthRow {
+  /** USD invested this month (0 for months with no price). */
+  amount: number;
+  tokens: number | null;
+  valueToday: number | null;
+  manual: boolean;
+}
+
+export interface Summary {
+  invested: number;
+  tokens: number;
+  avgPrice: number | null;
+  priceToday: number | null;
+  valueToday: number | null;
+  gain: number | null;
+  gainPct: number | null;
+  pricedMonths: number;
+  skippedMonths: number;
+  skipped: string[];
+}
+
+export function roundTo(x: number, decimals: number): number {
+  const f = 10 ** decimals;
+  return Math.round(x * f) / f;
+}
+
+export function tokensBought(amount: number, price: number, decimals: number): number {
+  return roundTo(amount / price, decimals);
+}
+
+/**
+ * The spec asks for ROUND(amount/price, 0). That is right for cheap tokens but
+ * rounds expensive ones (e.g. $200 / $3,000) to zero, so fall back to 6
+ * decimals when any unrounded purchase is under 100 tokens.
+ */
+export function chooseDecimals(rows: { price: number | null }[], amount: number): number {
+  const small = rows.some((r) => r.price !== null && r.price > 0 && amount / r.price < 100);
+  return small ? 6 : 0;
+}
+
+export function effectivePrice(row: MonthRow, overrides: Overrides): { price: number | null; manual: boolean } {
+  const o = overrides[row.month];
+  if (o !== undefined && Number.isFinite(o) && o > 0) return { price: o, manual: true };
+  return { price: row.price, manual: false };
+}
+
+export function buildBuys(
+  rows: MonthRow[],
+  amount: number,
+  priceToday: number | null,
+  overrides: Overrides,
+  decimals: number,
+): BuyRow[] {
+  return rows.map((row) => {
+    const { price, manual } = effectivePrice(row, overrides);
+    if (price === null) {
+      return { ...row, amount: 0, tokens: null, valueToday: null, manual: false };
+    }
+    const tokens = tokensBought(amount, price, decimals);
+    return {
+      ...row,
+      price,
+      source: manual ? "manual" : row.source,
+      priceDate: manual ? null : row.priceDate,
+      notes: manual ? [{ code: "manual", text: "Price entered manually" }] : row.notes,
+      amount,
+      tokens,
+      valueToday: priceToday === null ? null : tokens * priceToday,
+      manual,
+    };
+  });
+}
+
+export function summarize(buys: BuyRow[], priceToday: number | null): Summary {
+  const priced = buys.filter((b) => b.tokens !== null);
+  const invested = priced.reduce((s, b) => s + b.amount, 0);
+  const tokens = priced.reduce((s, b) => s + (b.tokens ?? 0), 0);
+  const valueToday = priceToday === null ? null : tokens * priceToday;
+  const gain = valueToday === null ? null : valueToday - invested;
+  const skipped = buys.filter((b) => b.tokens === null).map((b) => b.month);
+  return {
+    invested,
+    tokens,
+    avgPrice: tokens > 0 ? invested / tokens : null,
+    priceToday,
+    valueToday,
+    gain,
+    gainPct: gain !== null && invested > 0 ? (gain / invested) * 100 : null,
+    pricedMonths: priced.length,
+    skippedMonths: skipped.length,
+    skipped,
+  };
+}
