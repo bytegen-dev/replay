@@ -72,7 +72,12 @@ The list is not hardcoded. `/api/xstocks` joins CoinGecko's `xstocks-ecosystem` 
 
 ## Cardano history
 
-CoinGecko is the primary source for Cardano, but its free tier stops at 365 days. When a month is missing, the app also reads the token's GeckoTerminal pools (up to four, deepest first) and uses them only for days CoinGecko doesn't have. Those rows show Source `GeckoTerminal`, and a warning lists which months they are. Pool candles exist only on days with trades and the pools are thin, so expect `nearest-day` and `low-volume` notes, and some months can still be n/a. With a policy ID alone, the app finds the full asset ID by searching GeckoTerminal for the token's symbol; if you paste the full asset ID (policy plus token name in hex), it uses that directly, which matters when one policy covers several tokens. A paid CoinGecko key still gives the most complete history.
+CoinGecko is the primary source for Cardano, but its free tier stops at 365 days. Months it can't price are filled, only those days and only when something is missing, in this order:
+
+1. **DexHunter** (`charts.dhapi.io`): daily candles for the token against ADA, aggregated across Cardano DEXs, with history well past a year. ADA prices are converted to USD with **Bitstamp's** ADA/USD daily close for the same UTC day (a day with no ADA/USD close is dropped, never estimated). On NMKR this agrees with GeckoTerminal's USD prices to within about 1 to 2% on the days they overlap. Rows show Source `DexHunter`. DexHunter's docs ask for a partner key (`X-Partner-Id`) but it answered without one when tested; set `DEXHUNTER_PARTNER_ID` (a free key from app.dexhunter.io/partners) if it starts refusing requests, and the app sends it when present.
+2. **GeckoTerminal pools** (up to four, deepest first) for anything still empty. Pool candles exist only on days with trades and the pools are thin, so for these prices only, when nothing traded within 3 days of the target, the nearest actual trade up to 7 days away is used and the Note says how far and which way. Every other source stays strictly within 3 days.
+
+CoinGecko always wins on days it has a price. Whatever is still empty after both stays n/a and is left out of the totals. With a policy ID alone, the app finds the full asset ID by searching GeckoTerminal for the token's symbol; if you paste the full asset ID (policy plus token name in hex), it uses that directly, which matters when one policy covers several tokens. A paid CoinGecko key still gives the most complete history.
 
 ## Limits
 

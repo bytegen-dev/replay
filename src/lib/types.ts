@@ -20,6 +20,8 @@ export interface DailyPoint {
   volume?: number;
   /** Which source this point came from, when a series mixes sources. Falls back to the run's source. */
   source?: PriceSource;
+  /** From a thin pool that trades on only some days, so it may stand in for a target up to a week away. */
+  sparse?: boolean;
 }
 
 export type NoteCode =
@@ -36,7 +38,7 @@ export interface Note {
   text: string;
 }
 
-export type PriceSource = "CoinGecko" | "GeckoTerminal" | "manual" | "none";
+export type PriceSource = "CoinGecko" | "GeckoTerminal" | "DexHunter" | "manual" | "none";
 
 export interface MonthRow {
   /** YYYY-MM */

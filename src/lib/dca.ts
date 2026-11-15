@@ -8,7 +8,8 @@ import {
   gtTopPool,
   type ResolvedToken,
 } from "./providers.ts";
-import { fillGaps, gtCardanoSeries } from "./gtCardano.ts";
+import { dexhunterSeries } from "./dexhunter.ts";
+import { fillGaps, gtCardanoSeries, resolveCardanoUnit } from "./gtCardano.ts";
 import { selectAllMonths } from "./select.ts";
 import type { DailyPoint, DcaRequest, DcaResponse, PriceSource, SourceLink } from "./types.ts";
 
@@ -37,6 +38,7 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
   let source: PriceSource = "none";
   let token: ResolvedToken = { id: null, symbol: null, name: null, price: null };
   let earliestAllowed: string | null = null;
+  let freeTierWarning: string | null = null;
 
   // 1. GeckoTerminal pool (EVM + Solana). Free, full history. No pools => fall through.
   try {
@@ -82,9 +84,8 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
       source = "CoinGecko";
       sources.push({ label: "CoinGecko coin page", url: `https://www.coingecko.com/en/coins/${cg.id}` });
       if (earliestAllowed && from < earliestAllowed) {
-        warnings.push(
-          `The free CoinGecko tier only serves the last ${cfg.historyLimitDays} days (from ${earliestAllowed}). Older months show n/a. Set a paid COINGECKO_API_KEY with COINGECKO_PLAN=pro for full history.`,
-        );
+        // Only shown if months are still empty after the other sources have had their turn (see below).
+        freeTierWarning = `The free CoinGecko tier only serves the last ${cfg.historyLimitDays} days (from ${earliestAllowed}). Older months with no other source show n/a. Set a paid COINGECKO_API_KEY with COINGECKO_PLAN=pro for full history.`;
       }
     } else if (cg.price !== null) {
       token = { ...token, id: cg.id, price: cg.price, symbol: token.symbol ?? cg.symbol, name: token.name ?? cg.name };
@@ -117,26 +118,59 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
   const selectOpts = { basis: req.basis, basisDay: req.basisDay, source, today, earliestAllowed };
   let rows = selectAllMonths(req.startMonth, req.endMonth, points, selectOpts);
 
-  // Cardano: CoinGecko's free tier stops at 365 days, but GeckoTerminal's pools reach further back.
-  // Only ask for them when a month is actually missing, and only to fill those days.
-  if (req.chain === "cardano" && source === "CoinGecko" && rows.some((r) => r.price === null && !r.notes.some((n) => n.code === "future"))) {
+  // Cardano: CoinGecko's free tier stops at 365 days. Months it can't price are filled, only for those
+  // days and only when something is actually missing: first from DexHunter's complete daily charts, then
+  // from GeckoTerminal's thin pools for whatever is still empty. CoinGecko always wins where it has a price.
+  const gaps = (rs: typeof rows) => rs.filter((r) => r.price === null && !r.notes.some((n) => n.code === "future"));
+  if (req.chain === "cardano" && source === "CoinGecko" && gaps(rows).length) {
+    const hint = token.symbol ?? token.name;
+    let unit = req.unit;
+    points = points.map((p) => ({ ...p, source: "CoinGecko" as const }));
+
     try {
-      const gt = await gtCardanoSeries(req.address, req.unit, token.symbol ?? token.name, from, to);
-      if (gt) {
-        points = fillGaps(points.map((p) => ({ ...p, source: "CoinGecko" as const })), gt.points);
-        rows = selectAllMonths(req.startMonth, req.endMonth, points, selectOpts);
-        const filled = rows.filter((r) => r.source === "GeckoTerminal");
-        if (filled.length) {
-          sources.push(...gt.sources);
-          warnings.push(
-            `${filled.length} older ${filled.length === 1 ? "month uses" : "months use"} GeckoTerminal pool prices (${filled.map((r) => r.month).join(", ")}). Cardano pools are thin and trade on few days, so check the Note column.`,
-          );
+      unit = (await resolveCardanoUnit(req.address, req.unit, hint)) ?? undefined;
+      if (unit) {
+        const targets = gaps(rows).map((r) => r.targetDate).sort();
+        const spanFrom = addDays(targets[0], -7);
+        const spanTo = addDays(targets[targets.length - 1], 7);
+        const dh = await dexhunterSeries(unit, spanFrom, spanTo > today ? today : spanTo);
+        if (dh) {
+          points = fillGaps(points, dh.points);
+          rows = selectAllMonths(req.startMonth, req.endMonth, points, selectOpts);
+          const used = rows.filter((r) => r.source === "DexHunter");
+          if (used.length) {
+            sources.push(...dh.sources);
+            warnings.push(
+              `${used.length} older ${used.length === 1 ? "month uses" : "months use"} DexHunter prices (${used.map((r) => r.month).join(", ")}): ADA-pair prices across Cardano DEXs, converted to USD with Bitstamp's ADA/USD close. Check the Note column for thin trading.`,
+            );
+          }
         }
       }
     } catch (e) {
-      warnings.push(`GeckoTerminal pool prices were unavailable (${e instanceof Error ? e.message : "error"}); older months stay n/a.`);
+      warnings.push(`DexHunter prices were unavailable (${e instanceof Error ? e.message : "error"}).`);
+    }
+
+    if (gaps(rows).length) {
+      try {
+        const gt = await gtCardanoSeries(req.address, unit, hint, from, to);
+        if (gt) {
+          points = fillGaps(points, gt.points);
+          rows = selectAllMonths(req.startMonth, req.endMonth, points, selectOpts);
+          const used = rows.filter((r) => r.source === "GeckoTerminal");
+          if (used.length) {
+            sources.push(...gt.sources);
+            warnings.push(
+              `${used.length} older ${used.length === 1 ? "month uses" : "months use"} GeckoTerminal pool prices (${used.map((r) => r.month).join(", ")}). Cardano pools are thin and trade on few days, so check the Note column.`,
+            );
+          }
+        }
+      } catch (e) {
+        warnings.push(`GeckoTerminal pool prices were unavailable (${e instanceof Error ? e.message : "error"}); older months stay n/a.`);
+      }
     }
   }
+
+  if (freeTierWarning && rows.some((r) => r.notes.some((n) => n.code === "out-of-range"))) warnings.unshift(freeTierWarning);
 
   let currentPrice = token.price;
   if (currentPrice === null) {

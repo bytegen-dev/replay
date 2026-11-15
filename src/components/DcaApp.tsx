@@ -37,7 +37,7 @@ function tokenSymbol(t: { symbol: string | null; name: string | null }): string 
 }
 
 /** The answer in one plain sentence, so the numbers below are the evidence, not the headline. */
-function ResultSentence({ amount, symbol, summary, decimals }: { amount: number; symbol: string; summary: Summary; decimals: number }) {
+function ResultSentence({ amount, symbol, summary, decimals, total }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number }) {
   if (summary.pricedMonths === 0) {
     return (
       <p className="max-w-3xl text-lg leading-snug font-bold">
@@ -45,7 +45,11 @@ function ResultSentence({ amount, symbol, summary, decimals }: { amount: number;
       </p>
     );
   }
-  const months = `${summary.pricedMonths} ${summary.pricedMonths === 1 ? "month" : "months"}`;
+  // Say "17 of 23" when some months had no price, so the number can't be read as the whole range.
+  const months =
+    summary.skippedMonths > 0
+      ? `${summary.pricedMonths} of ${total} months`
+      : `${summary.pricedMonths} ${summary.pricedMonths === 1 ? "month" : "months"}`;
   const loss = (summary.gain ?? 0) < 0;
   return (
     <p className="text-base leading-relaxed sm:text-lg">
@@ -324,7 +328,8 @@ export function DcaApp() {
 
   return (
     <div className="mt-6 flex flex-col gap-6 sm:mt-8 sm:gap-8">
-      <Card className="rounded-none border border-border bg-card ring-0">
+      {/* overflow-visible: the search dropdown has to extend past the card's bottom edge */}
+      <Card className="overflow-visible rounded-none border border-border bg-card ring-0">
         <CardHeader className="border-b border-border pb-4">
           <div className="flex items-center gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center border border-border bg-background leading-none">
@@ -542,6 +547,7 @@ export function DcaApp() {
                 symbol={tokenSymbol(data.token)}
                 summary={computed.summary}
                 decimals={computed.decimals}
+                total={computed.buys.length}
               />
             </div>
           </section>

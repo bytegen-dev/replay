@@ -79,9 +79,20 @@ export interface CardanoSeries {
 }
 
 /**
+ * The full Cardano asset id (policy + token name in hex). Used as given when the user pasted it; otherwise
+ * found by searching GeckoTerminal for `hint` (the token's symbol or name) and matching on the policy id.
+ */
+export async function resolveCardanoUnit(policy: string, unit: string | undefined, hint: string | null): Promise<string | null> {
+  if (unit) return unit.toLowerCase();
+  if (!hint) return null;
+  const q = encodeURIComponent(hint.replace(/^\$/, "").trim());
+  const found = await getJson<{ data?: GtPoolRow[] }>(`${GT}/search/pools?query=${q}&network=cardano&page=1`);
+  return pickUnit(found.data, policy);
+}
+
+/**
  * Daily prices for a Cardano token from its GeckoTerminal pools, or null when GeckoTerminal doesn't know it.
- * `unit` is the full asset id if the user pasted it. Otherwise it is found by searching `hint` (the token's
- * symbol or name) and matching on the policy id.
+ * `unit` is the full asset id if already known; otherwise it is looked up from `hint`.
  */
 export async function gtCardanoSeries(
   policy: string,
@@ -90,12 +101,7 @@ export async function gtCardanoSeries(
   from: string,
   to: string,
 ): Promise<CardanoSeries | null> {
-  let asset = unit?.toLowerCase();
-  if (!asset && hint) {
-    const q = encodeURIComponent(hint.replace(/^\$/, "").trim());
-    const found = await getJson<{ data?: GtPoolRow[] }>(`${GT}/search/pools?query=${q}&network=cardano&page=1`);
-    asset = pickUnit(found.data, policy) ?? undefined;
-  }
+  const asset = await resolveCardanoUnit(policy, unit, hint);
   if (!asset) return null;
 
   const [poolsRes, token] = await Promise.all([
@@ -127,7 +133,7 @@ export async function gtCardanoSeries(
 
   const a = token?.data?.attributes;
   return {
-    points: mergeDailySeries(series).map((p) => ({ ...p, source: "GeckoTerminal" as const })),
+    points: mergeDailySeries(series).map((p) => ({ ...p, source: "GeckoTerminal" as const, sparse: true })),
     sources: used.map((p) => ({ label: `GeckoTerminal pool ${p.name} (daily OHLCV)`, url: `https://www.geckoterminal.com/cardano/pools/${p.address}` })),
     symbol: a?.symbol?.replace(/^\$/, "").toUpperCase() ?? null,
     name: a?.name ?? null,

@@ -11,7 +11,10 @@ const WARN_CODES = new Set(["nearest-day", "low-volume", "outlier"]);
 export function SharedResult({ data }: { data: SharePayload }) {
   const { buys, summary, decimals } = prepare(data);
   const symbol = data.tokenLabel.replace(/^\$/, "") || "tokens";
-  const months = `${summary.pricedMonths} ${summary.pricedMonths === 1 ? "month" : "months"}`;
+  const months =
+    summary.skippedMonths > 0
+      ? `${summary.pricedMonths} of ${buys.length} months`
+      : `${summary.pricedMonths} ${summary.pricedMonths === 1 ? "month" : "months"}`;
   const loss = (summary.gain ?? 0) < 0;
 
   const tiles = [

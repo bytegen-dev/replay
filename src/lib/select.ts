@@ -18,21 +18,30 @@ export interface SelectOptions {
 }
 
 /**
+ * How far a point from a thin pool (`sparse`) may be from the target. Such pools trade on only some days,
+ * so "no trade within 3 days" often just means the pool was quiet, not that the price is unknown.
+ */
+export const SPARSE_OFFSET_DAYS = 7;
+
+/**
  * Find the point for `target`, or the nearest one within MAX_OFFSET_DAYS.
+ * Past that, only `sparse` points count, out to SPARSE_OFFSET_DAYS.
  * Ties between an earlier and a later day go to the earlier day.
  */
 export function findNearest(
   byDate: Map<string, DailyPoint>,
   target: string,
   maxOffset = MAX_OFFSET_DAYS,
+  sparseOffset = SPARSE_OFFSET_DAYS,
 ): DailyPoint | null {
   const exact = byDate.get(target);
   if (exact) return exact;
-  for (let off = 1; off <= maxOffset; off++) {
+  for (let off = 1; off <= sparseOffset; off++) {
+    const sparseOnly = off > maxOffset;
     const before = byDate.get(addDays(target, -off));
-    if (before) return before;
+    if (before && (!sparseOnly || before.sparse)) return before;
     const after = byDate.get(addDays(target, off));
-    if (after) return after;
+    if (after && (!sparseOnly || after.sparse)) return after;
   }
   return null;
 }
@@ -92,7 +101,7 @@ export function selectMonthPrice(
   if (!point && opts.earliestAllowed && target < opts.earliestAllowed) {
     return empty(
       "out-of-range",
-      `No data: ${target} is before ${opts.earliestAllowed}, the oldest day the free CoinGecko tier serves (last 365 days)`,
+      `No data: ${target} is before ${opts.earliestAllowed}, the oldest day the free CoinGecko tier serves (last 365 days), and no pool data covers it`,
     );
   }
   if (!point) {
@@ -101,9 +110,13 @@ export function selectMonthPrice(
 
   const notes: Note[] = [];
   if (point.date !== target) {
+    const gap = Math.round((Date.parse(point.date) - Date.parse(target)) / 86_400_000);
     notes.push({
       code: "nearest-day",
-      text: `No price on ${target}; used ${point.date}`,
+      text:
+        Math.abs(gap) > MAX_OFFSET_DAYS
+          ? `No trade within ${MAX_OFFSET_DAYS} days of ${target}; used the nearest trade, ${point.date} (${Math.abs(gap)} days ${gap < 0 ? "earlier" : "later"})`
+          : `No price on ${target}; used ${point.date}`,
     });
   }
   notes.push(...liquidityNotes(byDate, point));

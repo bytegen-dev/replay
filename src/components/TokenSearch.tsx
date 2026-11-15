@@ -1,10 +1,11 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Info, Loader2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { fmtPrice } from "@/lib/format.ts";
 import { MIN_LIQUIDITY_USD, SORT_LABELS, shouldSearch, sortHits, type SortKey, type TokenHit } from "@/lib/tokenSearch.ts";
 import { CHAIN_LABELS, type Chain } from "@/lib/types.ts";
@@ -15,6 +16,35 @@ type Result = { q: string; hits: TokenHit[] } | { q: string; error: string };
 const DEBOUNCE_MS = 350;
 const compact = (n: number) => new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
 const shortAddress = (a: string) => (a.length > 16 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
+
+/** The fine print about these results, kept out of the way until asked for. Click toggles it so it also works by touch. */
+function ResultsInfo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="About these results"
+            onClick={(e) => {
+              e.preventDefault(); // stops the tooltip's own click-to-close, so a tap toggles it
+              setOpen((o) => !o);
+            }}
+            className="inline-flex size-7 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <Info className="size-4" aria-hidden />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="end">
+          <p>Market cap is DexScreener&apos;s estimate and can be wrong or missing.</p>
+          <p className="mt-1.5">Copycat tokens are common, so check the address and liquidity before you pick.</p>
+          <p className="mt-1.5">Pools under ${MIN_LIQUIDITY_USD} of liquidity are hidden.</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 interface Props {
   id: string;
@@ -125,9 +155,13 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
       {visible && (
         // Keeps focus in the input while you click inside the list or the sort buttons.
         <div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-50 mt-1 border border-border bg-popover shadow-lg">
-          {hits.length > 1 && (
-            <div className="flex flex-col items-start gap-1.5 border-b border-border px-3 py-2 sm:flex-row sm:items-center sm:gap-2">
-              <span className="shrink-0 text-xs text-muted-foreground">Sort by</span>
+          {hits.length > 0 && (
+            <div className="flex flex-col gap-1.5 border-b border-border px-3 py-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">{hits.length > 1 ? "Sort by" : "1 result"}</span>
+                <ResultsInfo />
+              </div>
+              {hits.length > 1 && (
               <ToggleGroup
                 type="single"
                 variant="outline"
@@ -147,6 +181,7 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
+              )}
             </div>
           )}
 
@@ -199,9 +234,6 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
               ))}
             </ul>
           )}
-          <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-            Market cap is DexScreener&apos;s estimate and can be wrong or missing. Copycat tokens are common, so check the address and liquidity before you pick. Pools under ${MIN_LIQUIDITY_USD} are hidden.
-          </p>
         </div>
       )}
     </div>
