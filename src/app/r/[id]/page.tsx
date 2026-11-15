@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { SharedResult } from "@/components/SharedResult";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { isShareId } from "@/lib/share.ts";
 import { getShare, ShareUnavailable } from "@/lib/shareStore.ts";
@@ -50,9 +51,7 @@ export default function SharedPage({ params }: { params: Promise<{ id: string }>
           <Result params={params} />
         </Suspense>
       </main>
-      <footer className="border-t border-border py-5">
-        <p className="mx-auto w-full max-w-6xl px-4 text-xs text-muted-foreground sm:px-6">Historical prices are indicative only. Not financial advice.</p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

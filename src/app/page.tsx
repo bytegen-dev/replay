@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { DcaApp } from "@/components/DcaApp";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export default function Home() {
   return (
@@ -30,11 +31,7 @@ export default function Home() {
         <DcaApp />
       </main>
 
-      <footer className="relative z-10 mt-auto shrink-0 border-t border-border bg-background py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:py-6">
-        <p className="mx-auto w-full max-w-6xl px-[max(1rem,env(safe-area-inset-left))] text-xs text-muted-foreground pr-[max(1rem,env(safe-area-inset-right))] sm:px-6">
-          Historical prices are indicative only. Not financial advice.
-        </p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
