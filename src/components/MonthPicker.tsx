@@ -87,7 +87,7 @@ export function MonthPicker({ id, value, onChange, min, max, invalid }: Props) {
           type="button"
           variant="outline"
           aria-invalid={invalid}
-          className="h-10 w-full justify-between rounded-none font-normal"
+          className="form-control-h w-full justify-between rounded-none font-normal"
         >
           <span className={value ? "" : "text-muted-foreground"}>{value ? formatMonth(value) : "Pick a month"}</span>
           <CalendarDays />

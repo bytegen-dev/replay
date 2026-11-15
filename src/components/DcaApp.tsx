@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Copy, FileSpreadsheet, Loader2, Settings, Share2, Trash2, X } from "lucide-react";
+import { AlertTriangle, Calculator, Check, Copy, FileSpreadsheet, Loader2, Settings, Share2, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
 import { MonthPicker } from "@/components/MonthPicker";
@@ -74,7 +74,7 @@ const WARN_CODES = new Set(["nearest-day", "low-volume", "outlier"]);
 
 function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex h-full flex-col gap-1.5 [&_[data-slot=select-trigger]]:w-full [&_button]:w-full [&_input]:w-full">
       <Label htmlFor={id} className="text-sm text-muted-foreground">
         {label}
       </Label>
@@ -355,7 +355,7 @@ export function DcaApp() {
                     setMode(v as "token" | "stock");
                     setErrors((e) => ({ ...e, address: undefined }));
                   }}
-                  className="w-full sm:w-72"
+                  className="form-control-h w-full sm:w-72"
                   aria-label="What to check"
                 >
                   {(
@@ -367,7 +367,7 @@ export function DcaApp() {
                     <ToggleGroupItem
                       key={v}
                       value={v}
-                      className="min-h-11 flex-1 rounded-none border border-border px-2 text-sm sm:h-10 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      className="form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                     >
                       {label}
                     </ToggleGroupItem>
@@ -400,7 +400,7 @@ export function DcaApp() {
               </div>
               <Field id="chain" label="Chain" error={errors.chain}>
                 <Select value={mode === "stock" ? "solana" : chain} disabled={mode === "stock"} onValueChange={(v) => setChain(v as Chain)}>
-                  <SelectTrigger id="chain" className="w-full rounded-none">
+                  <SelectTrigger id="chain" className="form-control-h w-full rounded-none">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className={selectContent}>
@@ -415,7 +415,7 @@ export function DcaApp() {
               <Field id="amount" label="Monthly amount (USD)" error={errors.amount}>
                 <Input
                   id="amount"
-                  className="h-11 text-base sm:h-10 sm:text-sm"
+                  className="form-control-h text-sm"
                   inputMode="decimal"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
@@ -441,7 +441,7 @@ export function DcaApp() {
                       setBasis(v as Basis);
                       setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
                     }}
-                    className="min-h-11 w-full sm:h-10"
+                    className="form-control-h w-full"
                     aria-label="Price basis"
                   >
                     {(
@@ -454,7 +454,7 @@ export function DcaApp() {
                       <ToggleGroupItem
                         key={v}
                         value={v}
-                        className="min-h-11 flex-1 rounded-none border border-border px-1.5 text-xs sm:h-10 sm:px-2 sm:text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        className="form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                       >
                         {label}
                       </ToggleGroupItem>
@@ -470,7 +470,7 @@ export function DcaApp() {
                         setErrors((e) => ({ ...e, basisDay: undefined }));
                       }}
                     >
-                      <SelectTrigger id="basisDay" className="w-full rounded-none">
+                      <SelectTrigger id="basisDay" className="form-control-h w-full rounded-none">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className={selectContent}>
@@ -487,20 +487,25 @@ export function DcaApp() {
                   </Field>
                 )}
               </div>
-              <div className="flex flex-col gap-1.5 min-[480px]:col-span-2 lg:col-span-3">
-                <span className="text-sm text-muted-foreground">Quick range, ending last month</span>
-                <div className="grid grid-cols-3 gap-2">
-                  {[6, 12, 24].map((n) => (
-                    <Button key={n} type="button" variant="outline" size="sm" className="min-h-11 rounded-none sm:min-h-0" onClick={() => applyPreset(n)}>
-                      Last {n} months
-                    </Button>
-                  ))}
+              <div className="flex flex-col gap-3 min-[480px]:col-span-2 lg:col-span-4">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm text-muted-foreground">Quick range, ending last month</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[6, 12, 24].map((n) => (
+                      <Button key={n} type="button" variant="outline" className="form-control-h rounded-none text-sm" onClick={() => applyPreset(n)}>
+                        Last {n} months
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-end min-[480px]:col-span-2 lg:col-span-1">
-                <Button type="submit" disabled={loading} className="h-11 w-full rounded-none text-base font-bold transition-transform hover:-translate-y-px active:translate-y-0 sm:h-10 sm:text-sm">
-                  {loading ? <Loader2 className="animate-spin" /> : null}
-                  {loading ? "Calculating" : "Calculate"}
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  variant="default"
+                  className="form-cta h-12 w-full gap-2 rounded-none border-2 border-foreground text-base font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border"
+                >
+                  {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Calculator className="size-5" aria-hidden />}
+                  {loading ? "Calculating" : "Calculate DCA"}
                 </Button>
               </div>
             </div>

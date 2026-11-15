@@ -120,3 +120,30 @@
     color: #000;
   }
 }
+
+@layer utilities {
+  .form-control-h {
+    height: 2.5rem;
+    min-height: 2.5rem;
+    max-height: 2.5rem;
+    box-sizing: border-box;
+  }
+
+  input.form-control-h {
+    padding-block: 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  [data-slot="select-trigger"].form-control-h,
+  button.form-control-h {
+    padding-block: 0;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .form-cta {
+    height: 3rem;
+    min-height: 3rem;
+  }
+}

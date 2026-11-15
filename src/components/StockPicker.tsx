@@ -97,7 +97,7 @@ export function StockPicker({ id, value, onChange, invalid }: Props) {
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
           aria-invalid={invalid}
-          className="h-11 w-full justify-between rounded-none font-normal sm:h-10"
+          className="form-control-h w-full justify-between rounded-none font-normal"
         >
           {value ? (
             <span className="truncate">

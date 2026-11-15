@@ -137,7 +137,7 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
         aria-autocomplete="list"
         aria-activedescendant={visible && hits[active] ? `${listId}-${active}` : undefined}
         aria-invalid={invalid}
-        className="h-11 pr-9 text-base sm:h-10 sm:text-sm"
+        className="form-control-h pr-9 text-sm"
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
