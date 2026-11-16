@@ -19,7 +19,7 @@ const MAX_WARNINGS = 10;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const NOTE_CODES: NoteCode[] = ["nearest-day", "low-volume", "outlier", "no-data", "out-of-range", "future", "manual"];
-const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "manual", "none"];
+const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "DexHunter", "manual", "none"];
 
 /** 8 URL-safe characters (48 random bits). Unguessable enough for an unlisted link. */
 export function newShareId(): string {

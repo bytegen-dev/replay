@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { SharedExport } from "@/components/SharedExport";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { prepare } from "@/lib/exportData.ts";
@@ -115,7 +116,18 @@ export function SharedResult({ data }: { data: SharePayload }) {
                 <TableCell className="text-right tabular-nums">{b.tokens === null ? NA : fmtNum(b.amount, 2)}</TableCell>
                 <TableCell className="text-right tabular-nums">{fmtNum(b.tokens, decimals)}</TableCell>
                 <TableCell className="text-right tabular-nums">{fmtUsd(b.valueToday)}</TableCell>
-                <TableCell>{b.source === "none" ? NA : <Badge variant="outline" className="rounded-none">{b.source}</Badge>}</TableCell>
+                <TableCell>
+                  {b.source !== "none" ? (
+                    <Badge variant="outline" className="rounded-none">
+                      {b.source}
+                    </Badge>
+                  ) : b.price === null ? (
+                    NA
+                  ) : (
+                    // A price with no recorded source: shares saved before a source was recognised.
+                    <span className="text-muted-foreground">unknown</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-xs whitespace-normal">
                   {b.notes.map((n) => (
                     <div key={n.code + n.text} className="flex items-start gap-1">
@@ -129,6 +141,8 @@ export function SharedResult({ data }: { data: SharePayload }) {
           </TableBody>
         </Table>
       </div>
+
+      <SharedExport data={data} />
 
       {data.sources.length > 0 && (
         <p className="text-xs text-muted-foreground">

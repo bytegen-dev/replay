@@ -92,3 +92,14 @@ test("unknown fields are dropped, long text is capped, bad overrides ignored", (
   assert.equal(p.rows[0].notes.length, 1);
   assert.equal(p.rows[0].notes[0].text.length, 300);
 });
+
+test("every price source survives a share, including DexHunter", () => {
+  for (const source of ["CoinGecko", "GeckoTerminal", "DexHunter", "manual"]) {
+    const p = parseShare({ ...good, rows: [{ ...row("2026-09", 0.02), source }] });
+    assert.ok(typeof p === "object");
+    if (typeof p === "string") return;
+    assert.equal(p.rows[0].source, source);
+  }
+  const p = parseShare({ ...good, rows: [{ ...row("2026-09", 0.02), source: "Made Up" }] });
+  assert.ok(typeof p === "object" && p.rows[0].source === "none", "an unknown source is still dropped");
+});

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { downloadFile } from "@/lib/download.ts";
 import { type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
@@ -87,20 +88,6 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
       )}
     </div>
   );
-}
-
-async function download(url: string, body: unknown, filename: string) {
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok) {
-    const j = await res.json().catch(() => null);
-    throw new Error(j?.error ?? `Export failed (${res.status})`);
-  }
-  const href = URL.createObjectURL(await res.blob());
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(href);
 }
 
 export function DcaApp() {
@@ -245,7 +232,7 @@ export function DcaApp() {
       sources: data.sources,
     };
     try {
-      await download("/api/export/xlsx", payload, "dca-checker.xlsx");
+      await downloadFile("/api/export/xlsx", payload, "dca-checker.xlsx");
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed");
     } finally {
