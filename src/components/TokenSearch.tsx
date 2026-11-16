@@ -31,7 +31,8 @@ function ResultsInfo() {
               e.preventDefault(); // stops the tooltip's own click-to-close, so a tap toggles it
               setOpen((o) => !o);
             }}
-            className="inline-flex size-7 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            // w-7! beats the form field's "buttons fill the width" rule, which would stretch this across the row.
+            className="inline-flex size-7 w-7! shrink-0 items-center justify-center text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           >
             <Info className="size-4" aria-hidden />
           </button>
@@ -176,7 +177,7 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
                 aria-label="Sort results"
               >
                 {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
-                  <ToggleGroupItem key={k} value={k} className="h-9 min-w-[45%] flex-1 rounded-none border border-border px-1 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:h-8 sm:min-w-0">
+                  <ToggleGroupItem key={k} value={k} className="h-9 w-auto! min-w-[45%] flex-1 rounded-none border border-border px-1 text-xs data-[state=on]:bg-primary data-[state=on]:text-primary-foreground sm:h-8 sm:min-w-0">
                     {SORT_LABELS[k]}
                   </ToggleGroupItem>
                 ))}
