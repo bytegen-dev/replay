@@ -4,6 +4,7 @@ import { AlertTriangle, FileSpreadsheet, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { downloadFile } from "@/lib/download.ts";
+import { xlsxFileName } from "@/lib/exportData.ts";
 import type { SharePayload } from "@/lib/share.ts";
 
 /** Export buttons for a shared result. The same data the page shows is posted to the export route, as on the main page. */
@@ -14,9 +15,8 @@ export function SharedExport({ data }: { data: SharePayload }) {
   async function exportXlsx() {
     setBusy(true);
     setError(null);
-    const name = (data.tokenLabel || "result").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "result";
     try {
-      await downloadFile("/api/export/xlsx", data, `dca-${name}.xlsx`);
+      await downloadFile("/api/export/xlsx", data, xlsxFileName(data));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Export failed");
     } finally {

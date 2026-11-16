@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadFile } from "@/lib/download.ts";
-import { type ExportPayload } from "@/lib/exportData.ts";
+import { xlsxFileName, type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
 import { basisBadgeLabel, currentMonth, formatBasisLabel } from "@/lib/months.ts";
@@ -232,7 +232,7 @@ export function DcaApp() {
       sources: data.sources,
     };
     try {
-      await downloadFile("/api/export/xlsx", payload, "dca-checker.xlsx");
+      await downloadFile("/api/export/xlsx", payload, xlsxFileName(payload));
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed");
     } finally {
