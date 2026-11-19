@@ -80,14 +80,26 @@ export function chunkRange(from: string, to: string, days = CHUNK_DAYS): [string
 
 /* ---------------------------- network parts ----------------------------- */
 
-const cache = new Map<string, { at: number; value: AdaCandle[] }>();
+const cache = new Map<string, { at: number; value: unknown }>();
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const unixStart = (d: string) => Math.floor(new Date(`${d}T00:00:00Z`).getTime() / 1000);
 
-/** One DexHunter request. Sends the partner key when DEXHUNTER_PARTNER_ID is set, and retries 429 and 5xx. */
-async function fetchCandles(unit: string, from: string, to: string): Promise<AdaCandle[]> {
-  const body = JSON.stringify({ tokenIn: "", tokenOut: unit, period: "1day", from: unixStart(from), to: unixStart(addDays(to, 1)) });
+export interface ChartsRequest {
+  /** "" is ADA. */
+  tokenIn: string;
+  /** The token's full asset id. */
+  tokenOut: string;
+  /** 1min, 5min, 15min, 1hour, 4hour, 1day or 1week. */
+  period: string;
+  /** Unix seconds. */
+  from: number;
+  to: number;
+}
+
+/** One DexHunter chart request, any period. Sends the partner key when DEXHUNTER_PARTNER_ID is set, retries 429 and 5xx, and remembers answers for an hour. */
+export async function postCharts(payload: ChartsRequest): Promise<unknown> {
+  const body = JSON.stringify(payload);
   const hit = cache.get(body);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value;
 
@@ -100,7 +112,7 @@ async function fetchCandles(unit: string, from: string, to: string): Promise<Ada
     try {
       const res = await fetch(CHARTS_URL, { method: "POST", headers, body, cache: "no-store", signal: AbortSignal.timeout(25_000) });
       if (res.ok) {
-        const value = parseCandles(await res.json());
+        const value = await res.json();
         cache.set(body, { at: Date.now(), value });
         return value;
       }
@@ -112,6 +124,11 @@ async function fetchCandles(unit: string, from: string, to: string): Promise<Ada
     await sleep(1000 * 2 ** attempt);
   }
   throw new HttpError(lastStatus, lastStatus === 401 || lastStatus === 403 ? "DexHunter wants a partner key (set DEXHUNTER_PARTNER_ID)" : "DexHunter request failed");
+}
+
+/** Daily candles for a token over [from, to] (YYYY-MM-DD, inclusive). */
+async function fetchCandles(unit: string, from: string, to: string): Promise<AdaCandle[]> {
+  return parseCandles(await postCharts({ tokenIn: "", tokenOut: unit, period: "1day", from: unixStart(from), to: unixStart(addDays(to, 1)) }));
 }
 
 /** ADA/USD closes, one per UTC day from `from`, paging past Bitstamp's 1000-candle limit if needed. */

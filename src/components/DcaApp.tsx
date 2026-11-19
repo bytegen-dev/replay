@@ -4,6 +4,7 @@ import { AlertTriangle, Calculator, Check, Copy, FileSpreadsheet, Loader2, Setti
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
 import { MonthPicker } from "@/components/MonthPicker";
+import { EquitySearchInput } from "@/components/EquitySearch";
 import { StockPicker } from "@/components/StockPicker";
 import { TokenDetails } from "@/components/TokenDetails";
 import { TokenSearchInput } from "@/components/TokenSearch";
@@ -19,11 +20,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadFile } from "@/lib/download.ts";
+import { EXAMPLES, exampleRequest, type Example } from "@/lib/examples.ts";
 import { xlsxFileName, type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
-import { basisBadgeLabel, currentMonth, formatBasisLabel } from "@/lib/months.ts";
-import { CHAINS, CHAIN_LABELS, type Basis, type Chain, type DcaResponse } from "@/lib/types.ts";
+import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel } from "@/lib/months.ts";
+import { CHAINS, CHAIN_LABELS, MARKET_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
 
 function shiftMonth(m: string, delta: number): string {
@@ -38,7 +40,7 @@ function tokenSymbol(t: { symbol: string | null; name: string | null }): string 
 }
 
 /** The answer in one plain sentence, so the numbers below are the evidence, not the headline. */
-function ResultSentence({ amount, symbol, summary, decimals, total }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number }) {
+function ResultSentence({ amount, symbol, summary, decimals, total, shares }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number; shares: boolean }) {
   if (summary.pricedMonths === 0) {
     return (
       <p className="max-w-3xl text-lg leading-snug font-bold">
@@ -56,7 +58,7 @@ function ResultSentence({ amount, symbol, summary, decimals, total }: { amount: 
     <p className="text-base leading-relaxed sm:text-lg">
       {fmtUsd(amount)} a month for <b>{months}</b> bought{" "}
       <b>
-        {fmtNum(summary.tokens, decimals)} {symbol}
+        {fmtNum(summary.tokens, decimals)} {shares ? `shares of ${symbol}` : symbol}
       </b>{" "}
       for <b>{fmtUsd(summary.invested)}</b>.
       {summary.valueToday !== null && summary.gain !== null && (
@@ -94,7 +96,13 @@ export function DcaApp() {
   const [address, setAddress] = useState("");
   const [chain, setChain] = useState<Chain>("ethereum");
   // "stock" mode picks a tokenized stock (xStock) from a list instead of typing an address; it is always Solana.
-  const [mode, setMode] = useState<"token" | "stock">("token");
+  // "equity" is an ordinary listed stock or ETF, looked up by ticker.
+  const [mode, setMode] = useState<"token" | "stock" | "equity">("token");
+  const [ticker, setTicker] = useState("");
+  const [tickerName, setTickerName] = useState("");
+  const [reinvest, setReinvest] = useState(false);
+  // The line of context shown under a ready-made check's result.
+  const [exampleNote, setExampleNote] = useState<string | null>(null);
   const [stock, setStock] = useState<XStock | null>(null);
   const [amount, setAmount] = useState("500");
   // Defaults depend on the current date, so set them after mount (not during prerender).
@@ -140,21 +148,45 @@ export function DcaApp() {
     resultsRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }, [data]);
 
+  /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const input = {
-      address: mode === "stock" ? (stock?.mint ?? "") : address,
-      chain: mode === "stock" ? ("solana" as Chain) : chain,
-      amount: Number(amount),
-      startMonth,
-      endMonth,
-      basis,
-      ...(basis === "day-of-month" ? { basisDay } : {}),
-    };
+    const common = { amount: Number(amount), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const input: Omit<DcaRequest, "unit"> =
+      mode === "equity"
+        ? { address: ticker.trim(), chain: "equity", ...common, ...(reinvest ? { reinvest: true } : {}) }
+        : { address: mode === "stock" ? (stock?.mint ?? "") : address, chain: mode === "stock" ? "solana" : chain, ...common };
     const errs = validateRequest(input);
     if (mode === "stock" && !stock) errs.address = "Pick a stock from the list";
     setErrors(errs);
     if (Object.keys(errs).length) return;
+    setExampleNote(null);
+    await execute(input);
+  }
+
+  /** Fills the form from a ready-made check and runs it straight away. */
+  function runExample(ex: Example) {
+    const req = exampleRequest(ex);
+    if (ex.market === "equity") {
+      setMode("equity");
+      setTicker(ex.address);
+      setTickerName(ex.label);
+      setReinvest(!!ex.reinvest);
+    } else {
+      setMode("token");
+      setChain(ex.market);
+      setAddress(ex.address);
+    }
+    setAmount(String(ex.amount));
+    setStartMonth(req.startMonth);
+    setEndMonth(req.endMonth);
+    setBasis(ex.basis);
+    setErrors({});
+    setExampleNote(ex.note ?? null);
+    void execute(req);
+  }
+
+  async function execute(input: Omit<DcaRequest, "unit">) {
     setLoading(true);
     setApiError(null);
     setExportError(null);
@@ -221,7 +253,7 @@ export function DcaApp() {
     setExportError(null);
     const payload: ExportPayload = {
       tokenLabel: data.token.symbol?.toUpperCase() ?? data.token.name ?? "",
-      chain: CHAIN_LABELS[data.chain],
+      chain: MARKET_LABELS[data.chain],
       address: data.address,
       basis: formatBasisLabel(data.basis, data.basisDay),
       amount: data.amount,
@@ -230,6 +262,7 @@ export function DcaApp() {
       rows: data.rows,
       overrides,
       sources: data.sources,
+      unit: data.chain === "equity" ? "shares" : "tokens",
     };
     try {
       await downloadFile("/api/export/xlsx", payload, xlsxFileName(payload));
@@ -247,7 +280,7 @@ export function DcaApp() {
     const payload = {
       tokenLabel: data.token.symbol?.toUpperCase() ?? data.token.name ?? "",
       tokenName: data.token.name ?? "",
-      chain: CHAIN_LABELS[data.chain],
+      chain: MARKET_LABELS[data.chain],
       address: data.address,
       basis: formatBasisLabel(data.basis, data.basisDay),
       amount: data.amount,
@@ -257,6 +290,7 @@ export function DcaApp() {
       overrides,
       sources: data.sources,
       warnings: data.warnings,
+      unit: data.chain === "equity" ? "shares" : "tokens",
     };
     try {
       const res = await fetch("/api/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
@@ -299,12 +333,13 @@ export function DcaApp() {
 
   const shareStale = share !== null && share.edits !== JSON.stringify(overrides);
 
+  const isEquity = data?.chain === "equity";
   const selectContent = "rounded-none border border-border bg-popover ring-0";
 
   const statTiles: { key: string; value: string; highlight?: boolean }[] = computed
     ? [
         { key: "Total invested", value: fmtUsd(computed.summary.invested) },
-        { key: "Total tokens", value: fmtNum(computed.summary.tokens, computed.decimals) },
+        { key: isEquity ? "Total shares" : "Total tokens", value: fmtNum(computed.summary.tokens, computed.decimals) },
         { key: "Avg buy price", value: fmtPrice(computed.summary.avgPrice) },
         { key: "Price today", value: fmtPrice(computed.summary.priceToday) },
         { key: "Value today", value: fmtUsd(computed.summary.valueToday), highlight: true },
@@ -339,8 +374,13 @@ export function DcaApp() {
                   value={mode}
                   onValueChange={(v) => {
                     if (!v) return;
-                    setMode(v as "token" | "stock");
-                    setErrors((e) => ({ ...e, address: undefined }));
+                    const next = v as "token" | "stock" | "equity";
+                    const end = endMonth || shiftMonth(currentMonth(), -1);
+                    // Stocks have decades of history, tokens at most six years: move the start so the range stays valid.
+                    if (next === "equity" && (!startMonth || startMonth > shiftMonth(end, -59))) setStartMonth(shiftMonth(end, -119));
+                    if (next !== "equity" && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
+                    setMode(next);
+                    setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
                   }}
                   className="form-control-h w-full sm:w-72"
                   aria-label="What to check"
@@ -349,6 +389,7 @@ export function DcaApp() {
                     [
                       ["token", "Token"],
                       ["stock", "xStocks"],
+                      ["equity", "Stocks"],
                     ] as const
                   ).map(([v, label]) => (
                     <ToggleGroupItem
@@ -362,7 +403,25 @@ export function DcaApp() {
                 </ToggleGroup>
               </div>
               <div className="min-[480px]:col-span-2">
-                {mode === "stock" ? (
+                {mode === "equity" ? (
+                  <Field id="ticker" label="Search or enter a ticker" error={errors.address}>
+                    <EquitySearchInput
+                      id="ticker"
+                      value={ticker}
+                      invalid={!!errors.address}
+                      onChange={(v) => {
+                        setTicker(v);
+                        setTickerName("");
+                      }}
+                      onPick={(h) => {
+                        setTicker(h.symbol);
+                        setTickerName(h.name);
+                        setErrors((e) => ({ ...e, address: undefined }));
+                      }}
+                    />
+                    {tickerName && <p className="text-xs text-muted-foreground">{tickerName}</p>}
+                  </Field>
+                ) : mode === "stock" ? (
                   <Field id="stock" label="Stock (tokenized, on Solana)" error={errors.address}>
                     <StockPicker id="stock" value={stock} invalid={!!errors.address} onChange={(s) => (setStock(s), setErrors((e) => ({ ...e, address: undefined })))} />
                     {stock && <p className="text-xs break-all text-muted-foreground">{stock.mint}</p>}
@@ -385,20 +444,49 @@ export function DcaApp() {
                   </Field>
                 )}
               </div>
-              <Field id="chain" label="Chain" error={errors.chain}>
-                <Select value={mode === "stock" ? "solana" : chain} disabled={mode === "stock"} onValueChange={(v) => setChain(v as Chain)}>
-                  <SelectTrigger id="chain" className="form-control-h w-full rounded-none">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className={selectContent}>
-                    {CHAINS.map((c) => (
-                      <SelectItem key={c} value={c} className="rounded-none">
-                        {CHAIN_LABELS[c]}
-                      </SelectItem>
+              {mode === "equity" ? (
+                <Field id="reinvest" label="Dividends">
+                  <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    spacing={0}
+                    value={reinvest ? "reinvest" : "ignore"}
+                    onValueChange={(v) => v && setReinvest(v === "reinvest")}
+                    className="form-control-h w-full"
+                    aria-label="Dividends"
+                  >
+                    {(
+                      [
+                        ["ignore", "Ignore"],
+                        ["reinvest", "Reinvest"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <ToggleGroupItem
+                        key={v}
+                        value={v}
+                        className="form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      >
+                        {label}
+                      </ToggleGroupItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+                  </ToggleGroup>
+                </Field>
+              ) : (
+                <Field id="chain" label="Chain" error={errors.chain}>
+                  <Select value={mode === "stock" ? "solana" : chain} disabled={mode === "stock"} onValueChange={(v) => setChain(v as Chain)}>
+                    <SelectTrigger id="chain" className="form-control-h w-full rounded-none">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className={selectContent}>
+                      {CHAINS.map((c) => (
+                        <SelectItem key={c} value={c} className="rounded-none">
+                          {CHAIN_LABELS[c]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+              )}
               <Field id="amount" label="Monthly amount (USD)" error={errors.amount}>
                 <Input
                   id="amount"
@@ -410,10 +498,10 @@ export function DcaApp() {
                 />
               </Field>
               <Field id="startMonth" label="Start month" error={errors.startMonth}>
-                <MonthPicker id="startMonth" value={startMonth} max={endMonth || undefined} invalid={!!errors.startMonth} onChange={setStartMonth} />
+                <MonthPicker id="startMonth" value={startMonth} minYear={mode === "equity" ? 1980 : undefined} max={endMonth || undefined} invalid={!!errors.startMonth} onChange={setStartMonth} />
               </Field>
               <Field id="endMonth" label="End month" error={errors.endMonth}>
-                <MonthPicker id="endMonth" value={endMonth} min={startMonth || undefined} invalid={!!errors.endMonth} onChange={setEndMonth} />
+                <MonthPicker id="endMonth" value={endMonth} minYear={mode === "equity" ? 1980 : undefined} min={startMonth || undefined} invalid={!!errors.endMonth} onChange={setEndMonth} />
               </Field>
               <div className="flex flex-col gap-2 min-[480px]:col-span-2">
                 <Field id="basis" label="Price basis" error={errors.basis}>
@@ -478,9 +566,9 @@ export function DcaApp() {
                 <div className="flex flex-col gap-1.5">
                   <span className="text-sm text-muted-foreground">Quick range, ending last month</span>
                   <div className="grid grid-cols-3 gap-2">
-                    {[6, 12, 24].map((n) => (
+                    {(mode === "equity" ? [60, 120, 240] : [6, 12, 24]).map((n) => (
                       <Button key={n} type="button" variant="outline" className="form-control-h rounded-none text-sm" onClick={() => applyPreset(n)}>
-                        Last {n} months
+                        {mode === "equity" ? `Last ${n / 12} years` : `Last ${n} months`}
                       </Button>
                     ))}
                   </div>
@@ -494,6 +582,16 @@ export function DcaApp() {
                   {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Calculator className="size-5" aria-hidden />}
                   {loading ? "Calculating" : "Calculate DCA"}
                 </Button>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm text-muted-foreground">Or try a ready-made check</span>
+                  <div className="flex flex-wrap gap-2">
+                    {EXAMPLES.map((ex) => (
+                      <Button key={ex.id} type="button" variant="outline" disabled={loading} title={ex.question} className="h-9 w-auto! rounded-none px-3 text-xs sm:text-sm" onClick={() => runExample(ex)}>
+                        {ex.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </form>
@@ -501,7 +599,7 @@ export function DcaApp() {
         </CardContent>
       </Card>
 
-      <TokenDetails chain={mode === "stock" ? "solana" : chain} address={mode === "stock" ? (stock?.mint ?? "") : address} />
+      <TokenDetails chain={mode === "stock" ? "solana" : chain} address={mode === "equity" ? "" : mode === "stock" ? (stock?.mint ?? "") : address} />
 
       {loading && (
         <div className="flex flex-col gap-4">
@@ -527,12 +625,18 @@ export function DcaApp() {
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold tracking-tight">{data.token.name ?? "Unknown token"}</h2>
               <Badge variant="outline" className="rounded-none font-normal">
-                {CHAIN_LABELS[data.chain]}
+                {MARKET_LABELS[data.chain]}
               </Badge>
               <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
                 {basisBadgeLabel(data.basis, data.basisDay)}
               </Badge>
+              {data.chain === "equity" && (
+                <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
+                  {data.reinvest ? "Dividends reinvested" : "Price only"}
+                </Badge>
+              )}
             </div>
+            {exampleNote && <p className="mb-4 text-sm text-muted-foreground">{exampleNote}</p>}
             <div className="border-l-2 border-foreground pl-4">
               <ResultSentence
                 amount={data.amount}
@@ -540,6 +644,7 @@ export function DcaApp() {
                 summary={computed.summary}
                 decimals={computed.decimals}
                 total={computed.buys.length}
+                shares={isEquity}
               />
             </div>
           </section>
@@ -578,7 +683,7 @@ export function DcaApp() {
               <AlertTriangle className="mt-0.5 size-4 shrink-0" />
               <span>
                 {computed.summary.skippedMonths} of {computed.buys.length} month(s) have no price (n/a) and are excluded from every total:{" "}
-                {computed.summary.skipped.join(", ")}. Enter a price manually to include a month.
+                {compressMonths(computed.summary.skipped).join(", ")}. Enter a price manually to include a month.
               </span>
             </p>
           )}
@@ -652,7 +757,7 @@ export function DcaApp() {
                       <dd className="tabular-nums">{b.tokens === null ? NA : fmtNum(b.amount, 2)}</dd>
                     </div>
                     <div className="text-right">
-                      <dt className="text-xs text-muted-foreground">Tokens</dt>
+                      <dt className="text-xs text-muted-foreground">{isEquity ? "Shares" : "Tokens"}</dt>
                       <dd className="tabular-nums">{fmtNum(b.tokens, computed.decimals)}</dd>
                     </div>
                   </dl>
@@ -676,7 +781,7 @@ export function DcaApp() {
             <Table className="min-w-[900px]">
               <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow className="hover:bg-transparent">
-                  {(["Month", "Price date", "Price (USD)", "Amount (USD)", "Tokens bought", "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
+                  {(["Month", "Price date", "Price (USD)", "Amount (USD)", isEquity ? "Shares bought" : "Tokens bought", "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
                     <TableHead key={h} className={cn("text-sm text-muted-foreground", i >= 2 && i <= 5 && "text-right")}>{h}</TableHead>
                   ))}
                 </TableRow>

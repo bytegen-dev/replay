@@ -1,6 +1,6 @@
-# DCA Checker
+# Dripcast
 
-Given a token contract and a chain, shows what a fixed monthly USD buy would have purchased and what it is worth today. Next.js (App Router), TypeScript, Tailwind. Black and white, no accents.
+Dripcast backtests a fixed monthly purchase: pick a US stock or ETF (decades of history) or a token on Ethereum, Base, BSC, Arbitrum, Solana or Cardano, and it shows what the monthly buys would have bought and what they are worth today. It also has a public API and an AI agent skill. Next.js (App Router), TypeScript, Tailwind. Black and white, no accents.
 
 ## Setup
 
@@ -78,6 +78,92 @@ CoinGecko is the primary source for Cardano, but its free tier stops at 365 days
 2. **GeckoTerminal pools** (up to four, deepest first) for anything still empty. Pool candles exist only on days with trades and the pools are thin, so for these prices only, when nothing traded within 3 days of the target, the nearest actual trade up to 7 days away is used and the Note says how far and which way. Every other source stays strictly within 3 days.
 
 CoinGecko always wins on days it has a price. Whatever is still empty after both stays n/a and is left out of the totals. With a policy ID alone, the app finds the full asset ID by searching GeckoTerminal for the token's symbol; if you paste the full asset ID (policy plus token name in hex), it uses that directly, which matters when one policy covers several tokens. A paid CoinGecko key still gives the most complete history.
+
+## Stocks
+
+The **Stocks** switch checks ordinary US-listed stocks and ETFs, with decades of history: "what is $100 a month into Apple since 2013 worth today?" Type a ticker or a company name (`AAPL`, `apple`, `BRK-B`, `SPY`) and pick from the matches. (**xStocks** is something different: tokenized stocks that trade on Solana.)
+
+- **Source:** Yahoo Finance's daily chart data, split-adjusted (Apple's 2014 7-for-1 and 2020 4-for-1 splits are already in the prices, so shares bought in 2013 are counted in today's shares). Ranges can run up to 40 years.
+- **Trading days:** a stock can only be bought on a day the market is open. With the month-end basis each purchase uses the last trading day on or before the month's last day, and with the first-of-month or day-of-month basis the first trading day on or after it, never a day from the neighbouring month. A closed-market month says so in its Note ("Market closed on 2013-03-31; used 2013-03-28").
+- **Dividends:** by default the result is price only. **Reinvest** switches every price to Yahoo's dividend-adjusted close, which gives the total return of reinvesting each payout. That makes the table's prices lower than the real historical prices, and the result header says which mode ran. A dividend-paying stock is understated with Ignore.
+- **Wording:** results say shares, not tokens, and fractional shares are allowed (6 decimals).
+- **USD only:** a stock quoted in another currency is refused with a clear message instead of being shown in the wrong unit. Indexes (`^GSPC`) and futures aren't supported; use the ETF (`SPY` for the S&P 500, `QQQ` for the Nasdaq-100).
+- **Resilience:** Yahoo's endpoint is unofficial and rate-limits shared server addresses. Each ticker's full history is fetched once and kept for six hours in memory and in the Neon database (a `stock_history` table, created on first use). If Yahoo refuses and an older copy exists, that copy answers and the result carries a warning saying so. If it blocks your host outright, set `YAHOO_BASE_URL` to a proxy.
+- **Ready-made checks:** under Calculate, one-click buttons run questions like "$500 a month into the S&P 500 since 1998".
+
+## Public API
+
+A versioned JSON API for other apps and AI agents, under `/api/v1`. The machine-readable description is at `/api/v1/openapi.json`.
+
+```bash
+# What is $500 a month into the S&P 500 (SPY) since 1998 worth today, dividends reinvested?
+curl "https://YOUR-SITE/api/v1/dca?market=stock&asset=SPY&amount=500&from=1998-01&reinvest=true"
+
+# Resolve a name to the market and asset to use
+curl "https://YOUR-SITE/api/v1/search?q=apple"
+
+# Ready-made questions, each with the exact call
+curl "https://YOUR-SITE/api/v1/examples"
+```
+
+| Endpoint | Purpose |
+|---|---|
+| `GET` or `POST /api/v1/dca` | The calculation. `market` (`stock` or a chain), `asset` (ticker, address or policy id), `amount`, `from`, optional `to`, `basis`, `day`, `reinvest`, `detail` (`summary` or `full`) |
+| `GET` or `POST /api/v1/historical-price` | The price of a token or stock at a past date and time (see below) |
+| `GET /api/v1/search?q=&type=` | Find the `market` and `asset` for a name (`type` is `all`, `stock` or `token`) |
+| `GET /api/v1/examples` | Suggested checks |
+| `GET /api/v1/openapi.json` | OpenAPI 3.1 description |
+
+The result has an `answer` sentence that is safe to quote, a `summary` (invested, units, average price, price today, value today, gain, gain percent, priced and skipped months), the `sources` and `warnings`, and with `detail=full` every month. Errors always look like `{ "error": { "code", "message", "fields" } }`, and `fields` names each bad input.
+
+- **CORS** is open (`*`), so browser apps can call it directly.
+- **Keys (optional):** set `DCA_API_KEYS` (comma-separated) and every v1 request must send one as `Authorization: Bearer <key>` or `x-api-key`. Unset, the API is open.
+- **Rate limits:** 30 requests a minute per caller without a key and 120 with one (`DCA_API_RATE_LIMIT_ANON`, `DCA_API_RATE_LIMIT_KEY`). The counter lives in the Neon database so it holds across serverless instances, and falls back to per-instance counting without one. `X-RateLimit-*` and `Retry-After` headers are sent.
+- It is **public if you leave `DCA_API_KEYS` unset**, and every call can use your CoinGecko and Yahoo allowance. Set keys if that matters.
+
+## Price at a past moment
+
+`/price` on the site, and `/api/v1/historical-price` in the API, answer "what was this worth at that date and time?":
+
+```bash
+# Named fields
+curl "https://YOUR-SITE/api/v1/historical-price?market=ETH&asset=0x6982508145454Ce325dDbE47a25d4ec3d2311933&date=5%20days%20ago&time=13:40"
+
+# One line of text, the way a chat command arrives, answered as a plain-text message
+curl -G "https://YOUR-SITE/api/v1/historical-price" --data-urlencode "q=So11111111111111111111111111111111111111112 SOL 13:40 15/09/2026" --data-urlencode "format=text"
+```
+
+**The one line** is `<address> <chain> [time] <date> [timezone]`. Chains are `SOL`, `ETH`, `BASE`, `BSC`, `ARB`, `ADA`, or `STOCK` (the address is then a ticker). The chain can be left out for a Solana address or a Cardano policy id, since those fit only one chain; an EVM address needs it.
+
+**Dates** are read the way people write them: `15/09/2026` (day first), `2026-09-15`, `September 15 2026`, `15 Sep`, `today`, `yesterday`, `5 days ago`, `3 weeks ago`, `5 months ago` (calendar months: 31 March minus a month is the end of February), `1 year ago`, `2 hours ago`, `30 min ago`, `now`, or a unix timestamp. With no year, it uses this year, or last year if that day hasn't happened yet this year (and a leap day with no leap year this year goes to the last leap year). It never guesses the future: that is an error. **Times** are `13:40`, `1:40pm`, `1pm`. **Timezones** are `UTC` (default), `UTC+2`, `EST`, or a name like `Europe/London`, with daylight saving handled. Whatever was assumed is returned in `when.assumptions`, and the page shows "Reads as ..." before you submit.
+
+**What the price means.** With a time, it is the last trade before that minute (the close of the last candle that had finished). With no time, it is that day's closing price in UTC. If nothing traded for a while, that last price still stands and the answer says how old it is. The `current` field gives today's price and the change since, where it is known.
+
+**How far back, and how precisely.** Each source can only see so far, so the lookup tries the finest data first and steps down, and the response always says which it used (`price.resolution`, `source`, `warnings`):
+
+| Tokens on Ethereum, Base, BSC, Arbitrum, Solana | Cardano | Stocks |
+|---|---|---|
+| 1-minute candles from the token's top pool (GeckoTerminal), about six months back | 1-minute candles from DexHunter, converted to USD with Bitstamp's ADA/USD at the same granularity, well past six months (1-minute reaches back at least 8 months in testing) | 1-minute bars for about a week, 5-minute for two months, hourly for two years (Yahoo) |
+| then hourly or daily candles | then hourly, then daily (back to late 2024 or earlier) | then the day's closing price, back decades |
+| then CoinGecko hourly snapshots, out to a year on the free plan | CoinGecko hourly snapshots inside a year | A weekend or holiday gets the last close, and says so |
+| Older than that: not available, with the reason. A paid CoinGecko key (`COINGECKO_PLAN=pro`) removes the one-year limit | | Stocks that have split since show the price it traded at then, plus the figure in today's shares |
+
+Thin tokens can have quiet stretches; those are flagged, never smoothed over. When a source says "slow down" (rate limit), the lookup stops asking it and moves down the ladder, and answers for past moments are kept in memory for hours, since they never change.
+
+**Chat bots.** `format=text` returns one ready-to-post message (the sentence, the source, any notes), and errors come back as plain text too, listing every problem. A Telegram bot is a few lines:
+
+```js
+// For: /historical-price <address> SOL 13:40 15/09/2026
+const arg = ctx.message.text.replace(/^\/historical-price(@\w+)?\s*/i, "");
+const res = await fetch(`https://YOUR-SITE/api/v1/historical-price?format=text&q=${encodeURIComponent(arg)}`, {
+  headers: { "x-api-key": process.env.DRIPCAST_KEY }, // only if you set DCA_API_KEYS
+});
+await ctx.reply(await res.text());
+```
+
+## Agent skill
+
+`skills/dripcast/SKILL.md` teaches an AI agent to use the API: how to turn "$500 a month into the S&P 500 since 1998" into a call, which ticker stands for which index, how to report the answer and its caveats, and what each error means. To use it, copy the `skills/dripcast` folder into your agent's skills directory (for Claude Code, `~/.claude/skills/dripcast` or a project's `.claude/skills/dripcast`). It points at the deployed site by default; set `DRIPCAST_URL` to use another.
 
 ## Limits
 

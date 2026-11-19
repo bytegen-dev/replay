@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { DcaApp } from "@/components/DcaApp";
 import { SiteFooter } from "@/components/SiteFooter";
+import { SiteNav } from "@/components/SiteNav";
 
 export default function Home() {
   return (
@@ -9,7 +10,7 @@ export default function Home() {
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-[max(1rem,env(safe-area-inset-left))] py-4 pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] sm:gap-4 sm:px-6 sm:py-5">
           <Image
             src="/dca-logo.png"
-            alt="DCA Checker"
+            alt="Dripcast"
             width={48}
             height={48}
             className="size-10 shrink-0 object-contain sm:size-12"
@@ -19,14 +20,15 @@ export default function Home() {
             <p className="text-[0.6rem] font-bold tracking-[0.18em] text-muted-foreground uppercase sm:text-[0.65rem] sm:tracking-[0.2em]">
               Backtest
             </p>
-            <h1 className="text-xl font-bold tracking-tight sm:text-3xl">DCA Checker</h1>
+            <h1 className="text-xl font-bold tracking-tight sm:text-3xl">Dripcast</h1>
           </div>
+          <SiteNav />
         </div>
       </header>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-[max(1rem,env(safe-area-inset-left))] py-6 pr-[max(1rem,env(safe-area-inset-right))] sm:px-6 sm:py-10">
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-          Model a fixed monthly USD purchase for any token, month by month. Edit missing prices, then export a spreadsheet.
+          Model a fixed monthly purchase of any stock or token, month by month. Edit missing prices, then export a spreadsheet.
         </p>
         <DcaApp />
       </main>

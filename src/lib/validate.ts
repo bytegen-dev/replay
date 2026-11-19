@@ -1,7 +1,13 @@
 import { isMonth } from "./months.ts";
-import { CHAINS, type Chain, type DcaRequest } from "./types.ts";
+import { CHAINS, type Chain, type DcaRequest, type Market } from "./types.ts";
 
 export const MAX_MONTHS = 72;
+/** Stocks have decades of history, so they get a much longer range. */
+export const MAX_MONTHS_EQUITY = 480;
+export const maxMonthsFor = (market: Market) => (market === "equity" ? MAX_MONTHS_EQUITY : MAX_MONTHS);
+
+/** A listed ticker: letters and digits, with . or - for share classes (BRK-B, BF.B). No indexes or futures. */
+const TICKER_RE = /^[A-Za-z0-9][A-Za-z0-9.-]{0,14}$/;
 
 const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
 // A policy ID is 56 hex characters. The full asset ID ("unit") appends the token name in hex (up to 32 bytes).
@@ -30,19 +36,24 @@ const WRONG_CHAIN_HINT: Record<AddressKind, string> = {
  * The form we send to the price providers. Cardano: a pasted asset ID (policy + token name) is cut
  * back to the lowercase 56-character policy ID, the only form CoinGecko looks up. Others: trimmed.
  */
-export function normalizeAddress(address: string, chain: Chain): string {
+export function normalizeAddress(address: string, chain: Market): string {
   const a = address.trim();
+  if (chain === "equity") return a.toUpperCase();
   return chain === "cardano" && CARDANO_POLICY_RE.test(a) ? a.slice(0, POLICY_LEN).toLowerCase() : a;
 }
 
 /** The full Cardano asset id (lowercase) when the user pasted policy + token name, otherwise undefined. */
-export function cardanoUnit(address: string, chain: Chain): string | undefined {
+export function cardanoUnit(address: string, chain: Market): string | undefined {
   const a = address.trim();
   return chain === "cardano" && a.length > POLICY_LEN && CARDANO_POLICY_RE.test(a) ? a.toLowerCase() : undefined;
 }
 
-export function validateAddress(address: string, chain: Chain): string | null {
+export function validateAddress(address: string, chain: Market): string | null {
   const a = address.trim();
+  if (chain === "equity") {
+    if (!a) return "Ticker is required";
+    return TICKER_RE.test(a) ? null : "Enter a ticker like AAPL or BRK-B";
+  }
   if (!a) return chain === "cardano" ? "Policy ID is required" : "Contract address is required";
   const detected = detectKind(a);
   if (detected && detected !== kindOf(chain)) return WRONG_CHAIN_HINT[detected];
@@ -62,9 +73,9 @@ export type FieldErrors = Partial<
 
 export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>>): FieldErrors {
   const errors: FieldErrors = {};
-  const chain = input.chain as Chain;
-  if (!CHAINS.includes(chain)) errors.chain = "Choose a supported chain";
-  else if (typeof input.address !== "string") errors.address = "Contract address is required";
+  const chain = input.chain as Market;
+  if (chain !== "equity" && !CHAINS.includes(chain)) errors.chain = "Choose a supported chain";
+  else if (typeof input.address !== "string") errors.address = chain === "equity" ? "Ticker is required" : "Contract address is required";
   else {
     const e = validateAddress(input.address, chain);
     if (e) errors.address = e;
@@ -81,7 +92,8 @@ export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>
     if (s > e) errors.endMonth = "End month must not be before start month";
     else {
       const months = (Number(e.slice(0, 4)) - Number(s.slice(0, 4))) * 12 + Number(e.slice(5)) - Number(s.slice(5)) + 1;
-      if (months > MAX_MONTHS) errors.endMonth = `Range is limited to ${MAX_MONTHS} months`;
+      const max = maxMonthsFor(chain);
+      if (months > max) errors.endMonth = `Range is limited to ${max} months`;
     }
   }
 

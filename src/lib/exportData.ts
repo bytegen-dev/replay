@@ -13,6 +13,8 @@ export interface ExportPayload {
   rows: MonthRow[];
   overrides: Overrides;
   sources: SourceLink[];
+  /** What was bought: "tokens" for crypto, "shares" for stocks. Only changes wording. */
+  unit?: "tokens" | "shares";
 }
 
 export interface Prepared {
@@ -49,18 +51,19 @@ export function parsePayload(x: unknown): ExportPayload | string {
     rows: p.rows as MonthRow[],
     overrides: (p.overrides ?? {}) as Overrides,
     sources: Array.isArray(p.sources) ? (p.sources as SourceLink[]) : [],
+    unit: p.unit === "shares" ? "shares" : "tokens",
   };
 }
 
 /**
- * File name for the spreadsheet: the token and the months it covers, e.g. dca-nmkr-2024-12-to-2026-10.xlsx.
- * One month gives dca-nmkr-2025-10.xlsx. Anything unsafe in the token label is flattened to a dash.
+ * File name for the spreadsheet: the token and the months it covers, e.g. dripcast-nmkr-2024-12-to-2026-10.xlsx.
+ * One month gives dripcast-nmkr-2025-10.xlsx. Anything unsafe in the token label is flattened to a dash.
  */
 export function xlsxFileName(p: { tokenLabel: string; rows: { month: string }[] }): string {
   const slug = p.tokenLabel.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "result";
   const months = p.rows.map((r) => r.month).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
   const range = months.length === 0 ? "" : months[0] === months[months.length - 1] ? `-${months[0]}` : `-${months[0]}-to-${months[months.length - 1]}`;
-  return `dca-${slug}${range}.xlsx`;
+  return `dripcast-${slug}${range}.xlsx`;
 }
 
 export function noteText(b: BuyRow): string {

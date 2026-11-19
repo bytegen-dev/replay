@@ -9,8 +9,8 @@ export interface SharePayload extends ExportPayload {
 }
 
 /** Hard cap on the posted body. A 72-month result is well under 100 KB. */
-export const MAX_SHARE_BYTES = 200_000;
-const MAX_ROWS = 72;
+export const MAX_SHARE_BYTES = 300_000;
+const MAX_ROWS = 480;
 const MAX_STR = 300;
 const MAX_NOTES = 8;
 const MAX_SOURCES = 10;
@@ -97,6 +97,7 @@ export function parseShare(x: unknown): SharePayload | string {
   }
 
   return {
+    unit: p.unit === "shares" ? "shares" : "tokens",
     tokenLabel: str(p.tokenLabel, 60),
     tokenName: str(p.tokenName, 100),
     chain: str(p.chain, 40),

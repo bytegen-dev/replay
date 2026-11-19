@@ -4,11 +4,13 @@ import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { currentMonth } from "@/lib/months.ts";
 import { cn } from "@/lib/utils";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+/** Default earliest year. Stocks pass an earlier one, since they have decades of history. */
 const MIN_YEAR = 2015;
 
 export function formatMonth(v: string): string {
@@ -24,14 +26,16 @@ interface Props {
   min?: string;
   /** Latest selectable month, YYYY-MM. Defaults to the current month. */
   max?: string;
+  /** Earliest year offered. Defaults to 2015. */
+  minYear?: number;
   invalid?: boolean;
 }
 
 /** Only mounted while the popover is open, so reading the clock here never runs during prerender. */
-function Grid({ value, onChange, min, max }: Pick<Props, "value" | "onChange" | "min" | "max">) {
+function Grid({ value, onChange, min, max, minYear: floorYear = MIN_YEAR }: Pick<Props, "value" | "onChange" | "min" | "max" | "minYear">) {
   const now = currentMonth();
   const upper = max && max < now ? max : now;
-  const lower = min && min > `${MIN_YEAR}-01` ? min : `${MIN_YEAR}-01`;
+  const lower = min && min > `${floorYear}-01` ? min : `${floorYear}-01`;
   const selectedYear = Number(value.slice(0, 4)) || Number(now.slice(0, 4));
   const [year, setYear] = useState(selectedYear);
 
@@ -46,7 +50,19 @@ function Grid({ value, onChange, min, max }: Pick<Props, "value" | "onChange" | 
         <Button type="button" variant="outline" size="icon-sm" className="rounded-none" aria-label="Previous year" disabled={year <= minYear} onClick={() => setYear((y) => y - 1)}>
           <ChevronLeft />
         </Button>
-        <span className="font-bold tabular-nums" aria-live="polite">{year}</span>
+        {/* A year list, so reaching 1998 or 2013 is one pick instead of dozens of clicks. */}
+        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+          <SelectTrigger aria-label="Year" className="h-8 w-24 justify-center gap-1 rounded-none font-bold tabular-nums">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="max-h-64 rounded-none border border-border bg-popover ring-0">
+            {Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i).map((y) => (
+              <SelectItem key={y} value={String(y)} className="rounded-none tabular-nums">
+                {y}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button type="button" variant="outline" size="icon-sm" className="rounded-none" aria-label="Next year" disabled={year >= maxYear} onClick={() => setYear((y) => y + 1)}>
           <ChevronRight />
         </Button>
@@ -77,7 +93,7 @@ function Grid({ value, onChange, min, max }: Pick<Props, "value" | "onChange" | 
   );
 }
 
-export function MonthPicker({ id, value, onChange, min, max, invalid }: Props) {
+export function MonthPicker({ id, value, onChange, min, max, minYear, invalid }: Props) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -98,6 +114,7 @@ export function MonthPicker({ id, value, onChange, min, max, invalid }: Props) {
           value={value}
           min={min}
           max={max}
+          minYear={minYear}
           onChange={(v) => {
             onChange(v);
             setOpen(false);

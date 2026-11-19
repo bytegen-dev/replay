@@ -15,6 +15,24 @@ export interface SelectOptions {
   today: string;
   /** Earliest day the data source can serve, or null for unlimited. */
   earliestAllowed: string | null;
+  /**
+   * Stocks only trade on some days. Month-end then means the last trading day on or before the target, and the
+   * other bases mean the first trading day on or after it, never a day from the neighbouring month.
+   */
+  tradingDays?: boolean;
+}
+
+/** Longest run of closed days to look across: a weekend plus a holiday or two. */
+export const TRADING_WINDOW_DAYS = 6;
+
+/** The trading day a stock purchase on `target` would happen on, or null when none is near. */
+export function findTradingDay(byDate: Map<string, DailyPoint>, target: string, basis: Basis): DailyPoint | null {
+  const step = basis === "month-end" ? -1 : 1;
+  for (let off = 0; off <= TRADING_WINDOW_DAYS; off++) {
+    const p = byDate.get(addDays(target, off * step));
+    if (p) return p;
+  }
+  return null;
 }
 
 /**
@@ -97,6 +115,7 @@ export function selectMonthPrice(
   if (target > opts.today) {
     return empty("future", `${target} has not happened yet; no price`);
   }
+  if (opts.tradingDays) return selectTradingMonth(month, target, byDate, opts);
   const point = findNearest(byDate, target);
   if (!point && opts.earliestAllowed && target < opts.earliestAllowed) {
     return empty(
@@ -129,6 +148,25 @@ export function selectMonthPrice(
     source: point.source ?? opts.source,
     notes,
   };
+}
+
+/** A stock month: the trading day on or around the target, with a plain note when the market was closed that day. */
+function selectTradingMonth(month: string, target: string, byDate: Map<string, DailyPoint>, opts: SelectOptions): MonthRow {
+  const point = findTradingDay(byDate, target, opts.basis);
+  if (!point) {
+    return {
+      month,
+      targetDate: target,
+      priceDate: null,
+      price: null,
+      source: "none",
+      notes: [{ code: "no-data", text: `No trading day with a price near ${target}` }],
+    };
+  }
+  const notes: Note[] = [];
+  if (point.date !== target) notes.push({ code: "market-closed", text: `Market closed on ${target}; used ${point.date}` });
+  notes.push(...liquidityNotes(byDate, point));
+  return { month, targetDate: target, priceDate: point.date, price: point.price, source: point.source ?? opts.source, notes };
 }
 
 export function selectAllMonths(

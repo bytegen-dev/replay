@@ -1,7 +1,7 @@
 {
-  "name": "DCA Checker",
-  "short_name": "DCA",
-  "description": "What a fixed monthly USD buy would have purchased, and what it is worth today.",
+  "name": "Dripcast",
+  "short_name": "Dripcast",
+  "description": "What a fixed monthly buy of a stock or token would be worth today.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

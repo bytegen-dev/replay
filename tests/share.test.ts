@@ -56,8 +56,9 @@ test("rejects bad rows, amounts and sizes", () => {
   assert.equal(typeof parseShare({ ...good, amount: 0 }), "string");
   assert.equal(typeof parseShare({ ...good, rows: [row("2026-13", 1)] }), "string");
   assert.equal(typeof parseShare({ ...good, rows: [row("2026-09", -1)] }), "string");
-  const many = Array.from({ length: 73 }, (_, i) => row(`${2020 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`, 1));
-  assert.equal(typeof parseShare({ ...good, rows: many }), "string");
+  const months = (n: number) => Array.from({ length: n }, (_, i) => row(`${1990 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`, 1));
+  assert.equal(typeof parseShare({ ...good, rows: months(481) }), "string", "more than 480 months (40 years) is refused");
+  assert.equal(typeof parseShare({ ...good, rows: months(480) }), "object", "a 40-year stock run can be shared");
 });
 
 test("only https source links survive", () => {

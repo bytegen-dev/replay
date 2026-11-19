@@ -6,9 +6,9 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "DCA Checker", template: "%s | DCA Checker" },
-  description: "What a fixed monthly USD buy of a token would have bought, and what it is worth today.",
-  applicationName: "DCA Checker",
+  title: { default: "Dripcast", template: "%s | Dripcast" },
+  description: "What a fixed monthly buy of a stock or token would be worth today.",
+  applicationName: "Dripcast",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -20,21 +20,21 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "DCA Checker",
+    title: "Dripcast",
     statusBarStyle: "black-translucent",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "DCA Checker",
-    title: "DCA Checker",
-    description: "Backtest a fixed monthly USD purchase for any token, month by month.",
-    images: [{ url: "/og-image.png", width: 512, height: 512, alt: "DCA Checker" }],
+    siteName: "Dripcast",
+    title: "Dripcast",
+    description: "Backtest a fixed monthly purchase of any stock or token, month by month.",
+    images: [{ url: "/og-image.png", width: 512, height: 512, alt: "Dripcast" }],
   },
   twitter: {
     card: "summary",
-    title: "DCA Checker",
-    description: "Backtest a fixed monthly USD purchase for any token, month by month.",
+    title: "Dripcast",
+    description: "Backtest a fixed monthly purchase of any stock or token, month by month.",
     images: ["/og-image.png"],
   },
   formatDetection: { telephone: false },

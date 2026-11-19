@@ -69,3 +69,23 @@ export function todayUtc(now: number = Date.now()): string {
 export function currentMonth(now: number = Date.now()): string {
   return toDateString(now).slice(0, 7);
 }
+
+/**
+ * Collapses a list of months into runs: ["2013-01","2013-02","2013-03","2013-07"] becomes
+ * ["2013-01 to 2013-03", "2013-07"]. Keeps long gaps readable. Input need not be sorted.
+ */
+export function compressMonths(months: string[]): string[] {
+  const sorted = [...new Set(months)].filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
+  const next = (m: string) => {
+    const [y, mo] = m.split("-").map(Number);
+    return new Date(Date.UTC(y, mo, 1)).toISOString().slice(0, 7);
+  };
+  const out: string[] = [];
+  let start = 0;
+  for (let i = 1; i <= sorted.length; i++) {
+    if (i < sorted.length && sorted[i] === next(sorted[i - 1])) continue;
+    out.push(i - 1 === start ? sorted[start] : `${sorted[start]} to ${sorted[i - 1]}`);
+    start = i;
+  }
+  return out;
+}

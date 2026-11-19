@@ -3,6 +3,7 @@ import { SharedExport } from "@/components/SharedExport";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { prepare } from "@/lib/exportData.ts";
+import { compressMonths } from "@/lib/months.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import type { SharePayload } from "@/lib/share.ts";
 
@@ -20,7 +21,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
 
   const tiles = [
     { key: "Total invested", value: fmtUsd(summary.invested) },
-    { key: "Total tokens", value: fmtNum(summary.tokens, decimals) },
+    { key: data.unit === "shares" ? "Total shares" : "Total tokens", value: fmtNum(summary.tokens, decimals) },
     { key: "Avg buy price", value: fmtPrice(summary.avgPrice) },
     { key: "Price today", value: fmtPrice(summary.priceToday) },
     { key: "Value today", value: fmtUsd(summary.valueToday), highlight: true },
@@ -91,7 +92,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
         <p className="flex items-start gap-2 text-sm">
           <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
-            {summary.skippedMonths} of {buys.length} month(s) have no price (n/a) and are excluded from every total: {summary.skipped.join(", ")}.
+            {summary.skippedMonths} of {buys.length} month(s) have no price (n/a) and are excluded from every total: {compressMonths(summary.skipped).join(", ")}.
           </span>
         </p>
       )}
@@ -100,7 +101,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
         <Table className="min-w-[860px]">
           <TableHeader className="bg-card">
             <TableRow className="hover:bg-transparent">
-              {(["Month", "Price date", "Price (USD)", "Amount (USD)", "Tokens bought", "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
+              {(["Month", "Price date", "Price (USD)", "Amount (USD)", data.unit === "shares" ? "Shares bought" : "Tokens bought", "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
                 <TableHead key={h} className={`text-sm text-muted-foreground ${i >= 2 && i <= 5 ? "text-right" : ""}`}>
                   {h}
                 </TableHead>

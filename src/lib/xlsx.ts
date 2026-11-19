@@ -12,7 +12,7 @@ const BOLD = { bold: true };
 export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   const { buys, summary, decimals } = prepare(p);
   const wb = new ExcelJS.Workbook();
-  wb.creator = "DCA Checker";
+  wb.creator = "Dripcast";
 
   const n = buys.length;
   const last = n + 1; // header is row 1
@@ -21,7 +21,7 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   const src = wb.addWorksheet("Sources");
 
   /* ---- Buys: C is the only hardcoded input per row (blue); everything else is a formula ---- */
-  buy.addRow(["Month", "Price date", "Price (USD)", "Amount (USD)", "Tokens bought", "Value today (USD)", "Source", "Note"]);
+  buy.addRow(["Month", "Price date", "Price (USD)", "Amount (USD)", p.unit === "shares" ? "Shares bought" : "Tokens bought", "Value today (USD)", "Source", "Note"]);
   buy.getRow(1).font = BOLD;
   buys.forEach((b, i) => {
     const r = i + 2;
@@ -58,7 +58,7 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
     ["Price today (USD)", p.currentPrice ?? "", "input", "0.00000000"],
     ["Price basis", p.basis, "text"],
     ["Total invested (USD)", { formula: `SUM(Buys!D2:D${last})`, result: summary.invested }, "formula", "#,##0.00"],
-    ["Total tokens", { formula: `SUM(Buys!E2:E${last})`, result: summary.tokens }, "formula", decimals ? `#,##0.${"0".repeat(decimals)}` : "#,##0"],
+    [p.unit === "shares" ? "Total shares" : "Total tokens", { formula: `SUM(Buys!E2:E${last})`, result: summary.tokens }, "formula", decimals ? `#,##0.${"0".repeat(decimals)}` : "#,##0"],
     ["Average buy price (USD)", { formula: `IF(B9>0,B8/B9,"n/a")`, result: summary.avgPrice ?? "n/a" }, "formula", "0.00000000"],
     ["Value today (USD)", { formula: `IF(ISNUMBER(B6),B9*B6,"n/a")`, result: summary.valueToday ?? "n/a" }, "formula", "#,##0.00"],
     ["Gain / loss (USD)", { formula: `IF(ISNUMBER(B11),B11-B8,"n/a")`, result: summary.gain ?? "n/a" }, "formula", "#,##0.00"],
@@ -67,7 +67,7 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   ];
   sum.getRow(1).height = 44;
   sum.mergeCells("B1:D1");
-  sum.getCell("B1").value = "DCA Checker";
+  sum.getCell("B1").value = "Dripcast";
   sum.getCell("B1").font = { bold: true, size: 14 };
   sum.getCell("B1").alignment = { vertical: "middle" };
   if (fs.existsSync(LOGO_PATH)) {

@@ -10,6 +10,11 @@ export const CHAIN_LABELS: Record<Chain, string> = {
   arbitrum: "Arbitrum",
 };
 
+/** Everything a request can target: a crypto chain, or "equity" for an ordinary listed stock or ETF (address = ticker). */
+export type Market = Chain | "equity";
+
+export const MARKET_LABELS: Record<Market, string> = { ...CHAIN_LABELS, equity: "Stock" };
+
 export type Basis = "month-end" | "first-of-month" | "day-of-month";
 
 /** One daily observation. `date` is a UTC calendar day, YYYY-MM-DD. */
@@ -31,6 +36,7 @@ export type NoteCode =
   | "no-data"
   | "out-of-range"
   | "future"
+  | "market-closed"
   | "manual";
 
 export interface Note {
@@ -38,7 +44,7 @@ export interface Note {
   text: string;
 }
 
-export type PriceSource = "CoinGecko" | "GeckoTerminal" | "DexHunter" | "manual" | "none";
+export type PriceSource = "CoinGecko" | "GeckoTerminal" | "DexHunter" | "Yahoo" | "manual" | "none";
 
 export interface MonthRow {
   /** YYYY-MM */
@@ -60,21 +66,24 @@ export interface SourceLink {
 
 export interface DcaResponse {
   token: { id: string | null; symbol: string | null; name: string | null };
-  chain: Chain;
+  chain: Market;
   address: string;
   basis: Basis;
   /** 1–31 when basis is day-of-month; each month uses this day or the last day of that month if shorter. */
   basisDay?: number;
   currentPrice: number | null;
   currentPriceDate: string;
+  /** Stocks only: prices are adjusted so dividends are treated as reinvested. */
+  reinvest?: boolean;
   rows: MonthRow[];
   sources: SourceLink[];
   warnings: string[];
 }
 
 export interface DcaRequest {
+  /** Contract, mint, Cardano policy id, or (for "equity") the ticker. */
   address: string;
-  chain: Chain;
+  chain: Market;
   amount: number;
   startMonth: string;
   endMonth: string;
@@ -82,4 +91,6 @@ export interface DcaRequest {
   basisDay?: number;
   /** Cardano only: the full asset id (policy + token name in hex), when the user pasted one. */
   unit?: string;
+  /** Stocks only: treat dividends as reinvested (total return) instead of price only. */
+  reinvest?: boolean;
 }

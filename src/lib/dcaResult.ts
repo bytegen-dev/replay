@@ -1,0 +1,119 @@
+import { fmtNum, fmtPct, fmtUsd } from "./format.ts";
+import { buildBuys, chooseDecimals, summarize } from "./math.ts";
+import { compressMonths } from "./months.ts";
+import type { DcaRequest, DcaResponse } from "./types.ts";
+
+/** What the public API returns: the numbers, a ready-to-quote sentence, and (with detail=full) every month. */
+export interface ApiResult {
+  /** One plain-English sentence with the answer. Safe to quote. */
+  answer: string;
+  request: {
+    market: string;
+    asset: string;
+    amountPerMonth: number;
+    from: string;
+    to: string;
+    basis: string;
+    reinvestDividends?: boolean;
+  };
+  asset: { market: string; symbol: string | null; name: string | null; address: string };
+  summary: {
+    totalMonths: number;
+    pricedMonths: number;
+    skippedMonths: number;
+    skippedMonthsList: string[];
+    /** The same months as runs, e.g. "1998-01 to 2012-11". Easier to read aloud. */
+    skippedMonthRanges: string[];
+    totalInvested: number;
+    /** Shares for stocks, tokens for crypto. */
+    unitsBought: number;
+    unit: "shares" | "tokens";
+    averageBuyPrice: number | null;
+    priceToday: number | null;
+    priceTodayDate: string;
+    valueToday: number | null;
+    gain: number | null;
+    /** Percent, e.g. 25.4 means +25.4%. */
+    gainPercent: number | null;
+  };
+  months?: {
+    month: string;
+    priceDate: string | null;
+    price: number | null;
+    invested: number;
+    units: number | null;
+    valueToday: number | null;
+    source: string;
+    notes: string[];
+  }[];
+  sources: { label: string; url: string }[];
+  warnings: string[];
+}
+
+const round = (x: number | null, d = 6): number | null => (x === null ? null : Math.round(x * 10 ** d) / 10 ** d);
+
+/** The sentence, in plain text. Mirrors the one on the page. */
+export function describeResult(opts: { amount: number; symbol: string; unit: "shares" | "tokens"; priced: number; total: number; skipped: number; invested: number; units: number; decimals: number; valueToday: number | null; gain: number | null; gainPct: number | null }): string {
+  if (opts.priced === 0) return "No month has a price, so there is nothing to total.";
+  const months = opts.skipped > 0 ? `${opts.priced} of ${opts.total} months` : `${opts.priced} ${opts.priced === 1 ? "month" : "months"}`;
+  const bought = opts.unit === "shares" ? `${fmtNum(opts.units, opts.decimals)} shares of ${opts.symbol}` : `${fmtNum(opts.units, opts.decimals)} ${opts.symbol}`;
+  let s = `${fmtUsd(opts.amount)} a month for ${months} bought ${bought} for ${fmtUsd(opts.invested)}.`;
+  if (opts.valueToday !== null && opts.gain !== null) {
+    s += ` Today that is worth ${fmtUsd(opts.valueToday)}, a ${opts.gain < 0 ? "loss" : "gain"} of ${fmtUsd(Math.abs(opts.gain))} (${fmtPct(opts.gainPct)}).`;
+  }
+  return s;
+}
+
+export function toApiResult(res: DcaResponse, req: DcaRequest, detail: "summary" | "full"): ApiResult {
+  const decimals = chooseDecimals(res.rows, req.amount);
+  const buys = buildBuys(res.rows, req.amount, res.currentPrice, {}, decimals);
+  const s = summarize(buys, res.currentPrice);
+  const unit = res.chain === "equity" ? "shares" : "tokens";
+  const symbol = res.token.symbol?.replace(/^\$/, "").toUpperCase() ?? res.token.name ?? "units";
+  const market = res.chain === "equity" ? "stock" : res.chain;
+
+  const out: ApiResult = {
+    answer: describeResult({ amount: req.amount, symbol, unit, priced: s.pricedMonths, total: buys.length, skipped: s.skippedMonths, invested: s.invested, units: s.tokens, decimals, valueToday: s.valueToday, gain: s.gain, gainPct: s.gainPct }),
+    request: {
+      market,
+      asset: res.address,
+      amountPerMonth: req.amount,
+      from: req.startMonth,
+      to: req.endMonth,
+      basis: res.basis,
+      ...(res.chain === "equity" ? { reinvestDividends: res.reinvest === true } : {}),
+    },
+    asset: { market, symbol: res.token.symbol, name: res.token.name, address: res.address },
+    summary: {
+      totalMonths: buys.length,
+      pricedMonths: s.pricedMonths,
+      skippedMonths: s.skippedMonths,
+      skippedMonthsList: s.skipped,
+      skippedMonthRanges: compressMonths(s.skipped),
+      totalInvested: round(s.invested, 2) ?? 0,
+      unitsBought: round(s.tokens, decimals) ?? 0,
+      unit,
+      averageBuyPrice: round(s.avgPrice),
+      priceToday: round(s.priceToday),
+      priceTodayDate: res.currentPriceDate,
+      valueToday: round(s.valueToday, 2),
+      gain: round(s.gain, 2),
+      gainPercent: round(s.gainPct, 2),
+    },
+    sources: res.sources,
+    warnings: res.warnings,
+  };
+  if (detail === "full") {
+    out.months = buys.map((b) => ({
+      month: b.month,
+      priceDate: b.priceDate,
+      price: round(b.price),
+      invested: round(b.amount, 2) ?? 0,
+      units: round(b.tokens, decimals),
+      valueToday: round(b.valueToday, 2),
+      source: b.source,
+      notes: b.notes.map((n) => n.text),
+    }));
+  }
+  return out;
+}

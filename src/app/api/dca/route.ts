@@ -25,6 +25,7 @@ export async function POST(request: Request) {
     startMonth: String(body.startMonth),
     endMonth: String(body.endMonth),
     basis: body.basis!,
+    ...(body.chain === "equity" && body.reinvest === true ? { reinvest: true } : {}),
     ...(body.basis === "day-of-month" ? { basisDay: Number(body.basisDay) } : {}),
   };
 

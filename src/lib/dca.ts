@@ -1,5 +1,6 @@
+import { DcaError } from "./errors.ts";
 import { HttpError } from "./http.ts";
-import { addDays, monthsBetween, targetDate, todayUtc } from "./months.ts";
+import { addDays, compressMonths, monthsBetween, targetDate, todayUtc } from "./months.ts";
 import {
   cgDaily,
   cgResolve,
@@ -11,17 +12,13 @@ import {
 import { dexhunterSeries } from "./dexhunter.ts";
 import { fillGaps, gtCardanoSeries, resolveCardanoUnit } from "./gtCardano.ts";
 import { selectAllMonths } from "./select.ts";
+import { runStockDca } from "./stocks.ts";
 import type { DailyPoint, DcaRequest, DcaResponse, PriceSource, SourceLink } from "./types.ts";
 
-export class DcaError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
+export { DcaError };
 
 export async function runDca(req: DcaRequest, now: number = Date.now()): Promise<DcaResponse> {
+  if (req.chain === "equity") return runStockDca({ ...req, chain: "equity" }, now);
   const today = todayUtc(now);
   const months = monthsBetween(req.startMonth, req.endMonth);
   const firstTarget = targetDate(months[0], req.basis, req.basisDay);
@@ -141,7 +138,7 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
           if (used.length) {
             sources.push(...dh.sources);
             warnings.push(
-              `${used.length} older ${used.length === 1 ? "month uses" : "months use"} DexHunter prices (${used.map((r) => r.month).join(", ")}): ADA-pair prices across Cardano DEXs, converted to USD with Bitstamp's ADA/USD close. Check the Note column for thin trading.`,
+              `${used.length} older ${used.length === 1 ? "month uses" : "months use"} DexHunter prices (${compressMonths(used.map((r) => r.month)).join(", ")}): ADA-pair prices across Cardano DEXs, converted to USD with Bitstamp's ADA/USD close. Check the Note column for thin trading.`,
             );
           }
         }
@@ -160,7 +157,7 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
           if (used.length) {
             sources.push(...gt.sources);
             warnings.push(
-              `${used.length} older ${used.length === 1 ? "month uses" : "months use"} GeckoTerminal pool prices (${used.map((r) => r.month).join(", ")}). Cardano pools are thin and trade on few days, so check the Note column.`,
+              `${used.length} older ${used.length === 1 ? "month uses" : "months use"} GeckoTerminal pool prices (${compressMonths(used.map((r) => r.month)).join(", ")}). Cardano pools are thin and trade on few days, so check the Note column.`,
             );
           }
         }
