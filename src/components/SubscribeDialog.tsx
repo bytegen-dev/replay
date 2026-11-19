@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
+import { MarkLoader } from "@/components/MarkLoader";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -68,7 +69,7 @@ export function SubscribeDialog() {
               )}
             </div>
             <Button type="submit" disabled={state === "sending"} className="h-11 w-full gap-2 rounded-none border-2 border-primary font-bold">
-              {state === "sending" && <Loader2 className="size-4 animate-spin" aria-hidden />}
+              {state === "sending" && <MarkLoader className="size-4" />}
               {state === "sending" ? "Subscribing" : "Subscribe"}
             </Button>
           </form>

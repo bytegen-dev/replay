@@ -1,7 +1,7 @@
 "use client";
 
 import { Pause, Play, RotateCcw } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DOWN, LineChart, UP, type ChartSeries } from "@/components/LineChart";
 import { growthSeries, moneyShort } from "@/lib/charts.ts";
 import { fmtPrice, fmtUsd } from "@/lib/format.ts";
@@ -18,8 +18,12 @@ const YEAR_MS = 365.25 * 86_400_000;
 export function GrowthChart({ buys, priceToday, priceTodayDate, unit }: { buys: BuyRow[]; priceToday: number | null; priceTodayDate: string | null; unit: "shares" | "tokens" }) {
   const [view, setView] = useState<View>("growth");
   const [frame, setFrame] = useState<number | "all">("all");
-  // Replay: how many months are drawn so far (null shows the whole history), whether it is running, and how fast.
+  // Replay: how far along the history the line has been drawn, in points and fractions of a point (null shows it all), whether it is running, and how fast.
   const [step, setStep] = useState<number | null>(null);
+  const stepRef = useRef<number | null>(null);
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const allPoints = useMemo(() => growthSeries(buys, priceToday, priceTodayDate), [buys, priceToday, priceTodayDate]);
@@ -34,9 +38,20 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit }: { buys: 
     return cut.length >= 2 ? cut : allPoints;
   }, [allPoints, activeFrame]);
   const total = points.length;
-  const shownCount = step === null ? total : Math.min(Math.max(step, 2), total);
-  const replaying = step !== null && shownCount < total;
-  const shown = useMemo(() => (shownCount >= total ? points : points.slice(0, shownCount)), [points, shownCount, total]);
+  const progress = step === null ? total : Math.min(Math.max(step, 2), total);
+  const shownCount = Math.floor(progress);
+  const frac = progress - shownCount;
+  const replaying = step !== null && progress < total;
+  // The points drawn so far, plus a tip that slides from the last one toward the next, so the line grows smoothly.
+  const shown = useMemo(() => {
+    if (progress >= total) return points;
+    const done = points.slice(0, shownCount);
+    if (frac < 0.001 || shownCount >= total) return done;
+    const a = points[shownCount - 1];
+    const b = points[shownCount];
+    const mix = (x: number, y: number) => x + (y - x) * frac;
+    return [...done, { ...b, t: mix(a.t, b.t), value: mix(a.value, b.value), invested: mix(a.invested, b.invested), price: mix(a.price, b.price), avgCost: mix(a.avgCost, b.avgCost) }];
+  }, [points, progress, shownCount, frac, total]);
   // The axes stay at the full history's size while the replay draws into them.
   const fixedRange = useMemo(() => {
     if (!replaying) return undefined;
@@ -44,27 +59,34 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit }: { buys: 
     return { xMin: points[0].t, xMax: points[total - 1].t, yMin: Math.min(...ys), yMax: Math.max(...ys) };
   }, [replaying, points, view, total]);
 
-  // One month per tick; 1x is about two a second.
+  // Drawn every frame: 1x is about two months a second, and the line moves between them rather than jumping.
   useEffect(() => {
     if (!playing) return;
-    const id = setInterval(() => {
-      setStep((s) => {
-        const next = (s ?? 2) + 1;
-        if (next >= total) {
-          setPlaying(false);
-          return null;
-        }
-        return next;
-      });
-    }, 520 / speed);
-    return () => clearInterval(id);
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const next = (stepRef.current ?? 2) + ((now - last) / 1000) * speed * 1.9;
+      last = now;
+      if (next >= total) {
+        stepRef.current = null;
+        setStep(null);
+        setPlaying(false);
+        return;
+      }
+      stepRef.current = next;
+      setStep(next);
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
   }, [playing, speed, total]);
 
   const stopReplay = () => {
     setPlaying(false);
     setStep(null);
   };
-  const lastPoint = shown[shown.length - 1];
+  // The readout names the last whole month reached, not the sliding tip.
+  const lastPoint = progress >= total ? points[total - 1] : points[Math.max(shownCount - 1, 0)];
   const upGrowth = !lastPoint || lastPoint.value >= lastPoint.invested;
   const upPrice = !lastPoint || lastPoint.price >= lastPoint.avgCost;
   const series = useMemo<ChartSeries[]>(

@@ -6,20 +6,22 @@ import { encodeRange, shiftYm } from "@/lib/urlState.ts";
 
 /** How far back the footer timeline goes. */
 const START = Date.UTC(2013, 0, 1);
+/** Where the playhead rests until someone picks a date: halfway along the timeline. */
+const REST = 0.5;
 
 /**
- * The footer wordmark as a video-style scrubber. At rest the whole word is filled and the playhead sits at "Now". Move a
+ * The footer wordmark as a video-style scrubber. At rest the playhead sits halfway along the timeline. Move a
  * pointer (or drag a finger) across it and the fill follows, with the date under the playhead, so you can travel back through
  * the years. Vertical scrolling still works on touch. Click or tap to pin a month, and links below start a Wayback from it:
  * pick a date, pick what you would have bought. The wordmark itself is decorative and hidden from screen readers.
  */
 export function FooterScrub() {
   const box = useRef<HTMLDivElement>(null);
-  const [live, setLive] = useState(1);
+  const [live, setLive] = useState(REST);
   const [pinned, setPinned] = useState<number | null>(null);
   const [active, setActive] = useState(false);
-  // What is drawn: the pointer while it is moving, otherwise the pinned month, otherwise "Now".
-  const p = active ? live : (pinned ?? 1);
+  // What is drawn: the pointer while it is moving, otherwise the pinned month, otherwise halfway.
+  const p = active ? live : (pinned ?? REST);
   // The clock is read after mount so the server and browser agree on first paint.
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
@@ -44,7 +46,7 @@ export function FooterScrub() {
 
   const label = p > 0.985 || now === null ? "Now" : new Date(START + p * (now - START)).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
   const years = now === null ? [] : Array.from({ length: new Date(now).getUTCFullYear() - 2013 + 1 }, (_, i) => 2013 + i);
-  // Fill and playhead snap while you drag, then glide back to "Now" when you let go.
+  // Fill and playhead snap while you drag, then glide back to the pinned month (or halfway) when you let go.
   const glide = active ? "none" : "clip-path 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)";
 
   const lastMonth = now === null ? null : shiftYm(new Date(now).toISOString().slice(0, 7), -1);

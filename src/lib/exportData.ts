@@ -15,6 +15,8 @@ export interface ExportPayload {
   sources: SourceLink[];
   /** What was bought: "tokens" for crypto, "shares" for stocks. Only changes wording. */
   unit?: "tokens" | "shares";
+  /** Set when the holding was sold at the end month, so the value is the end month's, not today's. */
+  sold?: boolean;
   /** Set when `amount` is in a currency other than USD; each row then carries its exchange rate in `fx`. */
   currency?: { code: string; symbol: string; perUsdToday: number | null };
 }
@@ -54,6 +56,7 @@ export function parsePayload(x: unknown): ExportPayload | string {
     overrides: (p.overrides ?? {}) as Overrides,
     sources: Array.isArray(p.sources) ? (p.sources as SourceLink[]) : [],
     unit: p.unit === "shares" ? "shares" : "tokens",
+    ...(p.sold === true ? { sold: true } : {}),
     ...(p.currency && typeof p.currency.code === "string" && /^[A-Z]{3}$/.test(p.currency.code) ? { currency: { code: p.currency.code, symbol: String(p.currency.symbol ?? "").slice(0, 6), perUsdToday: typeof p.currency.perUsdToday === "number" && p.currency.perUsdToday > 0 ? p.currency.perUsdToday : null } } : {}),
   };
 }

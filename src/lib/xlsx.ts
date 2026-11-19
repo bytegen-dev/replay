@@ -21,7 +21,7 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   const src = wb.addWorksheet("Sources");
 
   /* ---- Buys: C is the only hardcoded input per row (blue); everything else is a formula ---- */
-  buy.addRow(["Month", "Price date", "Price (USD)", "Amount (USD)", p.unit === "shares" ? "Shares bought" : "Tokens bought", "Value today (USD)", "Source", "Note"]);
+  buy.addRow(["Month", "Price date", "Price (USD)", "Amount (USD)", p.unit === "shares" ? "Shares bought" : "Tokens bought", p.sold ? "Value at sale (USD)" : "Value today (USD)", "Source", "Note"]);
   buy.getRow(1).font = BOLD;
   buys.forEach((b, i) => {
     const r = i + 2;
@@ -55,12 +55,12 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
     ["Chain", p.chain, "text"],
     ["Monthly amount (USD)", p.amount, "input", "#,##0.00"],
     ["Token rounding (decimals)", decimals, "input", "0"],
-    ["Price today (USD)", p.currentPrice ?? "", "input", "0.00000000"],
+    [p.sold ? "Price at sale (USD)" : "Price today (USD)", p.currentPrice ?? "", "input", "0.00000000"],
     ["Price basis", p.basis, "text"],
     ["Total invested (USD)", { formula: `SUM(Buys!D2:D${last})`, result: summary.invested }, "formula", "#,##0.00"],
     [p.unit === "shares" ? "Total shares" : "Total tokens", { formula: `SUM(Buys!E2:E${last})`, result: summary.tokens }, "formula", decimals ? `#,##0.${"0".repeat(decimals)}` : "#,##0"],
     ["Average buy price (USD)", { formula: `IF(B9>0,B8/B9,"n/a")`, result: summary.avgPrice ?? "n/a" }, "formula", "0.00000000"],
-    ["Value today (USD)", { formula: `IF(ISNUMBER(B6),B9*B6,"n/a")`, result: summary.valueToday ?? "n/a" }, "formula", "#,##0.00"],
+    [p.sold ? "Value at sale (USD)" : "Value today (USD)", { formula: `IF(ISNUMBER(B6),B9*B6,"n/a")`, result: summary.valueToday ?? "n/a" }, "formula", "#,##0.00"],
     ["Gain / loss (USD)", { formula: `IF(ISNUMBER(B11),B11-B8,"n/a")`, result: summary.gain ?? "n/a" }, "formula", "#,##0.00"],
     ["Gain / loss (%)", { formula: `IF(AND(ISNUMBER(B12),B8>0),B12/B8,"n/a")`, result: summary.gainPct === null ? "n/a" : summary.gainPct / 100 }, "formula", "0.00%"],
     ["Months with no price (excluded)", { formula: `ROWS(Buys!C2:C${last})-COUNT(Buys!C2:C${last})`, result: summary.skippedMonths }, "formula", "0"],
@@ -85,7 +85,7 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   });
   sum.getColumn(1).width = 34;
   sum.getColumn(2).width = 26;
-  sum.getCell("A16").value = "Blue = hardcoded input. Black = formula. Price today as of " + (p.currentPriceDate || "n/a") + ".";
+  sum.getCell("A16").value = "Blue = hardcoded input. Black = formula. " + (p.sold ? "Sold at the end month, price as of " : "Price today as of ") + (p.currentPriceDate || "n/a") + ".";
   sum.getCell("A16").font = { italic: true };
 
   /* ---- Sources ---- */

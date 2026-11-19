@@ -1,8 +1,9 @@
 "use client";
 
 import { ChainLogo } from "@/components/ChainLogo";
-import { AlertTriangle, Check, Clock, Copy, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Clock, Copy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { MarkLoader } from "@/components/MarkLoader";
 import { DatePickerButton } from "@/components/DatePicker";
 import { TimePickerButton } from "@/components/TimePicker";
 import { TimezonePicker } from "@/components/TimezonePicker";
@@ -128,7 +129,29 @@ export function PricePanel() {
       controller.abort();
     };
   }, [tickerNow]);
-  const minDate = firstDay && firstDay.symbol === tickerNow ? firstDay.date : undefined;
+  // Tokens: the day the token first had a price, from its details.
+  const [tokenFirst, setTokenFirst] = useState<{ key: string; date: string } | null>(null);
+  const tokenKey = market !== "equity" && asset.trim().length >= 20 ? `${market}:${asset.trim()}` : "";
+  useEffect(() => {
+    if (!tokenKey) return;
+    const controller = new AbortController();
+    const id = setTimeout(async () => {
+      try {
+        const [c, a] = [tokenKey.slice(0, tokenKey.indexOf(":")), tokenKey.slice(tokenKey.indexOf(":") + 1)];
+        const res = await fetch(`/api/token-info?chain=${c}&address=${encodeURIComponent(a)}`, { signal: controller.signal });
+        const j = await res.json().catch(() => null);
+        const launched = res.ok && typeof j?.info?.launchedAt === "string" ? (j.info.launchedAt as string).slice(0, 10) : null;
+        setTokenFirst(launched ? { key: tokenKey, date: launched } : null);
+      } catch {
+        /* a failed lookup just leaves the calendar unrestricted */
+      }
+    }, 600);
+    return () => {
+      clearTimeout(id);
+      controller.abort();
+    };
+  }, [tokenKey]);
+  const minDate = (firstDay && firstDay.symbol === tickerNow ? firstDay.date : undefined) ?? (tokenFirst && tokenFirst.key === tokenKey ? tokenFirst.date : undefined);
 
   // The clock is read after mount, so what is shown never depends on when the page was built.
   const [nowMs, setNowMs] = useState<number | null>(null);
@@ -292,7 +315,7 @@ export function PricePanel() {
           </div>
 
           <div className="min-[480px]:col-span-2">
-            <Field id="date" label="Date" error={fieldErrors.date ?? (minDate && reading && reading.ok && reading.value.dateUtc < minDate ? `${tickerNow} first traded on ${minDate}. There is no price before that.` : undefined)} hint={minDate ? `First price: ${minDate}` : undefined}>
+            <Field id="date" label="Date" error={fieldErrors.date ?? (minDate && reading && reading.ok && reading.value.dateUtc < minDate ? `${tickerNow || "This token"} first had a price on ${minDate}. There is no price before that.` : undefined)} hint={minDate ? `First price: ${minDate}` : undefined}>
               <div className="relative">
                 <Input id="date" className="form-control-h pr-12 text-sm" value={date} onChange={(e) => setDate(e.target.value)} placeholder="15/09/2026, September 15, or 5 days ago" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.date} />
                 <DatePickerButton selected={reading && reading.ok ? reading.value.dateUtc : null} min={minDate} onPick={setDate} />
@@ -336,7 +359,7 @@ export function PricePanel() {
         </div>
 
         <Button type="submit" disabled={loading} className="form-cta h-12 w-full gap-2 rounded-none border-2 border-primary px-8 text-base sm:w-auto sm:min-w-56 sm:self-end font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
-          {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
+          {loading ? <MarkLoader className="size-5" /> : null}
           {loading ? "Looking up" : "Get price"}
         </Button>
 

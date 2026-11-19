@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, KeyRound, RotateCcw, Settings } from "lucide-react";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useSettings } from "@/components/SettingsProvider";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -115,8 +115,15 @@ export function SettingsDialog() {
   const { settings, set, reset } = useSettings();
   const uid = useId();
   const changed = JSON.stringify(settings) !== JSON.stringify(DEFAULT_SETTINGS);
+  // Anything on the page can open this box (the stock price error does) by sending the "replay:open-settings" event.
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener("replay:open-settings", show);
+    return () => window.removeEventListener("replay:open-settings", show);
+  }, []);
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <button type="button" className="flex h-8 items-center gap-2 border border-border px-3 text-sm text-muted-foreground transition-colors hover:border-primary hover:text-primary">
           <Settings className="size-4" aria-hidden />

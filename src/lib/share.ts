@@ -19,7 +19,7 @@ const MAX_WARNINGS = 10;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const NOTE_CODES: NoteCode[] = ["nearest-day", "low-volume", "outlier", "no-data", "out-of-range", "future", "manual"];
-const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "DexHunter", "Yahoo", "Nasdaq", "Tiingo", "manual", "none"];
+const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "DexHunter", "Yahoo", "Nasdaq", "Tiingo", "Bitstamp", "manual", "none"];
 
 /** 8 URL-safe characters (48 random bits). Unguessable enough for an unlisted link. */
 export function newShareId(): string {
@@ -99,6 +99,7 @@ export function parseShare(x: unknown): SharePayload | string {
 
   return {
     unit: p.unit === "shares" ? "shares" : "tokens",
+    ...(p.sold === true ? { sold: true } : {}),
     tokenLabel: str(p.tokenLabel, 60),
     tokenName: str(p.tokenName, 100),
     chain: str(p.chain, 40),

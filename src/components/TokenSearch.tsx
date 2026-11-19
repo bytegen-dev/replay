@@ -1,7 +1,8 @@
 "use client";
 
 import { ChainLogo } from "@/components/ChainLogo";
-import { Info, Loader2, Search } from "lucide-react";
+import { MarkLoader } from "@/components/MarkLoader";
+import { Info, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -153,7 +154,7 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
         spellCheck={false}
         autoComplete="off"
       />
-      {loading && <Loader2 className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-label="Searching" />}
+      {loading && <MarkLoader label="Searching" className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground" />}
 
       {visible && (
         // Keeps focus in the input while you click inside the list or the sort buttons.

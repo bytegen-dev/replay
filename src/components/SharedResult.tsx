@@ -25,8 +25,8 @@ export function SharedResult({ data }: { data: SharePayload }) {
     { key: "Total invested", value: fmtUsd(summary.invested) },
     { key: data.unit === "shares" ? "Total shares" : "Total tokens", value: fmtNum(summary.tokens, decimals) },
     { key: "Avg buy price", value: fmtPrice(summary.avgPrice) },
-    { key: "Price today", value: fmtPrice(summary.priceToday) },
-    { key: "Value today", value: fmtUsd(summary.valueToday), highlight: true },
+    { key: data.sold ? "Price at sale" : "Price today", value: fmtPrice(summary.priceToday) },
+    { key: data.sold ? "Value at sale" : "Value today", value: fmtUsd(summary.valueToday), highlight: true },
     { key: "Gain / loss", value: fmtSigned(summary.gain), highlight: true },
     { key: "Gain / loss %", value: fmtPct(summary.gainPct), highlight: true },
   ];
@@ -60,7 +60,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
               {summary.valueToday !== null && summary.gain !== null && (
                 <>
                   {" "}
-                  Today that is worth <b>{fmtUsd(summary.valueToday)}</b>, a {loss ? "loss" : "gain"} of{" "}
+                  {data.sold ? "Sold at the end month, that is worth" : "Today that is worth"} <b>{fmtUsd(summary.valueToday)}</b>, a {loss ? "loss" : "gain"} of{" "}
                   <b>{fmtUsd(Math.abs(summary.gain))}</b> ({fmtPct(summary.gainPct)}).
                 </>
               )}
@@ -107,7 +107,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
         <Table className="min-w-[860px]">
           <TableHeader className="bg-card">
             <TableRow className="hover:bg-transparent">
-              {(["Month", "Price date", "Price (USD)", "Amount (USD)", data.unit === "shares" ? "Shares bought" : "Tokens bought", "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
+              {(["Month", "Price date", "Price (USD)", "Amount (USD)", data.unit === "shares" ? "Shares bought" : "Tokens bought", data.sold ? "Value at sale (USD)" : "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
                 <TableHead key={h} className={`text-sm text-muted-foreground ${i >= 2 && i <= 5 ? "text-right" : ""}`}>
                   {h}
                 </TableHead>

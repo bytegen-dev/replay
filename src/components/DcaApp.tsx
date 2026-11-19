@@ -1,8 +1,9 @@
 "use client";
 
 import { ChainLogo, CoinLogo } from "@/components/ChainLogo";
-import { AlertTriangle, Check, Copy, FileSpreadsheet, History, Loader2, Settings, Share2, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, Copy, FileSpreadsheet, History, Settings, Share2, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MarkLoader } from "@/components/MarkLoader";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
 import { MonthPicker, formatMonth } from "@/components/MonthPicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
@@ -53,7 +54,7 @@ function tokenSymbol(t: { symbol: string | null; name: string | null }): string 
 }
 
 /** The answer in one plain sentence, so the numbers below are the evidence, not the headline. */
-function ResultSentence({ amount, symbol, summary, decimals, total, shares, currency }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number; shares: boolean; currency?: DcaResponse["currency"] }) {
+function ResultSentence({ amount, symbol, summary, decimals, total, shares, currency, sold }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number; shares: boolean; currency?: DcaResponse["currency"]; sold?: boolean }) {
   if (summary.pricedMonths === 0) {
     return (
       <p className="max-w-3xl text-lg leading-snug font-bold">
@@ -82,7 +83,7 @@ function ResultSentence({ amount, symbol, summary, decimals, total, shares, curr
         {summary.valueToday !== null && summary.gain !== null && (
           <>
             {" "}
-            Today that is worth <b>{fmtUsd(summary.valueToday)}</b>, a {loss ? "loss" : "gain"} of{" "}
+            {sold ? "Sold at the end month, that is worth" : "Today that is worth"} <b>{fmtUsd(summary.valueToday)}</b>, a {loss ? "loss" : "gain"} of{" "}
             <b>{fmtUsd(Math.abs(summary.gain))}</b> ({fmtPct(summary.gainPct)}).
           </>
         )}
@@ -93,7 +94,7 @@ function ResultSentence({ amount, symbol, summary, decimals, total, shares, curr
           {worthLocal !== null && (
             <>
               {" "}
-              and it is worth about <b className="text-foreground">{local(worthLocal)}</b> today at {currency.perUsdToday!.toLocaleString("en-US", { maximumFractionDigits: 2 })} {currency.code} to the dollar ({fmtPct(((worthLocal - putInLocal) / putInLocal) * 100)}).
+              and it is worth about <b className="text-foreground">{local(worthLocal)}</b> {sold ? "at sale" : "today"} at {currency.perUsdToday!.toLocaleString("en-US", { maximumFractionDigits: 2 })} {currency.code} to the dollar ({fmtPct(((worthLocal - putInLocal) / putInLocal) * 100)}).
             </>
           )}
           {worthLocal === null && "."}
@@ -139,6 +140,10 @@ export function DcaApp() {
   // The line of context shown under a ready-made check's result.
   const [exampleNote, setExampleNote] = useState<string | null>(null);
   const [amount, setAmount] = useState("500");
+  // "Sell at end month": value the holding at the end month's price instead of today's. Applied when the check runs.
+  const [sellAtEnd, setSellAtEnd] = useState(false);
+  // Prices come from the data source and are read-only unless the person switches editing on (for what-if prices, or to fill a gap).
+  const [editPrices, setEditPrices] = useState(false);
   // The currency the monthly amount is in. Each buy is converted to dollars at that day's rate.
   const [currency, setCurrency] = useState("USD");
   // Defaults depend on the current date, so set them after mount (not during prerender).
@@ -154,13 +159,21 @@ export function DcaApp() {
   // The first day the chosen asset has a price. Months before it can't be picked.
   const [yahooLaunch, setYahooLaunch] = useState<string | null>(null);
   const [tokenLaunch, setTokenLaunch] = useState<string | null>(null);
-  const launchDate = usesYahoo ? yahooLaunch : tokenLaunch;
+  // A major coin's first price date is known up front, so earlier months can't be picked even before (or without) any lookup.
+  const majorFirst = isMajor ? (MAJORS.find((m) => m.symbol === major)?.firstPrice ?? null) : null;
+  const launchDate = isMajor ? majorFirst : usesYahoo ? yahooLaunch : tokenLaunch;
   const launchMonth = launchDate ? launchDate.slice(0, 7) : undefined;
   // A start month from before the asset existed moves up to its first month.
   const onTokenLaunch = useCallback((d: string | null) => {
     setTokenLaunch(d);
     if (d) setStartMonth((s) => (s && s < d.slice(0, 7) ? d.slice(0, 7) : s));
   }, []);
+  // Picking a coin (or arriving by link) with a start month from before it existed moves the start up to its first month.
+  useEffect(() => {
+    if (!majorFirst) return;
+    const id = setTimeout(() => setStartMonth((s) => (s && s < majorFirst.slice(0, 7) ? majorFirst.slice(0, 7) : s)), 0);
+    return () => clearTimeout(id);
+  }, [majorFirst]);
   const clampStart = (m: string) => (launchMonth && m < launchMonth ? launchMonth : m);
   useEffect(() => {
     const id = setTimeout(() => {
@@ -185,6 +198,7 @@ export function DcaApp() {
         if (q.get("drip") === "1") setReinvest(true);
       }
       if (q.get("run") === "1") autoRun.current = true;
+      if (q.get("sell") === "1") setSellAtEnd(true);
       const a = cleanAmount(q.get("amt"));
       if (a) setAmount(formatAmountInput(a));
       const cur = q.get("cur")?.toUpperCase();
@@ -218,7 +232,8 @@ export function DcaApp() {
         const j = await r.json().catch(() => null);
         const first = r.ok && typeof j?.firstDate === "string" ? (j.firstDate as string) : null;
         setYahooLaunch(first);
-        if (first) setStartMonth((s) => (s && s < first.slice(0, 7) ? first.slice(0, 7) : s));
+        // Major coins use their fixed first-price date instead, which doesn't depend on which source answered.
+        if (first && !isMajorSymbol(yahooSymbol)) setStartMonth((s) => (s && s < first.slice(0, 7) ? first.slice(0, 7) : s));
       } catch {
         /* an aborted or failed lookup just leaves the form unrestricted */
       }
@@ -245,12 +260,13 @@ export function DcaApp() {
       ...encodeRange(startMonth, endMonth, last),
       basis: basis !== "month-end" && basis,
       day: basis === "day-of-month" && String(basisDay),
+      sell: sellAtEnd && "1",
     });
-  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay]);
+  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [data, setData] = useState<(DcaResponse & { amount: number }) | null>(null);
+  const [data, setData] = useState<(DcaResponse & { amount: number; sold?: boolean }) | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -421,7 +437,7 @@ export function DcaApp() {
         if (j.fields) setErrors(j.fields);
         throw new Error(j.error ?? `Request failed (${res.status})`);
       }
-      setData({ ...(j as DcaResponse), amount: input.amount });
+      setData({ ...(j as DcaResponse), amount: input.amount, ...(sellAtEnd ? { sold: true } : {}) });
       setOverrides({});
       setDrafts({});
     } catch (err) {
@@ -439,13 +455,24 @@ export function DcaApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formReady]);
 
-  const computed = useMemo(() => {
+  // The price the holding is valued at: today's, or the end month's last priced row when it is sold there.
+  const val = useMemo(() => {
     if (!data) return null;
+    if (!data.sold) return { price: data.currentPrice, date: data.currentPriceDate, sold: false, perUsd: data.currency?.perUsdToday ?? null };
+    const last = [...data.rows].reverse().find((r) => (overrides[r.month] > 0 ? overrides[r.month] : r.price) !== null);
+    if (!last) return { price: data.currentPrice, date: data.currentPriceDate, sold: true, perUsd: null };
+    return { price: overrides[last.month] > 0 ? overrides[last.month] : last.price, date: last.priceDate ?? last.targetDate, sold: true, perUsd: last.fx ?? null };
+  }, [data, overrides]);
+
+  const computed = useMemo(() => {
+    if (!data || !val) return null;
     const effective = data.rows.map((r) => ({ price: overrides[r.month] > 0 ? overrides[r.month] : r.price, fx: r.fx }));
     const decimals = chooseDecimals(effective, data.amount);
-    const buys = buildBuys(data.rows, data.amount, data.currentPrice, overrides, decimals);
-    return { buys, decimals, summary: summarize(buys, data.currentPrice) };
-  }, [data, overrides]);
+    const buys = buildBuys(data.rows, data.amount, val.price, overrides, decimals);
+    return { buys, decimals, summary: summarize(buys, val.price) };
+  }, [data, val, overrides]);
+  // The word used beside the final valuation.
+  const when = val?.sold ? "at sale" : "today";
 
   // What the user is typing in a price cell. Kept apart from `overrides` so half-typed
   // text such as "0." survives; only a valid price (> 0) becomes an override.
@@ -482,12 +509,13 @@ export function DcaApp() {
       address: data.address,
       basis: formatBasisLabel(data.basis, data.basisDay),
       amount: data.amount,
-      currentPrice: data.currentPrice,
-      currentPriceDate: data.currentPriceDate,
+      currentPrice: val ? val.price : data.currentPrice,
+      currentPriceDate: val ? val.date : data.currentPriceDate,
       rows: data.rows,
       overrides,
       sources: data.sources,
       unit: isEquity ? "shares" : "tokens",
+      ...(data.sold ? { sold: true } : {}),
       ...(data.currency ? { currency: { code: data.currency.code, symbol: data.currency.symbol, perUsdToday: data.currency.perUsdToday } } : {}),
     };
     try {
@@ -510,13 +538,14 @@ export function DcaApp() {
       address: data.address,
       basis: formatBasisLabel(data.basis, data.basisDay),
       amount: data.amount,
-      currentPrice: data.currentPrice,
-      currentPriceDate: data.currentPriceDate,
+      currentPrice: val ? val.price : data.currentPrice,
+      currentPriceDate: val ? val.date : data.currentPriceDate,
       rows: data.rows,
       overrides,
       sources: data.sources,
       warnings: data.warnings,
       unit: isEquity ? "shares" : "tokens",
+      ...(data.sold ? { sold: true } : {}),
       ...(data.currency ? { currency: { code: data.currency.code, symbol: data.currency.symbol, perUsdToday: data.currency.perUsdToday } } : {}),
     };
     try {
@@ -571,8 +600,8 @@ export function DcaApp() {
         { key: "Total invested", value: fmtUsd(computed.summary.invested) },
         { key: isEquity ? "Total shares" : "Total tokens", value: fmtNum(computed.summary.tokens, computed.decimals) },
         { key: "Avg buy price", value: fmtPrice(computed.summary.avgPrice) },
-        { key: "Price today", value: fmtPrice(computed.summary.priceToday) },
-        { key: "Value today", value: fmtUsd(computed.summary.valueToday), highlight: true },
+        { key: `Price ${when}`, value: fmtPrice(computed.summary.priceToday) },
+        { key: `Value ${when}`, value: fmtUsd(computed.summary.valueToday), highlight: true },
         { key: "Gain / loss", value: fmtSigned(computed.summary.gain), highlight: true },
         { key: "Gain / loss %", value: fmtPct(computed.summary.gainPct), highlight: true },
       ]
@@ -702,6 +731,11 @@ export function DcaApp() {
                 </Field>
                 <Field id="endMonth" label="End month" error={errors.endMonth}>
                   <MonthPicker id="endMonth" value={endMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} min={startMonth && launchMonth && startMonth < launchMonth ? launchMonth : startMonth || launchMonth} invalid={!!errors.endMonth} onChange={setEndMonth} />
+                  {/* Value the holding at the end month's price (as if sold then), not at today's price. */}
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground" title="Value what you bought at the end month's price instead of today's">
+                    <input type="checkbox" checked={sellAtEnd} onChange={(e) => setSellAtEnd(e.target.checked)} className="size-4 w-4! shrink-0 cursor-pointer accent-primary" />
+                    Sell at end month
+                  </label>
                 </Field>
               </div>
               <div className="flex flex-col gap-2 min-[480px]:col-span-2">
@@ -795,7 +829,7 @@ export function DcaApp() {
                     variant="default"
                     className="form-cta h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border sm:w-auto sm:min-w-56"
                   >
-                    {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <History className="size-5" aria-hidden />}
+                    {loading ? <MarkLoader className="size-5" /> : <History className="size-5" aria-hidden />}
                     {loading ? "Checking prices" : "See what it's worth"}
                   </Button>
                 </div>
@@ -821,7 +855,7 @@ export function DcaApp() {
       {loading && (
         <div className="flex flex-col gap-4">
           <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+            <MarkLoader className="size-4" />
             Fetching prices. Rate-limit retries can take a few seconds.
           </p>
           <ResultsLoadingSkeleton />
@@ -832,7 +866,15 @@ export function DcaApp() {
         <Alert variant="destructive" className="rounded-none border-border">
           <AlertTriangle />
           <AlertTitle>Couldn&apos;t load prices</AlertTitle>
-          <AlertDescription>{apiError}</AlertDescription>
+          <AlertDescription>
+            {apiError}
+            {/* A stock price outage has a way out: the person's own free key. */}
+            {mode === "equity" && /Yahoo|Tiingo/.test(apiError) && (
+              <button type="button" onClick={() => window.dispatchEvent(new Event("replay:open-settings"))} className="mt-2 block font-bold underline underline-offset-4 hover:no-underline">
+                Add your Tiingo key in Settings
+              </button>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 
@@ -858,7 +900,8 @@ export function DcaApp() {
             <div className="border-l-2 border-primary pl-4">
               <ResultSentence
                 amount={data.amount}
-                currency={data.currency}
+                currency={data.currency && val ? { ...data.currency, perUsdToday: val.perUsd ?? data.currency.perUsdToday } : data.currency}
+                sold={val?.sold}
                 symbol={tokenSymbol(data.token)}
                 summary={computed.summary}
                 decimals={computed.decimals}
@@ -899,9 +942,9 @@ export function DcaApp() {
             ))}
           </div>
 
-          <GrowthChart buys={computed.buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} />
+          <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} />
 
-          <InsightsCard buys={computed.buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate} amount={data.amount} />
+          <InsightsCard buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} amount={data.amount} />
 
           {computed.summary.skippedMonths > 0 && (
             <p className="flex items-start gap-2 text-sm">
@@ -914,6 +957,10 @@ export function DcaApp() {
           )}
 
           <MonthFilterBar buys={computed.buys} filter={monthFilter} onChange={setMonthFilter} shown={shownBuys.length} />
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground" title="Prices come from the data source. Switch this on to type your own price for any month and see the totals change.">
+            <input type="checkbox" checked={editPrices} onChange={(e) => setEditPrices(e.target.checked)} className="size-4 shrink-0 cursor-pointer accent-primary" />
+            Edit prices (what-if)
+          </label>
 
           {shownBuys.length === 0 && (
             <p className="border border-border p-6 text-center text-sm text-muted-foreground">
@@ -927,6 +974,7 @@ export function DcaApp() {
           <div className="flex flex-col gap-3 md:hidden">
             {shownBuys.map((b) => {
               const original = data.rows.find((r) => r.month === b.month)?.price ?? null;
+                  const readOnlyPrice = !editPrices && !b.manual;
               return (
                 <article key={b.month} className="border border-border bg-card p-4">
                   <div className="mb-3 flex items-start justify-between gap-2">
@@ -946,14 +994,17 @@ export function DcaApp() {
                       <dd className="tabular-nums">{b.priceDate ?? (b.manual ? "manual" : NA)}</dd>
                     </div>
                     <div className="text-right">
-                      <dt className="text-xs text-muted-foreground">Value today</dt>
+                      <dt className="text-xs text-muted-foreground">Value {when}</dt>
                       <dd className="tabular-nums">{fmtUsd(b.valueToday)}</dd>
                     </div>
                     <div className="col-span-2">
                       <dt className="mb-1.5 text-xs text-muted-foreground">Price (USD)</dt>
                       <dd>
                         <div className="flex items-center gap-2">
-                          <Input
+                          {readOnlyPrice ? (
+<span className="flex h-11 flex-1 items-center justify-end text-base tabular-nums sm:h-10 sm:text-sm">{original === null ? "No price" : fmtPrice(original)}</span>
+) : (
+<Input
                             aria-label={`Price for ${b.month}`}
                             inputMode="decimal"
                             className="h-11 flex-1 text-right text-base tabular-nums sm:h-10 sm:text-sm"
@@ -969,6 +1020,7 @@ export function DcaApp() {
                             onChange={(e) => editPrice(b.month, e.target.value)}
                             onBlur={() => endEdit(b.month)}
                           />
+)}
                           {b.manual && (
                             <Button
                               type="button"
@@ -1017,7 +1069,7 @@ export function DcaApp() {
             <Table className="min-w-[900px]" containerClassName="max-h-[34rem] overflow-y-auto">
               <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow className="hover:bg-transparent">
-                  {(["Month", "Price date", "Price (USD)", "Amount (USD)", isEquity ? "Shares bought" : "Tokens bought", "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
+                  {(["Month", "Price date", "Price (USD)", "Amount (USD)", isEquity ? "Shares bought" : "Tokens bought", `Value ${when} (USD)`, "Source", "Note"] as const).map((h, i) => (
                     <TableHead key={h} className={cn("sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]", i >= 2 && i <= 5 && "text-right")}>{h}</TableHead>
                   ))}
                 </TableRow>
@@ -1025,13 +1077,17 @@ export function DcaApp() {
               <TableBody>
                 {shownBuys.map((b) => {
                   const original = data.rows.find((r) => r.month === b.month)?.price ?? null;
+                  const readOnlyPrice = !editPrices && !b.manual;
                   return (
                     <TableRow key={b.month} className="align-top odd:bg-muted/40 hover:bg-muted/60">
                       <TableCell>{b.month}</TableCell>
                       <TableCell>{b.priceDate ?? (b.manual ? "manual" : NA)}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
-                          <Input
+                          {readOnlyPrice ? (
+<span className="block w-32 text-right tabular-nums">{original === null ? "No price" : fmtPrice(original)}</span>
+) : (
+<Input
                             aria-label={`Price for ${b.month}`}
                             inputMode="decimal"
                             className="h-8 w-32 text-right tabular-nums"
@@ -1043,6 +1099,7 @@ export function DcaApp() {
                             onChange={(e) => editPrice(b.month, e.target.value)}
                             onBlur={() => endEdit(b.month)}
                           />
+)}
                           {b.manual && (
                             <Button type="button" variant="outline" size="icon-sm" title="Reset to fetched price" aria-label={`Reset ${b.month}`} onClick={() => { setOverride(b.month, ""); endEdit(b.month); }}>
                               <X />
@@ -1080,7 +1137,7 @@ export function DcaApp() {
               onClick={() => doExport()}
               disabled={exporting}
             >
-              {exporting ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />}
+              {exporting ? <MarkLoader /> : <FileSpreadsheet />}
               {exporting ? "Building XLSX" : "Export spreadsheet"}
             </Button>
           </div>
@@ -1104,7 +1161,7 @@ export function DcaApp() {
                 onClick={() => doShare()}
                 disabled={sharing}
               >
-                {sharing ? <Loader2 className="animate-spin" /> : <Share2 />}
+                {sharing ? <MarkLoader /> : <Share2 />}
                 {sharing ? "Saving" : share ? "Share again" : "Share"}
               </Button>
             </div>

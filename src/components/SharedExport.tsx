@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, FileSpreadsheet, Loader2 } from "lucide-react";
+import { MarkLoader } from "@/components/MarkLoader";
+import { AlertTriangle, FileSpreadsheet } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { downloadFile } from "@/lib/download.ts";
@@ -29,7 +30,7 @@ export function SharedExport({ data }: { data: SharePayload }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">Download this result for accounting or offline review.</p>
         <Button type="button" variant="outline" className="form-control-h rounded-none sm:w-auto" onClick={exportXlsx} disabled={busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <FileSpreadsheet />}
+          {busy ? <MarkLoader /> : <FileSpreadsheet />}
           {busy ? "Building XLSX" : "Export spreadsheet"}
         </Button>
       </div>

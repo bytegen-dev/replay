@@ -3,6 +3,7 @@ import { DcaError } from "./errors.ts";
 import { getJson, HttpError } from "./http.ts";
 import { addDays, monthsBetween, targetDate, todayUtc } from "./months.ts";
 import { selectAllMonths } from "./select.ts";
+import { BITSTAMP_PAIRS, BITSTAMP_PRIMARY, fetchBitstampHistory } from "./bitstamp.ts";
 import { fetchNasdaqHistory } from "./nasdaqHistory.ts";
 import { fetchTiingoHistory } from "./tiingo.ts";
 import { readHistory, writeHistory } from "./stockStore.ts";
@@ -35,7 +36,7 @@ export interface StockMeta {
   /** Stock splits, oldest first. `ratio` is new shares per old share (7 for a 7-for-1 split). */
   splits?: { date: string; ratio: number }[];
   /** Set when the history came from the backup source instead of Yahoo. */
-  via?: "nasdaq" | "tiingo";
+  via?: "nasdaq" | "tiingo" | "bitstamp";
 }
 
 interface YahooChart {
@@ -113,7 +114,7 @@ export function parseYahooChart(body: unknown): { meta: StockMeta; days: StockDa
 }
 
 /** Trading days -> price points. `reinvest` uses the dividend-adjusted close, otherwise the split-adjusted close. */
-export function stockPoints(days: StockDay[], reinvest: boolean, source: "Yahoo" | "Nasdaq" | "Tiingo" = "Yahoo"): DailyPoint[] {
+export function stockPoints(days: StockDay[], reinvest: boolean, source: "Yahoo" | "Nasdaq" | "Tiingo" | "Bitstamp" = "Yahoo"): DailyPoint[] {
   return days.map((d) => ({ date: d.date, price: reinvest ? d.adjClose : d.close, source }));
 }
 
@@ -207,7 +208,7 @@ const memory = new Map<string, { at: number; meta: StockMeta; days: StockDay[] }
  * Full price history for a ticker. Served from memory or the saved copy while it is fresh; otherwise from Yahoo
  * (and saved). If Yahoo refuses and any older copy exists, that is returned and marked stale rather than failing.
  */
-async function loadStockHistory(symbol: string, now: number, fetchChart: NonNullable<StockDeps["fetchChart"]>, useStore: boolean, fetchBackup?: StockDeps["fetchBackup"]): Promise<Loaded> {
+async function loadStockHistory(symbol: string, now: number, fetchChart: NonNullable<StockDeps["fetchChart"]>, useStore: boolean, fetchBackup?: StockDeps["fetchBackup"], fetchPrimary?: StockDeps["fetchBackup"]): Promise<Loaded> {
   const mem = memory.get(symbol);
   if (mem && now - mem.at < ttlFor(mem.meta)) return { meta: mem.meta, days: mem.days, staleSince: null };
 
@@ -215,6 +216,16 @@ async function loadStockHistory(symbol: string, now: number, fetchChart: NonNull
   if (stored && now - stored.fetchedAt < ttlFor(stored.meta)) {
     memory.set(symbol, { at: stored.fetchedAt, meta: stored.meta, days: stored.days });
     return { meta: stored.meta, days: stored.days, staleSince: null };
+  }
+
+  // A source asked before Yahoo (Bitstamp for Bitcoin, Ethereum and XRP). If it has nothing, Yahoo answers as usual.
+  if (fetchPrimary) {
+    const first = await fetchPrimary(symbol, todayUtc(now)).catch(() => null);
+    if (first && first.days.length) {
+      memory.set(symbol, { at: now, meta: first.meta, days: first.days });
+      if (useStore) await writeHistory(symbol, first.meta, first.days).catch(() => undefined);
+      return { meta: first.meta, days: first.days, staleSince: null };
+    }
   }
 
   try {
@@ -244,7 +255,8 @@ async function loadStockHistory(symbol: string, now: number, fetchChart: NonNull
 
 /** A ticker's saved daily history (split-adjusted), fetched from Yahoo at most every few hours. */
 export async function getStockHistory(symbol: string, now: number = Date.now()): Promise<Loaded> {
-  return loadStockHistory(symbol, now, fetchStockChart, true, fetchNasdaqHistory);
+  const pair = BITSTAMP_PAIRS[symbol];
+  return loadStockHistory(symbol, now, fetchStockChart, true, pair ? fetchBitstampHistory : fetchNasdaqHistory, pair && BITSTAMP_PRIMARY.has(symbol) ? fetchBitstampHistory : undefined);
 }
 
 /** Test hook: forget everything cached in memory. */
@@ -263,11 +275,15 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   let loaded: Loaded;
   // After Yahoo: the user's own Tiingo key if they gave one, then Nasdaq. A key that fails is reported, not hidden.
   let keyNote: string | null = null;
+  const pair = BITSTAMP_PAIRS[symbol];
+  const primary: StockDeps["fetchBackup"] | undefined = !deps.fetchChart && pair && BITSTAMP_PRIMARY.has(symbol) ? fetchBitstampHistory : undefined;
   const backup: StockDeps["fetchBackup"] | undefined =
     deps.fetchBackup ??
     (deps.fetchChart
       ? undefined
-      : async (sym, today) => {
+      : pair
+        ? fetchBitstampHistory
+        : async (sym, today) => {
           if (deps.tiingoKey) {
             try {
               const t = await fetchTiingoHistory(sym, today, deps.tiingoKey);
@@ -280,11 +296,11 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
           return fetchNasdaqHistory(sym, today);
         });
   try {
-    loaded = await loadStockHistory(symbol, now, deps.fetchChart ?? fetchStockChart, deps.useStore ?? true, backup);
+    loaded = await loadStockHistory(symbol, now, deps.fetchChart ?? fetchStockChart, deps.useStore ?? true, backup, primary);
   } catch (e) {
     if (e instanceof DcaError) throw e;
     if (e instanceof HttpError && e.status === 404) throw new DcaError(404, `No stock found for "${symbol}". Check the ticker.`);
-    if (e instanceof HttpError && e.status === 429) throw new DcaError(429, "Yahoo Finance is rate limiting requests and there is no saved copy for this ticker yet. Wait a few minutes and retry.");
+    if (e instanceof HttpError && e.status === 429) throw new DcaError(429, "Yahoo Finance is rate limiting requests and there is no saved copy for this ticker yet. Wait a few minutes and retry, or add your own free Tiingo key in Settings.");
     throw new DcaError(502, "Could not reach Yahoo Finance for prices. Try again shortly.");
   }
   const { meta, days } = loaded;
@@ -292,10 +308,11 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     throw new DcaError(422, `${symbol} is priced in ${meta.currency}. Only USD-quoted stocks and ETFs are supported.`);
   }
 
-  const rows = selectAllMonths(req.startMonth, req.endMonth, stockPoints(days, reinvest, meta.via === "nasdaq" ? "Nasdaq" : meta.via === "tiingo" ? "Tiingo" : "Yahoo"), {
+  const sourceName = meta.via === "nasdaq" ? "Nasdaq" : meta.via === "tiingo" ? "Tiingo" : meta.via === "bitstamp" ? "Bitstamp" : "Yahoo";
+  const rows = selectAllMonths(req.startMonth, req.endMonth, stockPoints(days, reinvest, sourceName), {
     basis: req.basis,
     basisDay: req.basisDay,
-    source: meta.via === "nasdaq" ? "Nasdaq" : meta.via === "tiingo" ? "Tiingo" : "Yahoo",
+    source: sourceName,
     today,
     earliestAllowed: null,
     tradingDays: true,
@@ -306,6 +323,9 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     warnings.push(`Yahoo Finance is not answering right now, so these prices come from a copy saved on ${new Date(loaded.staleSince).toISOString().slice(0, 10)}. Recent months and today's price may be out of date.`);
   }
   const viaBackup = meta.via === "nasdaq";
+  if (meta.via === "bitstamp" && !BITSTAMP_PRIMARY.has(symbol)) {
+    warnings.push(`Yahoo Finance is not answering right now, so these prices come from Bitstamp, which has ${major?.name ?? symbol} from ${days[0].date} only. Try again later for the full history.`);
+  }
   if (keyNote && meta.via !== "tiingo") warnings.push(keyNote);
   if (meta.via === "tiingo") warnings.push("Yahoo Finance is not answering right now, so these prices come from Tiingo using your key.");
   if (viaBackup) {
@@ -335,6 +355,8 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     rows,
     sources: viaBackup
       ? [{ label: "Nasdaq historical prices (daily)", url: `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(symbol.toLowerCase())}/historical` }]
+      : meta.via === "bitstamp"
+        ? [{ label: "Bitstamp daily prices (USD)", url: `https://www.bitstamp.net/markets/${encodeURIComponent((BITSTAMP_PAIRS[symbol] ?? "").replace("usd", "")) }/usd/` }]
       : meta.via === "tiingo"
         ? [{ label: "Tiingo end-of-day prices (your key)", url: `https://www.tiingo.com/${encodeURIComponent(symbol.toLowerCase())}` }]
         : [{ label: "Yahoo Finance price history (daily)", url: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/history/` }],

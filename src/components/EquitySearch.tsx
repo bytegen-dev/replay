@@ -1,6 +1,7 @@
 "use client";
 
-import { Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import { MarkLoader } from "@/components/MarkLoader";
 import { useEffect, useId, useRef, useState } from "react";
 import { StockLogo } from "@/components/StockLogo";
 import { Badge } from "@/components/ui/badge";
@@ -128,7 +129,7 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
         autoComplete="off"
         autoCapitalize="characters"
       />
-      {loading && <Loader2 className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-label="Searching" />}
+      {loading && <MarkLoader label="Searching" className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground" />}
 
       {listOpen && (cur || loading || showPopular) && (
         <div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-50 mt-1 border border-border bg-popover shadow-lg">

@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, ArrowRightLeft, History, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, History } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { MarkLoader } from "@/components/MarkLoader";
 import { AmountInput } from "@/components/AmountInput";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { DOWN, LineChart, UP } from "@/components/LineChart";
@@ -162,7 +163,7 @@ export function FxPanel() {
         <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <p className="text-sm leading-snug text-muted-foreground">{summary}</p>
           <Button type="submit" disabled={loading} className="form-cta h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold sm:w-auto sm:min-w-56">
-            {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <History className="size-5" aria-hidden />}
+            {loading ? <MarkLoader className="size-5" /> : <History className="size-5" aria-hidden />}
             {loading ? "Checking rates" : "See what it's worth"}
           </Button>
         </div>

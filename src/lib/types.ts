@@ -45,7 +45,7 @@ export interface Note {
   text: string;
 }
 
-export type PriceSource = "CoinGecko" | "GeckoTerminal" | "DexHunter" | "Yahoo" | "Nasdaq" | "Tiingo" | "manual" | "none";
+export type PriceSource = "CoinGecko" | "GeckoTerminal" | "DexHunter" | "Yahoo" | "Nasdaq" | "Tiingo" | "Bitstamp" | "manual" | "none";
 
 export interface MonthRow {
   /** YYYY-MM */

@@ -156,6 +156,24 @@
   display: inline-block;
 }
 
+@keyframes mark-fill {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    opacity: 1;
+  }
+  60% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+  80% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 0;
+  }
+}
 @keyframes spin-once {
   from {
     transform: rotate(0deg);
@@ -166,6 +184,10 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* The loading mark: the outline fills left to right, holds, then fades and starts over. */
+  .mark-loader-fill {
+    animation: mark-fill 1.3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
   .animate-spin-once {
     transform-origin: center;
     animation: spin-once 1s ease-out 1;
@@ -335,7 +357,7 @@
   .form-cta:not(:disabled):hover::after {
     animation: sweep 0.75s cubic-bezier(0.3, 0.6, 0.2, 1);
   }
-  .form-cta:not(:disabled):hover svg:not(.animate-spin) {
+  .form-cta:not(:disabled):hover svg:not(.animate-spin):not(.mark-loader) {
     animation: nudge 0.5s ease-out;
   }
 }
