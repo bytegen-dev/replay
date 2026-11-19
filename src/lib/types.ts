@@ -1,3 +1,4 @@
+import type { Plan } from "./plan.ts";
 export const CHAINS = ["ethereum", "solana", "base", "bsc", "arbitrum", "hyperevm", "cardano"] as const;
 export type Chain = (typeof CHAINS)[number];
 
@@ -100,4 +101,6 @@ export interface DcaRequest {
   reinvest?: boolean;
   /** The currency `amount` is in (an ISO code such as "NGN"). USD when absent. Each month's buy is converted at that day's rate. */
   currency?: string;
+  /** How often the amount is bought: every month (the default), every 3 or 6 months, yearly, or once at the start month. */
+  plan?: Plan;
 }

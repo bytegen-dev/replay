@@ -1,3 +1,4 @@
+import { isPlan, PLANS } from "./plan.ts";
 import { isCurrency } from "./fxCurrencies.ts";
 import { isMonth } from "./months.ts";
 import { CHAINS, type Chain, type DcaRequest, type Market } from "./types.ts";
@@ -69,7 +70,7 @@ export function validateAddress(address: string, chain: Market): string | null {
 }
 
 export type FieldErrors = Partial<
-  Record<"address" | "chain" | "amount" | "currency" | "startMonth" | "endMonth" | "basis" | "basisDay", string>
+  Record<"address" | "chain" | "amount" | "currency" | "plan" | "startMonth" | "endMonth" | "basis" | "basisDay", string>
 >;
 
 export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>>): FieldErrors {
@@ -85,6 +86,8 @@ export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>
   const amount = Number(input.amount);
   if (!Number.isFinite(amount) || amount <= 0) errors.amount = "Amount must be greater than 0";
   if (input.currency !== undefined && input.currency !== "" && !isCurrency(input.currency)) errors.currency = `Unknown currency "${String(input.currency)}". Use a three-letter code such as USD, EUR or NGN.`;
+
+  if (input.plan !== undefined && input.plan !== "" && !isPlan(input.plan)) errors.plan = `plan must be one of ${PLANS.map((p) => p.value).join(", ")}`;
 
   const s = String(input.startMonth ?? "");
   const e = String(input.endMonth ?? "");

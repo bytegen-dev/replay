@@ -6,8 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/", label: "Wayback" },
-  { href: "/price", label: "Price lookup" },
+  { href: "/", label: "Hindsight" },
+  { href: "/wayback", label: "Wayback" },
 ];
 
 const EXTERNAL = [

@@ -7,6 +7,7 @@ import { cardanoUnit, normalizeAddress, validateRequest } from "./validate.ts";
  *   market   "stock" or a chain: cardano, ethereum, solana, base, bsc, arbitrum, hyperevm
  *   asset    the ticker (stocks) or the contract / mint / Cardano policy id (tokens)
  *   amount   invested each month, in `currency` (US dollars unless currency is given)
+ *   plan     optional how often to buy: monthly (default), quarterly, semiannual, yearly or once (a single buy at `from`)
  *   currency optional ISO code the amount is in (NGN, EUR, GBP ...); each buy is converted at that day's rate
  *   from     first month, YYYY-MM         to  last month, YYYY-MM (default: last full month)
  *   basis    month-end (default), first-of-month or day-of-month (with `day`)
@@ -43,6 +44,7 @@ export function parseApiParams(input: Record<string, unknown>, now: number = Dat
   const basis = BASES.find((b) => b === basisRaw);
   if (!basis) fields.basis = `basis must be one of ${BASES.join(", ")}`;
   const day = str(input.day) ?? str(input.basisDay);
+  const planRaw = (str(input.plan) ?? "monthly").toLowerCase();
   const detailRaw = (str(input.detail) ?? "summary").toLowerCase();
   if (detailRaw !== "summary" && detailRaw !== "full") fields.detail = 'detail must be "summary" or "full"';
 
@@ -62,6 +64,7 @@ export function parseApiParams(input: Record<string, unknown>, now: number = Dat
     basis: basis ?? "month-end",
     ...(basis === "day-of-month" ? { basisDay: day === undefined ? Number.NaN : Number(day) } : {}),
     ...(useMarket === "equity" && truthy(input.reinvest) ? { reinvest: true } : {}),
+    ...(planRaw !== "monthly" ? { plan: planRaw as DcaRequest["plan"] } : {}),
     ...((str(input.currency) ?? "").toUpperCase() !== "" && (str(input.currency) ?? "").toUpperCase() !== "USD" ? { currency: (str(input.currency) ?? "").toUpperCase() } : {}),
   };
 

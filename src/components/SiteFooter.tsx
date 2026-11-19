@@ -5,8 +5,8 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { ThemeSelector } from "@/components/ThemeSelector";
 
 const PAGES = [
-  { label: "Wayback", href: "/" },
-  { label: "Price lookup", href: "/price" },
+  { label: "Hindsight", href: "/" },
+  { label: "Wayback", href: "/wayback" },
 ];
 const LINKS = [
   { label: "Documentation", href: "https://github.com/bytegen-dev/dripcast#readme" },

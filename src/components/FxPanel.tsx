@@ -1,7 +1,8 @@
 "use client";
 
-import { AlertTriangle, ArrowRightLeft, History } from "lucide-react";
+import { AlertTriangle, ArrowRightLeft, ArrowUpDown, History } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { DotsToggle, useDotsPref } from "@/components/DotsToggle";
 import { MarkLoader } from "@/components/MarkLoader";
 import { AmountInput } from "@/components/AmountInput";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
@@ -60,6 +61,7 @@ export function FxPanel() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<FxResponse | null>(null);
   const [restored, setRestored] = useState(false);
+  const [dots, setDots] = useDotsPref();
   // A link with run=1 (the footer timeline makes them) runs the check as soon as the form is filled in.
   const autoRun = useRef(false);
 
@@ -128,8 +130,10 @@ export function FxPanel() {
         <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-[1fr_auto_1fr]">
           {/* What you buy on the left, what you spend on the right. */}
           <CurrencySelect id="fx-to" value={to} onChange={setTo} label="You buy" />
-          <button type="button" aria-label="Swap the two currencies" onClick={() => (setFrom(to), setTo(from))} className="form-control-h hidden items-center justify-center border border-border px-3 text-muted-foreground hover:border-primary hover:text-primary sm:flex">
-            <ArrowRightLeft className="size-4" aria-hidden />
+          <button type="button" aria-label="Swap the two currencies" onClick={() => (setFrom(to), setTo(from))} className="form-control-h flex w-11 items-center justify-center justify-self-center border border-border text-muted-foreground hover:border-primary hover:text-primary sm:w-auto sm:px-3">
+            {/* Stacked on a phone (the two currencies sit one above the other), side by side on wider screens. */}
+            <ArrowUpDown className="size-4 sm:hidden" aria-hidden />
+            <ArrowRightLeft className="hidden size-4 sm:block" aria-hidden />
           </button>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="fx-amount" className="text-sm text-muted-foreground">
@@ -162,7 +166,7 @@ export function FxPanel() {
         </div>
         <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
           <p className="text-sm leading-snug text-muted-foreground">{summary}</p>
-          <Button type="submit" disabled={loading} className="form-cta h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold sm:w-auto sm:min-w-56">
+          <Button type="submit" disabled={loading} className="form-cta cut-bl h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold sm:w-auto sm:min-w-56">
             {loading ? <MarkLoader className="size-5" /> : <History className="size-5" aria-hidden />}
             {loading ? "Checking rates" : "See what it's worth"}
           </Button>
@@ -244,12 +248,15 @@ export function FxPanel() {
 
           {points.length >= 2 && (
             <div className="flex flex-col gap-2">
-              <h3 className="text-base font-bold">
-                {data.from.code} per {data.to.code} over time
-              </h3>
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="text-base font-bold">
+                  {data.from.code} per {data.to.code} over time
+                </h3>
+                <DotsToggle on={dots} onChange={setDots} />
+              </div>
               <LineChart
                 series={[
-                  { key: "rate", label: `${data.from.code} per ${data.to.code}`, area: true, dots: true, color: up ? UP : DOWN, points },
+                  { key: "rate", label: `${data.from.code} per ${data.to.code}`, area: true, dots, color: up ? UP : DOWN, points },
                   ...(r.averageRate !== null ? [{ key: "avg", label: "Your average rate", dashed: true, points: points.map((p) => ({ x: p.x, y: r.averageRate! })) }] : []),
                 ]}
                 yFormat={fmtPrice}

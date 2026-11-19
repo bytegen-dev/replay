@@ -1,3 +1,4 @@
+import { planInfo } from "./plan.ts";
 import fs from "node:fs";
 import path from "node:path";
 import ExcelJS from "exceljs";
@@ -32,7 +33,8 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
       buy.getCell(`C${r}`).value = b.price as number;
       buy.getCell(`C${r}`).font = BLUE;
     }
-    buy.getCell(`D${r}`).value = { formula: `IF(ISNUMBER(C${r}),Summary!$B$4,0)`, result: priced ? p.amount : 0 };
+    // A month between buys under the plan spends nothing; every other month spends the amount if it has a price.
+    buy.getCell(`D${r}`).value = b.buy === false ? 0 : { formula: `IF(ISNUMBER(C${r}),Summary!$B$4,0)`, result: priced ? p.amount : 0 };
     buy.getCell(`E${r}`).value = { formula: `IF(ISNUMBER(C${r}),ROUND(D${r}/C${r},Summary!$B$5),"")`, result: b.tokens ?? "" };
     buy.getCell(`F${r}`).value = {
       formula: `IF(AND(ISNUMBER(E${r}),ISNUMBER(Summary!$B$6)),E${r}*Summary!$B$6,"")`,
@@ -53,7 +55,7 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   const rows: [string, ExcelJS.CellValue, "input" | "formula" | "text", string?][] = [
     ["Token", p.tokenLabel || "unknown", "text"],
     ["Chain", p.chain, "text"],
-    ["Monthly amount (USD)", p.amount, "input", "#,##0.00"],
+    [p.plan && p.plan !== "monthly" ? `Amount each buy (USD, ${p.plan === "once" ? "once" : planInfo(p.plan).phrase})` : "Monthly amount (USD)", p.amount, "input", "#,##0.00"],
     ["Token rounding (decimals)", decimals, "input", "0"],
     [p.sold ? "Price at sale (USD)" : "Price today (USD)", p.currentPrice ?? "", "input", "0.00000000"],
     ["Price basis", p.basis, "text"],
@@ -63,7 +65,9 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
     [p.sold ? "Value at sale (USD)" : "Value today (USD)", { formula: `IF(ISNUMBER(B6),B9*B6,"n/a")`, result: summary.valueToday ?? "n/a" }, "formula", "#,##0.00"],
     ["Gain / loss (USD)", { formula: `IF(ISNUMBER(B11),B11-B8,"n/a")`, result: summary.gain ?? "n/a" }, "formula", "#,##0.00"],
     ["Gain / loss (%)", { formula: `IF(AND(ISNUMBER(B12),B8>0),B12/B8,"n/a")`, result: summary.gainPct === null ? "n/a" : summary.gainPct / 100 }, "formula", "0.00%"],
-    ["Months with no price (excluded)", { formula: `ROWS(Buys!C2:C${last})-COUNT(Buys!C2:C${last})`, result: summary.skippedMonths }, "formula", "0"],
+    p.plan && p.plan !== "monthly"
+      ? ["Buys with no price (excluded)", summary.skippedMonths, "text", "0"]
+      : ["Months with no price (excluded)", { formula: `ROWS(Buys!C2:C${last})-COUNT(Buys!C2:C${last})`, result: summary.skippedMonths }, "formula", "0"],
   ];
   sum.getRow(1).height = 44;
   sum.mergeCells("B1:D1");

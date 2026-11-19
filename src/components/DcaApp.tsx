@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { ChainLogo, CoinLogo } from "@/components/ChainLogo";
 import { AlertTriangle, Check, Copy, FileSpreadsheet, History, Settings, Share2, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +17,7 @@ import { CoinPicker } from "@/components/CoinPicker";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { currencyByCode, isCurrency } from "@/lib/fxCurrencies.ts";
 import { getTiingoKey } from "@/lib/userKeys.ts";
+import { countBuys, DEFAULT_PLAN, isPlan, PLANS, planInfo, type Plan } from "@/lib/plan.ts";
 import { cleanAmount, formatAmountInput, parseAmount, decodeRange, encodeRange, readQuery, writeQuery } from "@/lib/urlState.ts";
 import { RollText } from "@/components/RollText";
 import { applyMonthFilters, NO_FILTER, type MonthFilter } from "@/lib/monthFilters.ts";
@@ -54,7 +56,7 @@ function tokenSymbol(t: { symbol: string | null; name: string | null }): string 
 }
 
 /** The answer in one plain sentence, so the numbers below are the evidence, not the headline. */
-function ResultSentence({ amount, symbol, summary, decimals, total, shares, currency, sold }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number; shares: boolean; currency?: DcaResponse["currency"]; sold?: boolean }) {
+function ResultSentence({ amount, symbol, summary, decimals, total, shares, currency, sold, plan }: { plan?: Plan; amount: number; symbol: string; summary: Summary; decimals: number; total: number; shares: boolean; currency?: DcaResponse["currency"]; sold?: boolean }) {
   if (summary.pricedMonths === 0) {
     return (
       <p className="max-w-3xl text-lg leading-snug font-bold">
@@ -63,10 +65,11 @@ function ResultSentence({ amount, symbol, summary, decimals, total, shares, curr
     );
   }
   // Say "17 of 23" when some months had no price, so the number can't be read as the whole range.
+  const unitWord = plan && plan !== "monthly" ? "buy" : "month";
   const months =
     summary.skippedMonths > 0
-      ? `${summary.pricedMonths} of ${total} months`
-      : `${summary.pricedMonths} ${summary.pricedMonths === 1 ? "month" : "months"}`;
+      ? `${summary.pricedMonths} of ${total} ${unitWord}s`
+      : `${summary.pricedMonths} ${summary.pricedMonths === 1 ? unitWord : `${unitWord}s`}`;
   const loss = (summary.gain ?? 0) < 0;
   // When the amount is in another currency, say it in that currency, then add what it all came to in that currency too.
   const local = (n: number) => `${currency!.symbol}${n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 0 : 2 })}`;
@@ -75,7 +78,14 @@ function ResultSentence({ amount, symbol, summary, decimals, total, shares, curr
   return (
     <>
       <p className="text-base leading-relaxed sm:text-lg">
-        {currency ? local(amount) : fmtUsd(amount)} a month for <b>{months}</b> bought{" "}
+        {currency ? local(amount) : fmtUsd(amount)} {planInfo(plan).phrase}
+        {plan !== "once" && (
+          <>
+            {" "}
+            for <b>{months}</b>
+          </>
+        )}{" "}
+        bought{" "}
         <b>
           {fmtNum(summary.tokens, decimals)} {shares ? `shares of ${symbol}` : symbol}
         </b>{" "}
@@ -107,9 +117,9 @@ function ResultSentence({ amount, symbol, summary, decimals, total, shares, curr
 /** Notes that deserve a warning flag (price is estimated, from a nearby day, or illiquid). */
 const WARN_CODES = new Set(["nearest-day", "low-volume", "outlier"]);
 
-function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: React.ReactNode }) {
+function Field({ id, label, error, children, className }: { id: string; label: string; error?: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex h-full flex-col gap-1.5 [&_[data-slot=select-trigger]]:w-full [&_button]:w-full [&_input]:w-full">
+    <div className={cn("flex h-full flex-col gap-1.5 [&_[data-slot=select-trigger]]:w-full [&_button]:w-full [&_input]:w-full", className)}>
       <Label htmlFor={id} className="text-sm text-muted-foreground">
         {label}
       </Label>
@@ -142,6 +152,8 @@ export function DcaApp() {
   const [amount, setAmount] = useState("500");
   // "Sell at end month": value the holding at the end month's price instead of today's. Applied when the check runs.
   const [sellAtEnd, setSellAtEnd] = useState(false);
+  // How often the amount is bought: every month, every 3 or 6 months, yearly, or once at the start month.
+  const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN);
   // Prices come from the data source and are read-only unless the person switches editing on (for what-if prices, or to fill a gap).
   const [editPrices, setEditPrices] = useState(false);
   // The currency the monthly amount is in. Each buy is converted to dollars at that day's rate.
@@ -199,6 +211,8 @@ export function DcaApp() {
       }
       if (q.get("run") === "1") autoRun.current = true;
       if (q.get("sell") === "1") setSellAtEnd(true);
+      const pl = q.get("plan");
+      if (isPlan(pl)) setPlan(pl);
       const a = cleanAmount(q.get("amt"));
       if (a) setAmount(formatAmountInput(a));
       const cur = q.get("cur")?.toUpperCase();
@@ -261,12 +275,13 @@ export function DcaApp() {
       basis: basis !== "month-end" && basis,
       day: basis === "day-of-month" && String(basisDay),
       sell: sellAtEnd && "1",
+      plan: plan !== DEFAULT_PLAN && plan,
     });
-  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd]);
+  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
-  const [data, setData] = useState<(DcaResponse & { amount: number; sold?: boolean }) | null>(null);
+  const [data, setData] = useState<(DcaResponse & { amount: number; sold?: boolean; plan?: Plan }) | null>(null);
   const [overrides, setOverrides] = useState<Overrides>({});
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -291,7 +306,9 @@ export function DcaApp() {
       ? "Enter how much you buy each month."
       : runMonths === 0
         ? "Pick a start month that comes before the end month."
-        : `${usd0(amountNum)} a month into ${assetName}, ${formatMonth(startMonth)} to ${formatMonth(endMonth)}: ${runMonths} ${runMonths === 1 ? "buy" : "buys"}, ${usd0(amountNum * runMonths)} in all.`;
+        : plan === "once"
+          ? `${usd0(amountNum)} once into ${assetName} in ${formatMonth(startMonth)}, valued at ${sellAtEnd ? formatMonth(endMonth) : "today's price"}.`
+          : `${usd0(amountNum)} ${PLANS.find((p) => p.value === plan)?.phrase} into ${assetName}, ${formatMonth(startMonth)} to ${formatMonth(endMonth)}: ${countBuys(plan, startMonth, endMonth)} ${countBuys(plan, startMonth, endMonth) === 1 ? "buy" : "buys"}, ${usd0(amountNum * countBuys(plan, startMonth, endMonth))} in all.`;
 
   // The Stocks / Crypto / Currencies switch (and the Majors / Other tokens filter under Crypto). Shared by the form and the Currencies tab.
   // The Stocks / Crypto / Currencies tabs sit in the card header. Majors / Other tokens (under Crypto) stays with the form.
@@ -328,7 +345,7 @@ export function DcaApp() {
                     <ToggleGroupItem
                       key={v}
                       value={v}
-                      className="form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                      className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "fx" && "cut-tr")}
                     >
                       {label}
                     </ToggleGroupItem>
@@ -385,7 +402,7 @@ export function DcaApp() {
   /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
         ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
@@ -437,7 +454,7 @@ export function DcaApp() {
         if (j.fields) setErrors(j.fields);
         throw new Error(j.error ?? `Request failed (${res.status})`);
       }
-      setData({ ...(j as DcaResponse), amount: input.amount, ...(sellAtEnd ? { sold: true } : {}) });
+      setData({ ...(j as DcaResponse), amount: input.amount, ...(sellAtEnd ? { sold: true } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}) });
       setOverrides({});
       setDrafts({});
     } catch (err) {
@@ -468,7 +485,7 @@ export function DcaApp() {
     if (!data || !val) return null;
     const effective = data.rows.map((r) => ({ price: overrides[r.month] > 0 ? overrides[r.month] : r.price, fx: r.fx }));
     const decimals = chooseDecimals(effective, data.amount);
-    const buys = buildBuys(data.rows, data.amount, val.price, overrides, decimals);
+    const buys = buildBuys(data.rows, data.amount, val.price, overrides, decimals, data.plan);
     return { buys, decimals, summary: summarize(buys, val.price) };
   }, [data, val, overrides]);
   // The word used beside the final valuation.
@@ -516,6 +533,7 @@ export function DcaApp() {
       sources: data.sources,
       unit: isEquity ? "shares" : "tokens",
       ...(data.sold ? { sold: true } : {}),
+      ...(data.plan ? { plan: data.plan } : {}),
       ...(data.currency ? { currency: { code: data.currency.code, symbol: data.currency.symbol, perUsdToday: data.currency.perUsdToday } } : {}),
     };
     try {
@@ -546,6 +564,7 @@ export function DcaApp() {
       warnings: data.warnings,
       unit: isEquity ? "shares" : "tokens",
       ...(data.sold ? { sold: true } : {}),
+      ...(data.plan ? { plan: data.plan } : {}),
       ...(data.currency ? { currency: { code: data.currency.code, symbol: data.currency.symbol, perUsdToday: data.currency.perUsdToday } } : {}),
     };
     try {
@@ -591,7 +610,8 @@ export function DcaApp() {
 
   const isEquity = data?.chain === "equity" && !isMajorSymbol(data.address);
   // The months the list shows after filtering and ordering. Totals, charts and exports still use every month.
-  const shownBuys = useMemo(() => (computed ? applyMonthFilters(computed.buys, monthFilter) : []), [computed, monthFilter]);
+  // The list shows only buying months; months between buys still feed the chart.
+  const shownBuys = useMemo(() => (computed ? applyMonthFilters(computed.buys.filter((b) => b.buy !== false), monthFilter) : []), [computed, monthFilter]);
   // Inside the open list only the ticked item keeps its colour; the others go grey. The value shown on the closed select is coloured.
   const selectContent = "rounded-none border border-border bg-popover ring-0 [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:grayscale [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:opacity-70";
 
@@ -612,7 +632,7 @@ export function DcaApp() {
       {/* overflow-visible: the search dropdown has to extend past the card's bottom edge */}
       <Card className="cut-card overflow-visible rounded-none border border-border bg-card ring-0">
         <CardHeader className="border-b border-border pb-4">{modeTabs}</CardHeader>
-        <CardContent className="pt-5 pb-0 sm:pb-1">
+        <CardContent className="pt-2 pb-0 sm:pb-1">
           {!formReady ? (
             <ParametersFormSkeleton />
           ) : mode === "fx" ? (
@@ -665,7 +685,7 @@ export function DcaApp() {
                 )}
               </div>
               {isMajor ? null : mode === "equity" ? (
-                <Field id="reinvest" label="Dividends">
+                <Field id="reinvest" label="Dividends" className="min-[480px]:col-span-2">
                   <ToggleGroup
                     type="single"
                     variant="outline"
@@ -692,7 +712,7 @@ export function DcaApp() {
                   </ToggleGroup>
                 </Field>
               ) : (
-                <Field id="chain" label="Chain" error={errors.chain}>
+                <Field id="chain" label="Chain" error={errors.chain} className="min-[480px]:col-span-2">
                   <Select value={chain} onValueChange={(v) => setChain(v as Chain)}>
                     <SelectTrigger id="chain" className="form-control-h w-full rounded-none">
                       <SelectValue />
@@ -710,7 +730,7 @@ export function DcaApp() {
                   </Select>
                 </Field>
               )}
-              <Field id="amount" label="Monthly amount" error={errors.amount ?? errors.currency}>
+              <Field id="amount" className="min-[480px]:col-span-2" label={plan === "monthly" ? "Monthly amount" : plan === "once" ? "Amount" : "Amount each buy"} error={errors.amount ?? errors.currency}>
                 {/* The currency sits in front of the number. Anything other than USD is converted at each month's own rate. */}
                 <div className="flex">
                   <CurrencyPicker id="currency" ariaLabel="Currency" variant="compact" value={currency} onChange={setCurrency} className="w-[6.5rem]! shrink-0 border-r-0" />
@@ -721,6 +741,19 @@ export function DcaApp() {
                     onValueChange={setAmount}
                     aria-invalid={!!errors.amount}
                   />
+                  {/* How often it is bought, on the same row as the amount. Every month by default; the others buy only in some months, counted from the start month. */}
+                  <Select value={plan} onValueChange={(v) => setPlan(v as Plan)}>
+                    <SelectTrigger id="plan" aria-label="How often you buy" className="form-control-h w-[8.5rem]! shrink-0 rounded-none border-l-0 px-2 text-sm">
+                      <SelectValue>{PLANS.find((p) => p.value === plan)?.short}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent className={selectContent}>
+                      {PLANS.map((p) => (
+                        <SelectItem key={p.value} value={p.value} className="rounded-none">
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </Field>
               {/* Start and end always sit side by side, at every width. */}
@@ -827,7 +860,7 @@ export function DcaApp() {
                     type="submit"
                     disabled={loading}
                     variant="default"
-                    className="form-cta h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border sm:w-auto sm:min-w-56"
+                    className="form-cta cut-bl h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border sm:w-auto sm:min-w-56"
                   >
                     {loading ? <MarkLoader className="size-5" /> : <History className="size-5" aria-hidden />}
                     {loading ? "Checking prices" : "See what it's worth"}
@@ -905,10 +938,23 @@ export function DcaApp() {
                 symbol={tokenSymbol(data.token)}
                 summary={computed.summary}
                 decimals={computed.decimals}
-                total={computed.buys.length}
+                total={data.plan ? computed.buys.filter((b) => b.buy !== false).length : computed.buys.length}
+                plan={data.plan}
                 shares={isEquity}
               />
             </div>
+            {/* Majors aren't on the Wayback page, so the link is for stocks and tokens. */}
+            {!(data.chain === "equity" && isMajorSymbol(data.address)) && data.rows[0] && (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Want the exact price on a day?{" "}
+                <Link
+                  href={data.chain === "equity" ? `/wayback?chain=equity&asset=${encodeURIComponent(data.address)}&date=${data.rows[0].targetDate}` : `/wayback?chain=${data.chain}&asset=${encodeURIComponent(data.address)}&date=${data.rows[0].targetDate}`}
+                  className="underline underline-offset-4 hover:text-foreground"
+                >
+                  Look it up in Wayback
+                </Link>
+              </p>
+            )}
           </section>
 
           {data.warnings.length > 0 && (
@@ -942,7 +988,7 @@ export function DcaApp() {
             ))}
           </div>
 
-          <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} />
+          <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} title={`${tokenSymbol(data.token)}, ${data.currency ? data.currency.symbol : "$"}${data.amount.toLocaleString("en-US")} a month`} />
 
           <InsightsCard buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} amount={data.amount} />
 

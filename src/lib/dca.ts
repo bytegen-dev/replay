@@ -11,6 +11,7 @@ import {
 } from "./providers.ts";
 import { dexhunterSeries } from "./dexhunter.ts";
 import { fillGaps, gtCardanoSeries, resolveCardanoUnit } from "./gtCardano.ts";
+import { isBuyMonth } from "./plan.ts";
 import { selectAllMonths } from "./select.ts";
 import { runStockDca } from "./stocks.ts";
 import { currencyByCode } from "./fxCurrencies.ts";
@@ -218,8 +219,9 @@ async function runDcaUsd(req: DcaRequest, now: number, opts: { tiingoKey?: strin
     else warnings.push("No live price available; value today cannot be computed.");
   }
 
-  const missing = rows.filter((r) => r.price === null).length;
-  if (missing) warnings.push(`${missing} of ${rows.length} months have no price and are excluded from totals.`);
+  const buyRows = rows.filter((r) => isBuyMonth(req.plan, req.startMonth, r.month));
+  const missing = buyRows.filter((r) => r.price === null).length;
+  if (missing) warnings.push(`${missing} of ${buyRows.length} ${req.plan && req.plan !== "monthly" ? "buys" : "months"} have no price and ${missing === 1 ? "is" : "are"} excluded from totals.`);
 
   return {
     token: { id: token.id, symbol: token.symbol, name: token.name },

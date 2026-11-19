@@ -84,3 +84,10 @@ test("longest underwater stretch, and whether it is still going", () => {
 test("month names read like a person writes them", () => {
   assert.equal(monthYear("2020-03-31"), "Mar 2020");
 });
+
+test("thinTicks keeps evenly spaced ticks and never leaves more than asked", async () => {
+  const { thinTicks } = await import("../src/lib/charts.ts");
+  assert.deepEqual(thinTicks([1, 2, 3, 4, 5, 6], 3), [1, 3, 5]);
+  assert.deepEqual(thinTicks([1, 2, 3], 5), [1, 2, 3]);
+  assert.deepEqual(thinTicks([1, 2, 3, 4, 5, 6, 7], 1), [1, 5]);
+});

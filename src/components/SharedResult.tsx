@@ -1,3 +1,4 @@
+import { planInfo } from "@/lib/plan.ts";
 import { AlertTriangle } from "lucide-react";
 import { GrowthChart } from "@/components/GrowthChart";
 import { InsightsCard } from "@/components/InsightsCard";
@@ -15,10 +16,12 @@ const WARN_CODES = new Set(["nearest-day", "low-volume", "outlier"]);
 export function SharedResult({ data }: { data: SharePayload }) {
   const { buys, summary, decimals } = prepare(data);
   const symbol = data.tokenLabel.replace(/^\$/, "") || "tokens";
+  const unitWord = data.plan && data.plan !== "monthly" ? "buy" : "month";
+  const total = data.plan && data.plan !== "monthly" ? buys.filter((b) => b.buy !== false).length : buys.length;
   const months =
     summary.skippedMonths > 0
-      ? `${summary.pricedMonths} of ${buys.length} months`
-      : `${summary.pricedMonths} ${summary.pricedMonths === 1 ? "month" : "months"}`;
+      ? `${summary.pricedMonths} of ${total} ${unitWord}s`
+      : `${summary.pricedMonths} ${summary.pricedMonths === 1 ? unitWord : `${unitWord}s`}`;
   const loss = (summary.gain ?? 0) < 0;
 
   const tiles = [
@@ -52,7 +55,14 @@ export function SharedResult({ data }: { data: SharePayload }) {
             <p className="text-base leading-relaxed sm:text-lg">No month in this result has a price, so there is nothing to total.</p>
           ) : (
             <p className="text-base leading-relaxed sm:text-lg">
-              {data.currency ? `${data.currency.symbol}${data.amount.toLocaleString("en-US", { maximumFractionDigits: data.amount >= 100 ? 0 : 2 })}` : fmtUsd(data.amount)} a month for <b>{months}</b> bought{" "}
+              {data.currency ? `${data.currency.symbol}${data.amount.toLocaleString("en-US", { maximumFractionDigits: data.amount >= 100 ? 0 : 2 })}` : fmtUsd(data.amount)} {planInfo(data.plan).phrase}
+              {data.plan !== "once" && (
+                <>
+                  {" "}
+                  for <b>{months}</b>
+                </>
+              )}{" "}
+              bought{" "}
               <b>
                 {fmtNum(summary.tokens, decimals)} {symbol}
               </b>{" "}

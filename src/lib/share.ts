@@ -1,3 +1,4 @@
+import { isPlan } from "./plan.ts";
 import { createHash, randomBytes } from "node:crypto";
 import type { ExportPayload } from "./exportData.ts";
 import type { MonthRow, Note, NoteCode, PriceSource, SourceLink } from "./types.ts";
@@ -99,6 +100,7 @@ export function parseShare(x: unknown): SharePayload | string {
 
   return {
     unit: p.unit === "shares" ? "shares" : "tokens",
+    ...(isPlan(p.plan) && p.plan !== "monthly" ? { plan: p.plan } : {}),
     ...(p.sold === true ? { sold: true } : {}),
     tokenLabel: str(p.tokenLabel, 60),
     tokenName: str(p.tokenName, 100),

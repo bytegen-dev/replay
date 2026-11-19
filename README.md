@@ -93,8 +93,8 @@ The **Stocks** switch checks ordinary US-listed stocks and ETFs, with decades of
 
 Charts are drawn as plain SVG (no charting library), in the black-and-white theme, and they resize to the screen. Hover, touch or use the arrow keys to read exact values, and Escape clears the readout.
 
-- **Wayback results** and **shared pages** get a chart under the summary: *Growth* (what the holding was worth on each purchase date against the total you had put in, so it dips and climbs with the market) and *Price vs your cost* (the price against your running average cost per unit, which shows why buying a fixed dollar amount lowers your average). Months with no price were never bought, so they add no point. Manual price edits redraw it.
-- **Price lookup** shows the prices around the moment you asked about, with that moment marked: the lookup returns them as `series` (about 2 hours of minutes, 2 days of hours, or 2 months of days, depending on the resolution used). Stocks that have split are charted at what they traded at each day.
+- **Hindsight results** and **shared pages** get a chart under the summary: *Growth* (what the holding was worth on each purchase date against the total you had put in, so it dips and climbs with the market) and *Price vs your cost* (the price against your running average cost per unit, which shows why buying a fixed dollar amount lowers your average). Months with no price were never bought, so they add no point. Manual price edits redraw it.
+- **Wayback** (the price lookup page) shows the prices around the moment you asked about, with that moment marked: the lookup returns them as `series` (about 2 hours of minutes, 2 days of hours, or 2 months of days, depending on the resolution used). Stocks that have split are charted at what they traded at each day.
 
 ## Public API
 
@@ -128,7 +128,7 @@ The result has an `answer` sentence that is safe to quote, a `summary` (invested
 
 ## Price at a past moment
 
-`/price` on the site, and `/api/v1/historical-price` in the API, answer "what was this worth at that date and time?":
+`/wayback` on the site, and `/api/v1/historical-price` in the API, answer "what was this worth at that date and time?":
 
 ```bash
 # Named fields

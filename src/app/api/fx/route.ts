@@ -8,7 +8,7 @@ import { hashSecret } from "@/lib/share.ts";
 
 const MAX_MONTHS = 720;
 
-/** Currency wayback: spend a fixed amount of one currency on another every month, and see what it came to. */
+/** Currency hindsight: spend a fixed amount of one currency on another every month, and see what it came to. */
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
   const rate = await hitRateLimit(`web-fx:${hashSecret(ip).slice(0, 16)}`, 30, 60);

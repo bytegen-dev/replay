@@ -10,8 +10,8 @@ import { GithubIcon, XIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/utils";
 
 const TOOLS = [
-  { href: "/", label: "Wayback", note: "What a monthly buy is worth today", Icon: History },
-  { href: "/price", label: "Price lookup", note: "Any token or stock at a past moment", Icon: LineChart },
+  { href: "/", label: "Hindsight", note: "What a monthly buy would be worth today", Icon: History },
+  { href: "/wayback", label: "Wayback", note: "Any token or stock at a past moment", Icon: LineChart },
 ];
 const LINKS = [
   { href: "https://github.com/bytegen-dev/dripcast#readme", label: "Documentation", note: "Guides and the public API", Icon: BookOpen },

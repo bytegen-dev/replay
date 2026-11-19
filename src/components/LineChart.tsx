@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { formatChartTime, niceScale, timeTicks } from "@/lib/charts.ts";
+import { formatChartTime, niceScale, thinTicks, timeTicks } from "@/lib/charts.ts";
 
 /**
  * A chart drawn as plain SVG, so it needs no charting library. It borrows from trading terminals: the price axis is on the
@@ -91,7 +91,9 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
       xMax = fixedRange.xMax;
     }
     const scale = fixedRange ? niceScale(fixedRange.yMin, fixedRange.yMax, zeroBaseline) : niceScale(Math.min(...ys), Math.max(...ys), zeroBaseline);
-    return { xMin, xMax, scale, xTicks: timeTicks(xMin, xMax, width < 480 ? 3 : 6) };
+    // Labels are about 55px wide, so only as many as fit with a gap between them: three or four on a phone.
+    const room = Math.floor((width - M.left - M.right) / 80);
+    return { xMin, xMax, scale, xTicks: thinTicks(timeTicks(xMin, xMax, 6), room) };
   }, [series, marker, zeroBaseline, width, fixedRange]);
 
   if (!model) return null;
@@ -187,9 +189,17 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
         {xTicks.map((t) => (
           <g key={t.t}>
             <line x1={sx(t.t)} x2={sx(t.t)} y1={M.top} y2={M.top + ih + 4} stroke="var(--border)" strokeWidth="1" opacity="0.3" />
-            <text x={sx(t.t)} y={height - 9} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)">
-              {t.label}
-            </text>
+            {/* A label near an edge is kept inside the chart: left-aligned at the start, right-aligned at the end. */}
+            {(() => {
+              const half = (t.label.length * CHAR) / 2;
+              const x = sx(t.t);
+              const anchor = x - half < 2 ? "start" : x + half > axisX + 8 ? "end" : "middle";
+              return (
+                <text x={anchor === "start" ? Math.max(2, x - 2) : anchor === "end" ? x + 2 : x} y={height - 9} textAnchor={anchor} fontSize="11" fill="var(--muted-foreground)">
+                  {t.label}
+                </text>
+              );
+            })()}
           </g>
         ))}
 

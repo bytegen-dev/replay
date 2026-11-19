@@ -354,6 +354,33 @@
   .form-cta:not(:disabled):hover {
     box-shadow: 0 0 0 4px var(--cta-ring), 0 6px 22px -6px var(--cta-glow);
   }
+  /* A main button with its bottom-left corner slanted, like the cards. A clip-path would also clip the hover glow, so a
+     slanted button brightens instead. */
+  .cut-bl {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+  }
+  .form-cta.cut-bl:not(:disabled):hover {
+    box-shadow: none;
+    filter: brightness(1.08);
+  }
+  /* A tab with its top-right corner slanted. The 1px border follows the cut through a thin diagonal drawn in the corner. */
+  .cut-tr {
+    position: relative;
+    clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%);
+  }
+  .cut-tr::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 11px;
+    height: 11px;
+    pointer-events: none;
+    background: linear-gradient(to top right, transparent calc(50% - 0.5px), var(--border) calc(50% - 0.5px), var(--border) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+  }
+  .cut-tr[data-state="on"]::after {
+    display: none;
+  }
   .form-cta:not(:disabled):hover::after {
     animation: sweep 0.75s cubic-bezier(0.3, 0.6, 0.2, 1);
   }

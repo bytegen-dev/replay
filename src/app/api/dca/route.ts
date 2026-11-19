@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { DcaError, runDca } from "@/lib/dca.ts";
 import type { DcaRequest } from "@/lib/types.ts";
+import { isPlan } from "@/lib/plan.ts";
 import { isTiingoKey } from "@/lib/tiingo.ts";
 import { cardanoUnit, normalizeAddress, validateRequest } from "@/lib/validate.ts";
 
@@ -28,6 +29,7 @@ export async function POST(request: Request) {
     basis: body.basis!,
     ...(body.chain === "equity" && body.reinvest === true ? { reinvest: true } : {}),
     ...(typeof body.currency === "string" && body.currency.trim() !== "" && body.currency.trim().toUpperCase() !== "USD" ? { currency: body.currency.trim().toUpperCase() } : {}),
+    ...(isPlan(body.plan) && body.plan !== "monthly" ? { plan: body.plan } : {}),
     ...(body.basis === "day-of-month" ? { basisDay: Number(body.basisDay) } : {}),
   };
 

@@ -1,3 +1,4 @@
+import { isBuyMonth, type Plan } from "./plan.ts";
 import type { MonthRow } from "./types.ts";
 
 export type Overrides = Record<string, number>;
@@ -8,6 +9,8 @@ export interface BuyRow extends MonthRow {
   tokens: number | null;
   valueToday: number | null;
   manual: boolean;
+  /** False for a month that is not a buying month under the plan (nothing bought; the price is still shown). */
+  buy?: boolean;
 }
 
 export interface Summary {
@@ -55,9 +58,15 @@ export function buildBuys(
   priceToday: number | null,
   overrides: Overrides,
   decimals: number,
+  plan?: Plan,
 ): BuyRow[] {
+  const start = rows[0]?.month ?? "";
   return rows.map((row) => {
     const { price, manual } = effectivePrice(row, overrides);
+    // Not a buying month: nothing is bought, but the holding is still valued at this month's price.
+    if (plan && plan !== "monthly" && !isBuyMonth(plan, start, row.month)) {
+      return { ...row, price, source: manual ? "manual" : row.source, amount: 0, tokens: 0, valueToday: priceToday === null ? null : 0, manual, buy: false };
+    }
     if (price === null) {
       return { ...row, amount: 0, tokens: null, valueToday: null, manual: false };
     }
@@ -79,12 +88,14 @@ export function buildBuys(
 }
 
 export function summarize(buys: BuyRow[], priceToday: number | null): Summary {
-  const priced = buys.filter((b) => b.tokens !== null);
+  // Only buying months count: a month between buys has no tokens and no amount.
+  const bought = buys.filter((b) => b.buy !== false);
+  const priced = bought.filter((b) => b.tokens !== null);
   const invested = priced.reduce((s, b) => s + b.amount, 0);
   const tokens = priced.reduce((s, b) => s + (b.tokens ?? 0), 0);
   const valueToday = priceToday === null ? null : tokens * priceToday;
   const gain = valueToday === null ? null : valueToday - invested;
-  const skipped = buys.filter((b) => b.tokens === null).map((b) => b.month);
+  const skipped = bought.filter((b) => b.tokens === null).map((b) => b.month);
   return {
     invested,
     tokens,

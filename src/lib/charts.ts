@@ -32,6 +32,8 @@ export function growthSeries(buys: BuyRow[], priceToday: number | null, priceTod
     if (b.tokens === null || b.price === null || !(b.price > 0)) continue;
     invested += b.amount;
     units += b.tokens;
+    // Nothing bought yet (a plan whose first buy had no price): there is no holding to draw.
+    if (!(units > 0)) continue;
     const date = b.priceDate ?? b.targetDate;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
     out.push({ t: dayMs(date), date, invested, value: units * b.price, price: b.price, avgCost: units > 0 ? invested / units : 0 });
@@ -91,6 +93,13 @@ export function moneyShort(n: number): string {
   if (a >= 1e6) return fmt(a / 1e6, "M");
   if (a >= 1e3) return fmt(a / 1e3, "K");
   return `${sign}$${a >= 10 ? Math.round(a).toString() : a.toFixed(2).replace(/\.?0+$/, "") || "0"}`;
+}
+
+/** Drops every other tick until no more than `max` remain, so what is left stays evenly spaced (Jan, Jan, Jan, not Jan, Jul, Jan). */
+export function thinTicks<T>(ticks: T[], max: number): T[] {
+  let out = ticks;
+  while (out.length > Math.max(2, max)) out = out.filter((_, i) => i % 2 === 0);
+  return out;
 }
 
 /* ------------------------------ time axis ------------------------------ */

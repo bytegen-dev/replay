@@ -2,7 +2,7 @@ import { rateOn, type FxPoint } from "./fx.ts";
 import { monthsBetween } from "./months.ts";
 
 /**
- * "Wayback" for money itself: put a fixed amount of one currency into another every month, and see what it came to. For
+ * Hindsight for money itself: put a fixed amount of one currency into another every month, and see what it came to. For
  * example 100,000 naira a month into US dollars since 2016. The price of 1 unit of the currency you buy, in the currency
  * you spend, is the exchange rate that month. Pure maths on rate histories you pass in; no network.
  */

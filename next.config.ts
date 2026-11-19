@@ -3,6 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
+  // The price page used to live at /price; old links and bookmarks keep working.
+  async redirects() {
+    return [{ source: "/price", destination: "/wayback", permanent: true }];
+  },
   async headers() {
     return [
       {

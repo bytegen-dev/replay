@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { ChainLogo } from "@/components/ChainLogo";
 import { AlertTriangle, Check, Clock, Copy } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
 import { DatePickerButton } from "@/components/DatePicker";
 import { TimePickerButton } from "@/components/TimePicker";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PRICE_EXAMPLES, type PriceExample } from "@/lib/examples.ts";
 import type { HistoricalPriceResult } from "@/lib/historicalPrice.ts";
 import { formatAge, formatUsdPrice } from "@/lib/priceAt.ts";
@@ -84,6 +86,11 @@ export function PricePanel() {
   const [market, setMarket] = useState<Market>("ethereum");
   const [asset, setAsset] = useState("");
   const [assetName, setAssetName] = useState("");
+  // The chain last used under Crypto, so switching Stocks and back returns to it.
+  const lastChain = useRef<Market>("ethereum");
+  useEffect(() => {
+    if (market !== "equity") lastChain.current = market;
+  }, [market]);
   const [date, setDate] = useState("yesterday");
   const [time, setTime] = useState("");
   const [tz, setTz] = useState("");
@@ -247,9 +254,40 @@ export function PricePanel() {
 
   return (
     <div className="mt-6 flex flex-col gap-6 sm:mt-8 sm:gap-8">
-      <form onSubmit={submit} noValidate className="cut-card stagger-in flex flex-col gap-5 border border-border bg-card p-4 pb-7 [--stagger-base:140ms] sm:p-6 sm:pb-9">
+      <form onSubmit={submit} noValidate className="cut-card stagger-in border border-border bg-card [--stagger-base:140ms]">
+        {/* The same Stocks / Crypto tabs as Hindsight, in a header, so the chain picker only appears when it is needed. */}
+        <div className="border-b border-border p-4 sm:px-6">
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            spacing={0}
+            value={market === "equity" ? "equity" : "token"}
+            onValueChange={(v) => {
+              if (!v || (v === "equity") === (market === "equity")) return;
+              setMarket(v === "equity" ? "equity" : lastChain.current);
+              setAsset("");
+              setAssetName("");
+              setFieldErrors({});
+            }}
+            className="form-control-h w-full sm:w-72"
+            aria-label="What to look up"
+          >
+            {(
+              [
+                ["equity", "Stocks"],
+                ["token", "Crypto"],
+              ] as const
+            ).map(([v, label]) => (
+              <ToggleGroupItem key={v} value={v} className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "token" && "cut-tr")}>
+                {label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+        <div className="flex flex-col gap-5 p-4 pb-7 sm:p-6 sm:pb-9">
         <div className="stagger-in grid grid-cols-1 gap-4 [--stagger-base:200ms] min-[480px]:grid-cols-2 lg:grid-cols-4">
           <div className="min-[480px]:col-span-2 lg:col-span-4 lg:grid lg:grid-cols-4 lg:gap-4">
+            {market !== "equity" && (
             <div className="mb-4 lg:mb-0">
               <Field id="market" label="Chain" error={fieldErrors.market}>
                 <Select
@@ -263,7 +301,7 @@ export function PricePanel() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className={selectContent}>
-                    {MARKETS.map((m) => (
+                    {MARKETS.filter((m) => m.value !== "equity").map((m) => (
                       <SelectItem key={m.value} value={m.value} className="rounded-none">
                         <span className="flex items-center gap-2">
                           <ChainLogo chain={m.value} />
@@ -275,7 +313,8 @@ export function PricePanel() {
                 </Select>
               </Field>
             </div>
-            <div className="lg:col-span-3">
+            )}
+            <div className={market === "equity" ? "lg:col-span-4" : "lg:col-span-3"}>
               {market === "equity" ? (
                 <Field id="asset" label="Search or enter a ticker" error={fieldErrors.asset}>
                   <EquitySearchInput
@@ -358,7 +397,7 @@ export function PricePanel() {
           </p>
         </div>
 
-        <Button type="submit" disabled={loading} className="form-cta h-12 w-full gap-2 rounded-none border-2 border-primary px-8 text-base sm:w-auto sm:min-w-56 sm:self-end font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
+        <Button type="submit" disabled={loading} className="form-cta cut-bl h-12 w-full gap-2 rounded-none border-2 border-primary px-8 text-base sm:w-auto sm:min-w-56 sm:self-end font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
           {loading ? <MarkLoader className="size-5" /> : null}
           {loading ? "Looking up" : "Get price"}
         </Button>
@@ -372,6 +411,7 @@ export function PricePanel() {
             </button>
           ))}
         </p>
+        </div>
       </form>
 
       {error && (
@@ -438,6 +478,14 @@ export function PricePanel() {
               ))}
             </ul>
           )}
+
+          {/* The same asset as regular buys: opens Hindsight with it already chosen. */}
+          <p className="text-sm text-muted-foreground">
+            What if you had bought this every month?{" "}
+            <Link href={market === "equity" ? `/?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
+              Open it in Hindsight
+            </Link>
+          </p>
 
           <details className="group border-t border-border pt-4">
             <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Use this lookup in a bot or app</summary>

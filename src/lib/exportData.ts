@@ -1,3 +1,4 @@
+import { isPlan, type Plan } from "./plan.ts";
 import { buildBuys, chooseDecimals, summarize, type BuyRow, type Overrides, type Summary } from "./math.ts";
 import type { MonthRow, SourceLink } from "./types.ts";
 
@@ -15,6 +16,8 @@ export interface ExportPayload {
   sources: SourceLink[];
   /** What was bought: "tokens" for crypto, "shares" for stocks. Only changes wording. */
   unit?: "tokens" | "shares";
+  /** How often the amount was bought. Absent means every month. */
+  plan?: Plan;
   /** Set when the holding was sold at the end month, so the value is the end month's, not today's. */
   sold?: boolean;
   /** Set when `amount` is in a currency other than USD; each row then carries its exchange rate in `fx`. */
@@ -30,7 +33,7 @@ export interface Prepared {
 export function prepare(p: ExportPayload): Prepared {
   const effective = p.rows.map((r) => ({ price: p.overrides[r.month] > 0 ? p.overrides[r.month] : r.price, fx: r.fx }));
   const decimals = chooseDecimals(effective, p.amount);
-  const buys = buildBuys(p.rows, p.amount, p.currentPrice, p.overrides, decimals);
+  const buys = buildBuys(p.rows, p.amount, p.currentPrice, p.overrides, decimals, p.plan);
   return { buys, summary: summarize(buys, p.currentPrice), decimals };
 }
 
@@ -56,6 +59,7 @@ export function parsePayload(x: unknown): ExportPayload | string {
     overrides: (p.overrides ?? {}) as Overrides,
     sources: Array.isArray(p.sources) ? (p.sources as SourceLink[]) : [],
     unit: p.unit === "shares" ? "shares" : "tokens",
+    ...(isPlan(p.plan) && p.plan !== "monthly" ? { plan: p.plan } : {}),
     ...(p.sold === true ? { sold: true } : {}),
     ...(p.currency && typeof p.currency.code === "string" && /^[A-Z]{3}$/.test(p.currency.code) ? { currency: { code: p.currency.code, symbol: String(p.currency.symbol ?? "").slice(0, 6), perUsdToday: typeof p.currency.perUsdToday === "number" && p.currency.perUsdToday > 0 ? p.currency.perUsdToday : null } } : {}),
   };
