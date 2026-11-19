@@ -4,6 +4,8 @@ import { ChainLogo } from "@/components/ChainLogo";
 import { AlertTriangle, Check, Clock, Copy, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { DatePickerButton } from "@/components/DatePicker";
+import { TimePickerButton } from "@/components/TimePicker";
+import { TimezonePicker } from "@/components/TimezonePicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
 import { DOWN, LineChart, UP } from "@/components/LineChart";
 import { TokenSearchInput } from "@/components/TokenSearch";
@@ -106,6 +108,28 @@ export function PricePanel() {
   useEffect(() => {
     if (restored) writeQuery({ chain: market, asset: asset.trim(), date: date.trim(), time: time.trim(), tz: tz.trim() });
   }, [restored, market, asset, date, time, tz]);
+  // The first day a stock has a price, so the calendar can't be pointed at a day before it traded.
+  const [firstDay, setFirstDay] = useState<{ symbol: string; date: string } | null>(null);
+  const tickerNow = market === "equity" ? asset.trim().toUpperCase() : "";
+  useEffect(() => {
+    if (!/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(tickerNow)) return;
+    const controller = new AbortController();
+    const id = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/asset-start?symbol=${encodeURIComponent(tickerNow)}`, { signal: controller.signal });
+        const j = await res.json().catch(() => null);
+        setFirstDay(res.ok && typeof j?.firstDate === "string" ? { symbol: tickerNow, date: j.firstDate } : null);
+      } catch {
+        /* an aborted or failed lookup just leaves the calendar unrestricted */
+      }
+    }, 500);
+    return () => {
+      clearTimeout(id);
+      controller.abort();
+    };
+  }, [tickerNow]);
+  const minDate = firstDay && firstDay.symbol === tickerNow ? firstDay.date : undefined;
+
   // The clock is read after mount, so what is shown never depends on when the page was built.
   const [nowMs, setNowMs] = useState<number | null>(null);
   useEffect(() => {
@@ -268,10 +292,10 @@ export function PricePanel() {
           </div>
 
           <div className="min-[480px]:col-span-2">
-            <Field id="date" label="Date" error={fieldErrors.date}>
+            <Field id="date" label="Date" error={fieldErrors.date ?? (minDate && reading && reading.ok && reading.value.dateUtc < minDate ? `${tickerNow} first traded on ${minDate}. There is no price before that.` : undefined)} hint={minDate ? `First price: ${minDate}` : undefined}>
               <div className="relative">
                 <Input id="date" className="form-control-h pr-12 text-sm" value={date} onChange={(e) => setDate(e.target.value)} placeholder="15/09/2026, September 15, or 5 days ago" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.date} />
-                <DatePickerButton selected={reading && reading.ok ? reading.value.dateUtc : null} onPick={setDate} />
+                <DatePickerButton selected={reading && reading.ok ? reading.value.dateUtc : null} min={minDate} onPick={setDate} />
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {DATE_CHIPS.map((c) => (
@@ -283,13 +307,13 @@ export function PricePanel() {
             </Field>
           </div>
           <Field id="time" label="Time" error={fieldErrors.time} hint="Optional. Empty means the day's close.">
-            <Input id="time" className="form-control-h text-sm" value={time} onChange={(e) => setTime(e.target.value)} placeholder="13:40 or 1:40pm" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.time} />
+            <div className="relative">
+              <Input id="time" className="form-control-h pr-12 text-sm" value={time} onChange={(e) => setTime(e.target.value)} placeholder="13:40 or 1:40pm" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.time} />
+              <TimePickerButton value={time} onPick={setTime} />
+            </div>
           </Field>
           <Field id="tz" label="Timezone" error={fieldErrors.tz}>
-            <Input id="tz" className="form-control-h text-sm" value={tz} onChange={(e) => setTz(e.target.value)} placeholder="UTC" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.tz} />
-            <button type="button" className="self-start text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={() => setTz(Intl.DateTimeFormat().resolvedOptions().timeZone)}>
-              Use my timezone
-            </button>
+            <TimezonePicker id="tz" value={tz} onChange={setTz} />
           </Field>
         </div>
 
@@ -311,7 +335,7 @@ export function PricePanel() {
           </p>
         </div>
 
-        <Button type="submit" disabled={loading} className="form-cta h-12 w-full gap-2 rounded-none border-2 border-primary text-base font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
+        <Button type="submit" disabled={loading} className="form-cta h-12 w-full gap-2 rounded-none border-2 border-primary px-8 text-base sm:w-auto sm:min-w-56 sm:self-end font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
           {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
           {loading ? "Looking up" : "Get price"}
         </Button>

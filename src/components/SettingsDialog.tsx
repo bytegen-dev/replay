@@ -1,12 +1,14 @@
 "use client";
 
-import { RotateCcw, Settings } from "lucide-react";
-import { useId } from "react";
+import { Check, KeyRound, RotateCcw, Settings } from "lucide-react";
+import { useId, useState } from "react";
 import { useSettings } from "@/components/SettingsProvider";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { DEFAULT_SETTINGS } from "@/lib/settings.ts";
+import { isTiingoKey } from "@/lib/tiingo.ts";
+import { getTiingoKey, setTiingoKey } from "@/lib/userKeys.ts";
 
 function Row({ id, title, note, children }: { id: string; title: string; note: string; children: React.ReactNode }) {
   return (
@@ -20,6 +22,90 @@ function Row({ id, title, note, children }: { id: string; title: string; note: s
         </p>
       </div>
       {children}
+    </div>
+  );
+}
+
+/** Where a person pastes their own Tiingo key, used for stock prices when Yahoo Finance refuses. Kept in this browser only. */
+function StockKey() {
+  const uid = useId();
+  // Read after mount: the dialog only renders client-side, so localStorage is available here.
+  const [saved, setSaved] = useState<string | null>(() => getTiingoKey());
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function save() {
+    const k = draft.trim();
+    if (!isTiingoKey(k)) {
+      setError("That doesn't look like a Tiingo key. It is a long string of letters and numbers.");
+      return;
+    }
+    if (!setTiingoKey(k)) {
+      setError("This browser won't let the key be saved.");
+      return;
+    }
+    setSaved(k);
+    setDraft("");
+    setError(null);
+  }
+
+  return (
+    <div className="flex flex-col gap-2 pt-4">
+      <label htmlFor={`${uid}-key`} className="flex items-center gap-2 text-sm font-bold">
+        <KeyRound className="size-4" aria-hidden />
+        Your stock price key
+      </label>
+      <p className="text-xs leading-snug text-muted-foreground">
+        Optional. When Yahoo Finance is rate limiting, stock prices come from Tiingo using your own free key, with the full history and dividends. It stays in this browser and is sent only to look up the prices you ask for.{" "}
+        <a href="https://www.tiingo.com/account/api/token" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground">
+          Get a free key
+        </a>
+        .
+      </p>
+      {saved ? (
+        <div className="flex items-center justify-between gap-3 border border-border px-3 py-2 text-sm">
+          <span className="flex items-center gap-2">
+            <Check className="size-4 text-primary" aria-hidden />
+            Key saved <span className="text-muted-foreground tabular-nums">ending {saved.slice(-4)}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setTiingoKey(null);
+              setSaved(null);
+            }}
+            className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <input
+            id={`${uid}-key`}
+            type="password"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setError(null);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            placeholder="Paste your Tiingo key"
+            autoComplete="off"
+            spellCheck={false}
+            aria-invalid={!!error}
+            className="form-control-h min-w-0 flex-1 border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          />
+          <button type="button" onClick={save} disabled={!draft.trim()} className="form-control-h border border-border px-4 text-sm font-bold hover:border-primary hover:text-primary disabled:opacity-40">
+            Save
+          </button>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-xs font-bold">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -54,6 +140,7 @@ export function SettingsDialog() {
           <Row id={`${uid}-contrast`} title="High contrast" note="Brighter text, stronger borders and focus rings, and a plain background.">
             <Switch id={`${uid}-contrast`} aria-describedby={`${uid}-contrast-note`} checked={settings.highContrast} onCheckedChange={(v) => set({ highContrast: v })} />
           </Row>
+          <StockKey />
         </div>
 
         <button

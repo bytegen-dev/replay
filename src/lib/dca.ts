@@ -24,8 +24,8 @@ export { DcaError };
  * The backtest. Prices are always worked out in dollars; when the monthly amount is in another currency, each month's row
  * then gets that day's exchange rate (units per dollar), so a ₦100,000 buy is converted at the rate of the month it was made.
  */
-export async function runDca(req: DcaRequest, now: number = Date.now()): Promise<DcaResponse> {
-  const res = await runDcaUsd(req, now);
+export async function runDca(req: DcaRequest, now: number = Date.now(), opts: { tiingoKey?: string } = {}): Promise<DcaResponse> {
+  const res = await runDcaUsd(req, now, opts);
   const code = req.currency?.trim().toUpperCase();
   if (!code || code === "USD") return res;
   const cur = currencyByCode(code);
@@ -59,8 +59,8 @@ export async function runDca(req: DcaRequest, now: number = Date.now()): Promise
   };
 }
 
-async function runDcaUsd(req: DcaRequest, now: number): Promise<DcaResponse> {
-  if (req.chain === "equity") return runStockDca({ ...req, chain: "equity" }, now);
+async function runDcaUsd(req: DcaRequest, now: number, opts: { tiingoKey?: string } = {}): Promise<DcaResponse> {
+  if (req.chain === "equity") return runStockDca({ ...req, chain: "equity" }, now, opts.tiingoKey ? { tiingoKey: opts.tiingoKey } : {});
   const today = todayUtc(now);
   const months = monthsBetween(req.startMonth, req.endMonth);
   const firstTarget = targetDate(months[0], req.basis, req.basisDay);

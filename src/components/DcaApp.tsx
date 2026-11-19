@@ -14,6 +14,7 @@ import { AmountInput } from "@/components/AmountInput";
 import { CoinPicker } from "@/components/CoinPicker";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { currencyByCode, isCurrency } from "@/lib/fxCurrencies.ts";
+import { getTiingoKey } from "@/lib/userKeys.ts";
 import { cleanAmount, formatAmountInput, parseAmount, decodeRange, encodeRange, readQuery, writeQuery } from "@/lib/urlState.ts";
 import { RollText } from "@/components/RollText";
 import { applyMonthFilters, NO_FILTER, type MonthFilter } from "@/lib/monthFilters.ts";
@@ -411,7 +412,8 @@ export function DcaApp() {
     try {
       const res = await fetch("/api/dca", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        // Stocks only: a key from Settings lets the server fall back to Tiingo when Yahoo refuses.
+        headers: { "content-type": "application/json", ...(input.chain === "equity" && getTiingoKey() ? { "x-tiingo-key": getTiingoKey()! } : {}) },
         body: JSON.stringify({ ...input, address: input.address.trim() }),
       });
       const j = await res.json();

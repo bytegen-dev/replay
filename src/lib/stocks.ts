@@ -4,6 +4,7 @@ import { getJson, HttpError } from "./http.ts";
 import { addDays, monthsBetween, targetDate, todayUtc } from "./months.ts";
 import { selectAllMonths } from "./select.ts";
 import { fetchNasdaqHistory } from "./nasdaqHistory.ts";
+import { fetchTiingoHistory } from "./tiingo.ts";
 import { readHistory, writeHistory } from "./stockStore.ts";
 import type { DailyPoint, DcaRequest, DcaResponse } from "./types.ts";
 
@@ -34,7 +35,7 @@ export interface StockMeta {
   /** Stock splits, oldest first. `ratio` is new shares per old share (7 for a 7-for-1 split). */
   splits?: { date: string; ratio: number }[];
   /** Set when the history came from the backup source instead of Yahoo. */
-  via?: "nasdaq";
+  via?: "nasdaq" | "tiingo";
 }
 
 interface YahooChart {
@@ -112,7 +113,7 @@ export function parseYahooChart(body: unknown): { meta: StockMeta; days: StockDa
 }
 
 /** Trading days -> price points. `reinvest` uses the dividend-adjusted close, otherwise the split-adjusted close. */
-export function stockPoints(days: StockDay[], reinvest: boolean, source: "Yahoo" | "Nasdaq" = "Yahoo"): DailyPoint[] {
+export function stockPoints(days: StockDay[], reinvest: boolean, source: "Yahoo" | "Nasdaq" | "Tiingo" = "Yahoo"): DailyPoint[] {
   return days.map((d) => ({ date: d.date, price: reinvest ? d.adjClose : d.close, source }));
 }
 
@@ -182,6 +183,8 @@ export interface StockDeps {
   fetchChart?: (symbol: string, from: string, to: string) => Promise<unknown>;
   /** Replaces the backup source, for tests. Without it, the backup is only used alongside the real Yahoo request. */
   fetchBackup?: (symbol: string, today: string) => Promise<{ meta: StockMeta; days: StockDay[] } | null>;
+  /** A Tiingo key the user supplied; tried after Yahoo and before the Nasdaq backup. Never stored. */
+  tiingoKey?: string;
   /** Set false to skip the database copy, for tests. */
   useStore?: boolean;
 }
@@ -258,8 +261,26 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   const reinvest = req.reinvest === true && !major;
 
   let loaded: Loaded;
+  // After Yahoo: the user's own Tiingo key if they gave one, then Nasdaq. A key that fails is reported, not hidden.
+  let keyNote: string | null = null;
+  const backup: StockDeps["fetchBackup"] | undefined =
+    deps.fetchBackup ??
+    (deps.fetchChart
+      ? undefined
+      : async (sym, today) => {
+          if (deps.tiingoKey) {
+            try {
+              const t = await fetchTiingoHistory(sym, today, deps.tiingoKey);
+              if (t) return t;
+              keyNote = `Tiingo has no data for ${sym}.`;
+            } catch (e) {
+              keyNote = e instanceof HttpError && (e.status === 401 || e.status === 403) ? "Your Tiingo key was refused. Check it in Settings." : "Tiingo could not be reached with your key.";
+            }
+          }
+          return fetchNasdaqHistory(sym, today);
+        });
   try {
-    loaded = await loadStockHistory(symbol, now, deps.fetchChart ?? fetchStockChart, deps.useStore ?? true, deps.fetchBackup ?? (deps.fetchChart ? undefined : fetchNasdaqHistory));
+    loaded = await loadStockHistory(symbol, now, deps.fetchChart ?? fetchStockChart, deps.useStore ?? true, backup);
   } catch (e) {
     if (e instanceof DcaError) throw e;
     if (e instanceof HttpError && e.status === 404) throw new DcaError(404, `No stock found for "${symbol}". Check the ticker.`);
@@ -271,10 +292,10 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     throw new DcaError(422, `${symbol} is priced in ${meta.currency}. Only USD-quoted stocks and ETFs are supported.`);
   }
 
-  const rows = selectAllMonths(req.startMonth, req.endMonth, stockPoints(days, reinvest, meta.via === "nasdaq" ? "Nasdaq" : "Yahoo"), {
+  const rows = selectAllMonths(req.startMonth, req.endMonth, stockPoints(days, reinvest, meta.via === "nasdaq" ? "Nasdaq" : meta.via === "tiingo" ? "Tiingo" : "Yahoo"), {
     basis: req.basis,
     basisDay: req.basisDay,
-    source: meta.via === "nasdaq" ? "Nasdaq" : "Yahoo",
+    source: meta.via === "nasdaq" ? "Nasdaq" : meta.via === "tiingo" ? "Tiingo" : "Yahoo",
     today,
     earliestAllowed: null,
     tradingDays: true,
@@ -285,6 +306,8 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     warnings.push(`Yahoo Finance is not answering right now, so these prices come from a copy saved on ${new Date(loaded.staleSince).toISOString().slice(0, 10)}. Recent months and today's price may be out of date.`);
   }
   const viaBackup = meta.via === "nasdaq";
+  if (keyNote && meta.via !== "tiingo") warnings.push(keyNote);
+  if (meta.via === "tiingo") warnings.push("Yahoo Finance is not answering right now, so these prices come from Tiingo using your key.");
   if (viaBackup) {
     warnings.push(`Yahoo Finance is not answering right now, so these prices come from Nasdaq's public data, which covers about the last ten years and is adjusted for splits only. ${reinvest ? "Dividend reinvestment is not available from this source, so dividends are ignored. " : ""}Try again later for the full history.`);
   }
@@ -312,7 +335,9 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     rows,
     sources: viaBackup
       ? [{ label: "Nasdaq historical prices (daily)", url: `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(symbol.toLowerCase())}/historical` }]
-      : [{ label: "Yahoo Finance price history (daily)", url: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/history/` }],
+      : meta.via === "tiingo"
+        ? [{ label: "Tiingo end-of-day prices (your key)", url: `https://www.tiingo.com/${encodeURIComponent(symbol.toLowerCase())}` }]
+        : [{ label: "Yahoo Finance price history (daily)", url: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/history/` }],
     warnings,
   };
 }

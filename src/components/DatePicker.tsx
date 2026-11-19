@@ -14,13 +14,15 @@ const MIN_YEAR = 2010;
 const pad = (n: number) => String(n).padStart(2, "0");
 
 /** A calendar for picking one day. Only mounted while open, so reading the clock never runs during prerender. */
-function Calendar({ selected, onPick }: { selected: string | null; onPick: (iso: string) => void }) {
+function Calendar({ selected, min, onPick }: { selected: string | null; min?: string; onPick: (iso: string) => void }) {
   const today = new Date();
   const todayIso = `${today.getUTCFullYear()}-${pad(today.getUTCMonth() + 1)}-${pad(today.getUTCDate())}`;
   const start = selected ?? todayIso;
   const [year, setYear] = useState(Number(start.slice(0, 4)));
   const [month, setMonth] = useState(Number(start.slice(5, 7)) - 1);
 
+  const floorYear = min ? Math.max(MIN_YEAR, Number(min.slice(0, 4))) : MIN_YEAR;
+  const floorMonth = min && Number(min.slice(0, 4)) >= MIN_YEAR ? Number(min.slice(5, 7)) - 1 : 0;
   const maxYear = today.getUTCFullYear();
   const first = new Date(Date.UTC(year, month, 1));
   const lead = (first.getUTCDay() + 6) % 7; // Monday first
@@ -32,7 +34,7 @@ function Calendar({ selected, onPick }: { selected: string | null; onPick: (iso:
     setYear(d.getUTCFullYear());
     setMonth(d.getUTCMonth());
   };
-  const atMin = year === MIN_YEAR && month === 0;
+  const atMin = year < floorYear || (year === floorYear && month <= floorMonth);
   const atMax = year === maxYear && month === today.getUTCMonth();
 
   return (
@@ -41,14 +43,14 @@ function Calendar({ selected, onPick }: { selected: string | null; onPick: (iso:
         <Button type="button" variant="outline" size="icon-sm" className="rounded-none" aria-label="Previous month" disabled={atMin} onClick={() => step(-1)}>
           <ChevronLeft />
         </Button>
-        <div className="flex gap-1">
+        <div className="flex">
           <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
             <SelectTrigger aria-label="Month" className="h-8 w-28 justify-center gap-1 rounded-none font-bold">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-h-64 rounded-none border border-border bg-popover ring-0">
               {LONG.map((m, i) => (
-                <SelectItem key={m} value={String(i)} disabled={year === maxYear && i > today.getUTCMonth()} className="rounded-none">
+                <SelectItem key={m} value={String(i)} disabled={(year === maxYear && i > today.getUTCMonth()) || (year === floorYear && i < floorMonth)} className="rounded-none">
                   {m}
                 </SelectItem>
               ))}
@@ -60,13 +62,14 @@ function Calendar({ selected, onPick }: { selected: string | null; onPick: (iso:
               const y = Number(v);
               setYear(y);
               if (y === maxYear && month > today.getUTCMonth()) setMonth(today.getUTCMonth());
+              if (y === floorYear && month < floorMonth) setMonth(floorMonth);
             }}
           >
-            <SelectTrigger aria-label="Year" className="h-8 w-20 justify-center gap-1 rounded-none font-bold tabular-nums">
+            <SelectTrigger aria-label="Year" className="-ml-px h-8 w-20 justify-center gap-1 rounded-none font-bold tabular-nums">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="max-h-64 rounded-none border border-border bg-popover ring-0">
-              {Array.from({ length: maxYear - MIN_YEAR + 1 }, (_, i) => maxYear - i).map((y) => (
+              {Array.from({ length: maxYear - floorYear + 1 }, (_, i) => maxYear - i).map((y) => (
                 <SelectItem key={y} value={String(y)} className="rounded-none tabular-nums">
                   {y}
                 </SelectItem>
@@ -93,7 +96,7 @@ function Calendar({ selected, onPick }: { selected: string | null; onPick: (iso:
             <button
               key={i}
               type="button"
-              disabled={iso > todayIso}
+              disabled={iso > todayIso || (!!min && iso < min)}
               aria-pressed={isSel}
               aria-label={`${d} ${LONG[month]} ${year}`}
               onClick={() => onPick(iso)}
@@ -118,18 +121,19 @@ function Calendar({ selected, onPick }: { selected: string | null; onPick: (iso:
 }
 
 /** A calendar button that sits inside a text field. Picking a day hands back YYYY-MM-DD, which the text field already understands. */
-export function DatePickerButton({ selected, onPick }: { selected: string | null; onPick: (iso: string) => void }) {
+export function DatePickerButton({ selected, min, onPick }: { selected: string | null; min?: string; onPick: (iso: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" aria-label="Open calendar" className="absolute inset-y-0 right-0 flex w-11 items-center justify-center border-l border-input text-muted-foreground transition-colors hover:bg-secondary hover:text-primary">
+        <button type="button" aria-label="Open calendar" className="absolute inset-y-px right-px flex w-11 items-center justify-center border-l border-input text-muted-foreground transition-colors hover:bg-secondary hover:text-primary">
           <CalendarDays className="size-4" aria-hidden />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-72 rounded-none border border-border bg-popover ring-0">
         <Calendar
           selected={selected}
+          min={min}
           onPick={(iso) => {
             onPick(iso);
             setOpen(false);
