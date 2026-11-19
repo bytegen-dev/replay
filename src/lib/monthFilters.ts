@@ -13,6 +13,8 @@ export interface MonthFilter {
   year: string;
   /** Leave out months that have no price. */
   hideNoPrice: boolean;
+  /** Only months where something was bought: not the months between buys under a plan, and not months with no price. */
+  onlyBought: boolean;
   /** Only months that carry a note (a nearest-day price, thin volume, a manual price and so on). */
   onlyNotes: boolean;
   /** Only prices the user edited. */
@@ -25,7 +27,7 @@ export interface MonthFilter {
   sort: SortKey;
 }
 
-export const NO_FILTER: MonthFilter = { year: "all", hideNoPrice: false, onlyNotes: false, onlyEdited: false, result: "all", minPrice: "", maxPrice: "", sort: "month-asc" };
+export const NO_FILTER: MonthFilter = { year: "all", hideNoPrice: false, onlyBought: false, onlyNotes: false, onlyEdited: false, result: "all", minPrice: "", maxPrice: "", sort: "month-asc" };
 
 const num = (s: string): number | null => {
   const n = Number(s.trim().replace(/[,$\s]/g, ""));
@@ -43,6 +45,7 @@ export function applyMonthFilters(buys: BuyRow[], f: MonthFilter): BuyRow[] {
   const out = buys.filter((b) => {
     if (f.year !== "all" && !b.month.startsWith(f.year)) return false;
     if (f.hideNoPrice && b.tokens === null) return false;
+    if (f.onlyBought && (b.buy === false || b.tokens === null)) return false;
     if (f.onlyNotes && b.notes.length === 0) return false;
     if (f.onlyEdited && !b.manual) return false;
     if (f.result !== "all") {

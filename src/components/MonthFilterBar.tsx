@@ -34,6 +34,7 @@ export function MonthFilterBar({ buys, filter, onChange, shown }: { buys: BuyRow
   const set = (p: Partial<MonthFilter>) => onChange({ ...filter, ...p });
   const years = yearsIn(buys);
   const missing = buys.filter((b) => b.tokens === null).length;
+  const bought = buys.filter((b) => b.buy !== false && b.tokens !== null).length;
   const withNotes = buys.filter((b) => b.notes.length > 0).length;
   const edited = buys.filter((b) => b.manual).length;
   const selectContent = "rounded-none border border-border bg-popover ring-0";
@@ -48,6 +49,11 @@ export function MonthFilterBar({ buys, filter, onChange, shown }: { buys: BuyRow
       </div>
 
       <div className="flex flex-wrap gap-2">
+        {bought < buys.length && (
+          <Chip on={filter.onlyBought} onClick={() => set({ onlyBought: !filter.onlyBought })}>
+            Only months bought ({bought})
+          </Chip>
+        )}
         {missing > 0 && (
           <Chip on={filter.hideNoPrice} onClick={() => set({ hideNoPrice: !filter.hideNoPrice })}>
             Hide months with no price ({missing})

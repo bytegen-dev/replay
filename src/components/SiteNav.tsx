@@ -11,7 +11,7 @@ const LINKS = [
 ];
 
 const EXTERNAL = [
-  { href: "https://github.com/bytegen-dev/dripcast#readme", label: "Docs" },
+  { href: "https://github.com/bytegen-dev/replay#readme", label: "Docs" },
   { href: "https://github.com/bytegen-dev", label: "GitHub" },
 ];
 

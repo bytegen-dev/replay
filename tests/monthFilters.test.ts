@@ -61,3 +61,10 @@ test("filters combine, and the list of years is newest first", () => {
   assert.deepEqual(months(applyMonthFilters(buys, f({ year: "2024", result: "profit" }))), ["2024-02"]);
   assert.deepEqual(yearsIn(buys), ["2025", "2024", "2023"]);
 });
+
+test("only months bought leaves out the months between buys and months with no price", () => {
+  const rows = [row("2023-01", 10), row("2023-02", 20, { buy: false, amount: 0, tokens: 0 }), row("2023-03", null), row("2023-04", 40)];
+  assert.deepEqual(applyMonthFilters(rows, { ...NO_FILTER, onlyBought: true }).map((b) => b.month), ["2023-01", "2023-04"]);
+  assert.equal(applyMonthFilters(rows, NO_FILTER).length, 4);
+  assert.equal(isFiltered({ ...NO_FILTER, onlyBought: true }), true);
+});

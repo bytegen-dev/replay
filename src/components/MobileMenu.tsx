@@ -14,7 +14,7 @@ const TOOLS = [
   { href: "/wayback", label: "Wayback", note: "Any token or stock at a past moment", Icon: LineChart },
 ];
 const LINKS = [
-  { href: "https://github.com/bytegen-dev/dripcast#readme", label: "Documentation", note: "Guides and the public API", Icon: BookOpen },
+  { href: "https://github.com/bytegen-dev/replay#readme", label: "Documentation", note: "Guides and the public API", Icon: BookOpen },
   { href: "https://x.com/bytegen_dev", label: "X / Twitter", note: "Updates and news", Icon: XIcon },
   { href: "https://github.com/bytegen-dev", label: "GitHub", note: "bytegen-dev", Icon: GithubIcon },
 ];

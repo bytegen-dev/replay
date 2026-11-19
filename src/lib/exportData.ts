@@ -77,5 +77,5 @@ export function xlsxFileName(p: { tokenLabel: string; rows: { month: string }[] 
 }
 
 export function noteText(b: BuyRow): string {
-  return b.notes.map((n) => n.text).join("; ");
+  return [...(b.buy === false ? ["Not a buying month"] : []), ...b.notes.map((n) => n.text)].join("; ");
 }

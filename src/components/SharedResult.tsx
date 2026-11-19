@@ -1,3 +1,4 @@
+import { SourceBadge } from "@/components/SourceBadge";
 import { planInfo } from "@/lib/plan.ts";
 import { AlertTriangle } from "lucide-react";
 import { GrowthChart } from "@/components/GrowthChart";
@@ -135,9 +136,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
                 <TableCell className="text-right tabular-nums">{fmtUsd(b.valueToday)}</TableCell>
                 <TableCell>
                   {b.source !== "none" ? (
-                    <Badge variant="outline" className="rounded-none">
-                      {b.source}
-                    </Badge>
+                    <SourceBadge source={b.source} sources={data.sources} />
                   ) : b.price === null ? (
                     NA
                   ) : (

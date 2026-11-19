@@ -9,7 +9,7 @@ const PAGES = [
   { label: "Wayback", href: "/wayback" },
 ];
 const LINKS = [
-  { label: "Documentation", href: "https://github.com/bytegen-dev/dripcast#readme" },
+  { label: "Documentation", href: "https://github.com/bytegen-dev/replay#readme" },
   { label: "GitHub", href: "https://github.com/bytegen-dev" },
   { label: "X / Twitter", href: "https://x.com/bytegen_dev" },
 ];

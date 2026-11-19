@@ -1,5 +1,6 @@
 "use client";
 
+import { SourceBadge } from "@/components/SourceBadge";
 import Link from "next/link";
 import { ChainLogo, CoinLogo } from "@/components/ChainLogo";
 import { AlertTriangle, Check, Copy, FileSpreadsheet, History, Settings, Share2, Trash2, X } from "lucide-react";
@@ -455,6 +456,8 @@ export function DcaApp() {
         throw new Error(j.error ?? `Request failed (${res.status})`);
       }
       setData({ ...(j as DcaResponse), amount: input.amount, ...(sellAtEnd ? { sold: true } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}) });
+      // Under a plan that buys only some months, start with the list showing just those; one click shows every month.
+      setMonthFilter({ ...NO_FILTER, onlyBought: plan !== DEFAULT_PLAN });
       setOverrides({});
       setDrafts({});
     } catch (err) {
@@ -610,8 +613,7 @@ export function DcaApp() {
 
   const isEquity = data?.chain === "equity" && !isMajorSymbol(data.address);
   // The months the list shows after filtering and ordering. Totals, charts and exports still use every month.
-  // The list shows only buying months; months between buys still feed the chart.
-  const shownBuys = useMemo(() => (computed ? applyMonthFilters(computed.buys.filter((b) => b.buy !== false), monthFilter) : []), [computed, monthFilter]);
+  const shownBuys = useMemo(() => (computed ? applyMonthFilters(computed.buys, monthFilter) : []), [computed, monthFilter]);
   // Inside the open list only the ticked item keeps its colour; the others go grey. The value shown on the closed select is coloured.
   const selectContent = "rounded-none border border-border bg-popover ring-0 [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:grayscale [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:opacity-70";
 
@@ -1028,11 +1030,7 @@ export function DcaApp() {
                       <p className="text-xs text-muted-foreground">Month</p>
                       <p className="text-lg font-bold tabular-nums">{b.month}</p>
                     </div>
-                    {b.source !== "none" && (
-                      <Badge variant="outline" className="shrink-0 rounded-none">
-                        {b.source}
-                      </Badge>
-                    )}
+                    {b.source !== "none" && <SourceBadge source={b.source} sources={data.sources} className="shrink-0" />}
                   </div>
                   <dl className="grid grid-cols-2 gap-3 text-sm">
                     <div>
@@ -1095,6 +1093,7 @@ export function DcaApp() {
                       <dd className="tabular-nums">{fmtNum(b.tokens, computed.decimals)}</dd>
                     </div>
                   </dl>
+                  {b.buy === false && <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">Not a buying month</p>}
                   {b.notes.length > 0 && (
                     <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
                       {b.notes.map((n) => (
@@ -1157,9 +1156,10 @@ export function DcaApp() {
                       <TableCell className="text-right tabular-nums">{fmtNum(b.tokens, computed.decimals)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmtUsd(b.valueToday)}</TableCell>
                       <TableCell>
-                        {b.source === "none" ? NA : <Badge variant="outline" className="rounded-none">{b.source}</Badge>}
+                        {b.source === "none" ? NA : <SourceBadge source={b.source} sources={data.sources} />}
                       </TableCell>
                       <TableCell className="whitespace-normal text-xs">
+                        {b.buy === false && <span className="text-muted-foreground">Not a buying month</span>}
                         {b.notes.map((n) => (
                           <div key={n.code + n.text} className="flex items-start gap-1">
                             {WARN_CODES.has(n.code) && <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-label="warning" />}
