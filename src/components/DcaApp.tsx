@@ -346,7 +346,7 @@ export function DcaApp() {
                     <ToggleGroupItem
                       key={v}
                       value={v}
-                      className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "fx" && "cut-tab-last")}
+                      className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "fx" && "cut-tab-last")}
                     >
                       {label}
                     </ToggleGroupItem>
