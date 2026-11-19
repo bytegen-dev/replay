@@ -1,12 +1,12 @@
 {
-  "name": "DCA",
-  "short_name": "DCA",
+  "name": "Replay",
+  "short_name": "Replay",
   "description": "What a fixed monthly buy of a stock or token would be worth today.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#071013",
+  "theme_color": "#071013",
   "orientation": "any",
   "icons": [
     {

@@ -39,6 +39,7 @@ const CHAIN_BY_DEX = new Map<string, Chain>([
   ["base", "base"],
   ["bsc", "bsc"],
   ["arbitrum", "arbitrum"],
+  ["hyperevm", "hyperevm"],
   ["solana", "solana"],
   ["cardano", "cardano"],
 ]);

@@ -3,6 +3,7 @@ import { DcaError } from "./errors.ts";
 import { getJson, HttpError } from "./http.ts";
 import { addDays, monthsBetween, targetDate, todayUtc } from "./months.ts";
 import { selectAllMonths } from "./select.ts";
+import { fetchNasdaqHistory } from "./nasdaqHistory.ts";
 import { readHistory, writeHistory } from "./stockStore.ts";
 import type { DailyPoint, DcaRequest, DcaResponse } from "./types.ts";
 
@@ -32,6 +33,8 @@ export interface StockMeta {
   priceDate: string | null;
   /** Stock splits, oldest first. `ratio` is new shares per old share (7 for a 7-for-1 split). */
   splits?: { date: string; ratio: number }[];
+  /** Set when the history came from the backup source instead of Yahoo. */
+  via?: "nasdaq";
 }
 
 interface YahooChart {
@@ -109,8 +112,8 @@ export function parseYahooChart(body: unknown): { meta: StockMeta; days: StockDa
 }
 
 /** Trading days -> price points. `reinvest` uses the dividend-adjusted close, otherwise the split-adjusted close. */
-export function stockPoints(days: StockDay[], reinvest: boolean): DailyPoint[] {
-  return days.map((d) => ({ date: d.date, price: reinvest ? d.adjClose : d.close, source: "Yahoo" as const }));
+export function stockPoints(days: StockDay[], reinvest: boolean, source: "Yahoo" | "Nasdaq" = "Yahoo"): DailyPoint[] {
+  return days.map((d) => ({ date: d.date, price: reinvest ? d.adjClose : d.close, source }));
 }
 
 export interface StockHit {
@@ -177,6 +180,8 @@ export function searchStocks(q: string): Promise<unknown> {
 export interface StockDeps {
   /** Replaces the Yahoo chart request, for tests. */
   fetchChart?: (symbol: string, from: string, to: string) => Promise<unknown>;
+  /** Replaces the backup source, for tests. Without it, the backup is only used alongside the real Yahoo request. */
+  fetchBackup?: (symbol: string, today: string) => Promise<{ meta: StockMeta; days: StockDay[] } | null>;
   /** Set false to skip the database copy, for tests. */
   useStore?: boolean;
 }
@@ -190,18 +195,21 @@ interface Loaded {
 
 /** Fresh copies last this long before Yahoo is asked again. */
 const HISTORY_TTL_MS = 6 * 60 * 60 * 1000;
+/** A copy that came from the backup is replaced sooner, so Yahoo gets asked again once it is answering. */
+const BACKUP_TTL_MS = 30 * 60 * 1000;
+const ttlFor = (meta: StockMeta) => (meta.via ? BACKUP_TTL_MS : HISTORY_TTL_MS);
 const memory = new Map<string, { at: number; meta: StockMeta; days: StockDay[] }>();
 
 /**
  * Full price history for a ticker. Served from memory or the saved copy while it is fresh; otherwise from Yahoo
  * (and saved). If Yahoo refuses and any older copy exists, that is returned and marked stale rather than failing.
  */
-async function loadStockHistory(symbol: string, now: number, fetchChart: NonNullable<StockDeps["fetchChart"]>, useStore: boolean): Promise<Loaded> {
+async function loadStockHistory(symbol: string, now: number, fetchChart: NonNullable<StockDeps["fetchChart"]>, useStore: boolean, fetchBackup?: StockDeps["fetchBackup"]): Promise<Loaded> {
   const mem = memory.get(symbol);
-  if (mem && now - mem.at < HISTORY_TTL_MS) return { meta: mem.meta, days: mem.days, staleSince: null };
+  if (mem && now - mem.at < ttlFor(mem.meta)) return { meta: mem.meta, days: mem.days, staleSince: null };
 
   const stored = useStore ? await readHistory(symbol) : null;
-  if (stored && now - stored.fetchedAt < HISTORY_TTL_MS) {
+  if (stored && now - stored.fetchedAt < ttlFor(stored.meta)) {
     memory.set(symbol, { at: stored.fetchedAt, meta: stored.meta, days: stored.days });
     return { meta: stored.meta, days: stored.days, staleSince: null };
   }
@@ -216,6 +224,16 @@ async function loadStockHistory(symbol: string, now: number, fetchChart: NonNull
     if (e instanceof HttpError && e.status === 404) throw e;
     if (e instanceof DcaError) throw e;
     const old = stored ?? (mem ? { fetchedAt: mem.at, meta: mem.meta, days: mem.days } : null);
+    // An older full Yahoo copy beats the shorter backup; a backup copy is just replaced by a fresh backup.
+    if (old && !old.meta.via) return { meta: old.meta, days: old.days, staleSince: old.fetchedAt };
+    if (fetchBackup) {
+      const backup = await fetchBackup(symbol, todayUtc(now)).catch(() => null);
+      if (backup && backup.days.length) {
+        memory.set(symbol, { at: now, meta: backup.meta, days: backup.days });
+        if (useStore) await writeHistory(symbol, backup.meta, backup.days).catch(() => undefined);
+        return { meta: backup.meta, days: backup.days, staleSince: null };
+      }
+    }
     if (old) return { meta: old.meta, days: old.days, staleSince: old.fetchedAt };
     throw e;
   }
@@ -223,7 +241,7 @@ async function loadStockHistory(symbol: string, now: number, fetchChart: NonNull
 
 /** A ticker's saved daily history (split-adjusted), fetched from Yahoo at most every few hours. */
 export async function getStockHistory(symbol: string, now: number = Date.now()): Promise<Loaded> {
-  return loadStockHistory(symbol, now, fetchStockChart, true);
+  return loadStockHistory(symbol, now, fetchStockChart, true, fetchNasdaqHistory);
 }
 
 /** Test hook: forget everything cached in memory. */
@@ -241,7 +259,7 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
 
   let loaded: Loaded;
   try {
-    loaded = await loadStockHistory(symbol, now, deps.fetchChart ?? fetchStockChart, deps.useStore ?? true);
+    loaded = await loadStockHistory(symbol, now, deps.fetchChart ?? fetchStockChart, deps.useStore ?? true, deps.fetchBackup ?? (deps.fetchChart ? undefined : fetchNasdaqHistory));
   } catch (e) {
     if (e instanceof DcaError) throw e;
     if (e instanceof HttpError && e.status === 404) throw new DcaError(404, `No stock found for "${symbol}". Check the ticker.`);
@@ -253,10 +271,10 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     throw new DcaError(422, `${symbol} is priced in ${meta.currency}. Only USD-quoted stocks and ETFs are supported.`);
   }
 
-  const rows = selectAllMonths(req.startMonth, req.endMonth, stockPoints(days, reinvest), {
+  const rows = selectAllMonths(req.startMonth, req.endMonth, stockPoints(days, reinvest, meta.via === "nasdaq" ? "Nasdaq" : "Yahoo"), {
     basis: req.basis,
     basisDay: req.basisDay,
-    source: "Yahoo",
+    source: meta.via === "nasdaq" ? "Nasdaq" : "Yahoo",
     today,
     earliestAllowed: null,
     tradingDays: true,
@@ -266,7 +284,11 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   if (loaded.staleSince !== null) {
     warnings.push(`Yahoo Finance is not answering right now, so these prices come from a copy saved on ${new Date(loaded.staleSince).toISOString().slice(0, 10)}. Recent months and today's price may be out of date.`);
   }
-  if (!major) warnings.push(
+  const viaBackup = meta.via === "nasdaq";
+  if (viaBackup) {
+    warnings.push(`Yahoo Finance is not answering right now, so these prices come from Nasdaq's public data, which covers about the last ten years and is adjusted for splits only. ${reinvest ? "Dividend reinvestment is not available from this source, so dividends are ignored. " : ""}Try again later for the full history.`);
+  }
+  if (!major && !viaBackup) warnings.push(
     reinvest
       ? "Dividends are treated as reinvested: prices are adjusted for dividends and splits, so they sit below the actual historical prices."
       : "Prices are adjusted for stock splits only. Dividends are not included; turn on dividend reinvestment for total return.",
@@ -286,9 +308,11 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     ...(req.basisDay ? { basisDay: req.basisDay } : {}),
     currentPrice: meta.price ?? last.close,
     currentPriceDate: meta.priceDate ?? last.date,
-    reinvest,
+    reinvest: reinvest && !viaBackup,
     rows,
-    sources: [{ label: "Yahoo Finance price history (daily)", url: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/history/` }],
+    sources: viaBackup
+      ? [{ label: "Nasdaq historical prices (daily)", url: `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(symbol.toLowerCase())}/historical` }]
+      : [{ label: "Yahoo Finance price history (daily)", url: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/history/` }],
     warnings,
   };
 }

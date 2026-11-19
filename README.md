@@ -1,6 +1,6 @@
-# DCA
+# Replay
 
-DCA backtests a fixed monthly purchase: pick a US stock or ETF (decades of history) or a token on Ethereum, Base, BSC, Arbitrum, Solana or Cardano, and it shows what the monthly buys would have bought and what they are worth today. It also has a public API and an AI agent skill. Next.js (App Router), TypeScript, Tailwind. Black and white, no accents.
+Replay backtests a fixed monthly purchase: pick a US stock or ETF (decades of history) or a token on Ethereum, Base, BSC, Arbitrum, Hyperliquid (HyperEVM), Solana or Cardano, and it shows what the monthly buys would have bought and what they are worth today. It also has a public API and an AI agent skill. Next.js (App Router), TypeScript, Tailwind. Black and white, no accents.
 
 ## Setup
 
@@ -37,7 +37,7 @@ Token math: `tokens = ROUND(amount / price, 0)`. If any single buy would be unde
 
 ## Export
 
-**Export spreadsheet**: `.xlsx` with `Summary`, `Buys` and `Sources` sheets. The Summary sheet includes the DCA logo. Tokens are `ROUND(amount/price, decimals)`, totals are `SUM`. Blue font = hardcoded input, black = formula. Built server-side from the same table data you see on screen.
+**Export spreadsheet**: `.xlsx` with `Summary`, `Buys` and `Sources` sheets. The Summary sheet includes the Replay logo. Tokens are `ROUND(amount/price, decimals)`, totals are `SUM`. Blue font = hardcoded input, black = formula. Built server-side from the same table data you see on screen.
 
 ## Token details
 
@@ -93,7 +93,7 @@ The **Stocks** switch checks ordinary US-listed stocks and ETFs, with decades of
 
 Charts are drawn as plain SVG (no charting library), in the black-and-white theme, and they resize to the screen. Hover, touch or use the arrow keys to read exact values, and Escape clears the readout.
 
-- **Backtest results** and **shared pages** get a chart under the summary: *Growth* (what the holding was worth on each purchase date against the total you had put in, so it dips and climbs with the market) and *Price vs your cost* (the price against your running average cost per unit, which shows why buying a fixed dollar amount lowers your average). Months with no price were never bought, so they add no point. Manual price edits redraw it.
+- **Wayback results** and **shared pages** get a chart under the summary: *Growth* (what the holding was worth on each purchase date against the total you had put in, so it dips and climbs with the market) and *Price vs your cost* (the price against your running average cost per unit, which shows why buying a fixed dollar amount lowers your average). Months with no price were never bought, so they add no point. Manual price edits redraw it.
 - **Price lookup** shows the prices around the moment you asked about, with that moment marked: the lookup returns them as `series` (about 2 hours of minutes, 2 days of hours, or 2 months of days, depending on the resolution used). Stocks that have split are charted at what they traded at each day.
 
 ## Public API
@@ -146,7 +146,7 @@ curl -G "https://YOUR-SITE/api/v1/historical-price" --data-urlencode "q=So111111
 
 **How far back, and how precisely.** Each source can only see so far, so the lookup tries the finest data first and steps down, and the response always says which it used (`price.resolution`, `source`, `warnings`):
 
-| Tokens on Ethereum, Base, BSC, Arbitrum, Solana | Cardano | Stocks |
+| Tokens on Ethereum, Base, BSC, Arbitrum, Hyperliquid, Solana | Cardano | Stocks |
 |---|---|---|
 | 1-minute candles from the token's top pool (GeckoTerminal), about six months back | 1-minute candles from DexHunter, converted to USD with Bitstamp's ADA/USD at the same granularity, well past six months (1-minute reaches back at least 8 months in testing) | 1-minute bars for about a week, 5-minute for two months, hourly for two years (Yahoo) |
 | then hourly or daily candles | then hourly, then daily (back to late 2024 or earlier) | then the day's closing price, back decades |
@@ -161,14 +161,14 @@ Thin tokens can have quiet stretches; those are flagged, never smoothed over. Wh
 // For: /historical-price <address> SOL 13:40 15/09/2026
 const arg = ctx.message.text.replace(/^\/historical-price(@\w+)?\s*/i, "");
 const res = await fetch(`https://YOUR-SITE/api/v1/historical-price?format=text&q=${encodeURIComponent(arg)}`, {
-  headers: { "x-api-key": process.env.DCA_KEY }, // only if you set DCA_API_KEYS
+  headers: { "x-api-key": process.env.REPLAY_KEY }, // only if you set DCA_API_KEYS
 });
 await ctx.reply(await res.text());
 ```
 
 ## Agent skill
 
-`skills/dca/SKILL.md` teaches an AI agent to use the API: how to turn "$500 a month into the S&P 500 since 1998" into a call, which ticker stands for which index, how to report the answer and its caveats, and what each error means. To use it, copy the `skills/dca` folder into your agent's skills directory (for Claude Code, `~/.claude/skills/dca` or a project's `.claude/skills/dca`). It points at the deployed site by default; set `DCA_URL` to use another.
+`skills/replay/SKILL.md` teaches an AI agent to use the API: how to turn "$500 a month into the S&P 500 since 1998" into a call, which ticker stands for which index, how to report the answer and its caveats, and what each error means. To use it, copy the `skills/replay` folder into your agent's skills directory (for Claude Code, `~/.claude/skills/replay` or a project's `.claude/skills/replay`). It points at the deployed site by default; set `REPLAY_URL` to use another.
 
 ## Limits
 

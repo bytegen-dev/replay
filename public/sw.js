@@ -1,5 +1,5 @@
-const CACHE = "dca-v1";
-const SHELL = ["/", "/dca-logo.png", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
+const CACHE = "replay-v1";
+const SHELL = ["/", "/replay-logo.png", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

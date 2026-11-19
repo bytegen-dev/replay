@@ -11,6 +11,7 @@ const CG_PLATFORM: Record<Chain, string> = {
   base: "base",
   bsc: "binance-smart-chain",
   arbitrum: "arbitrum-one",
+  hyperevm: "hyperevm",
 };
 
 interface CgConfig {
@@ -86,6 +87,7 @@ const GT_NETWORK: Partial<Record<Chain, string>> = {
   base: "base",
   bsc: "bsc",
   arbitrum: "arbitrum",
+  hyperevm: "hyperevm",
 };
 
 const GT = "https://api.geckoterminal.com/api/v2";

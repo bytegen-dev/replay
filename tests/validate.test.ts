@@ -29,7 +29,7 @@ test("an address from another chain says which chain to pick", () => {
   const evm = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
   const policy = "5dac8536653edc12f6f5e1045d8164b9f59998d3bdc300fc92843489";
   const sol = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-  assert.match(validateAddress(evm, "cardano") ?? "", /EVM address.*Ethereum, Base, BSC or Arbitrum/);
+  assert.match(validateAddress(evm, "cardano") ?? "", /EVM address.*Ethereum, Base, BSC, Arbitrum or Hyperliquid/);
   assert.match(validateAddress(evm, "solana") ?? "", /EVM address/);
   assert.match(validateAddress(policy, "base") ?? "", /Cardano policy ID.*Choose Cardano/);
   assert.match(validateAddress(sol, "cardano") ?? "", /Solana address.*Choose Solana/);
@@ -93,4 +93,9 @@ test("cardanoUnit keeps the pasted asset id and nothing else", () => {
   assert.equal(cardanoUnit(policy + "4E4D4B52", "cardano"), policy + "4e4d4b52");
   assert.equal(cardanoUnit(policy, "cardano"), undefined);
   assert.equal(cardanoUnit(policy + "4e4d4b52", "base"), undefined);
+});
+
+test("Hyperliquid (HyperEVM) takes EVM addresses", () => {
+  assert.equal(validateAddress("0x0000000000000000000000000000000000000001", "hyperevm"), null);
+  assert.notEqual(validateAddress("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "hyperevm"), null);
 });

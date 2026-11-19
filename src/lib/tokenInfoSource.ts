@@ -10,6 +10,7 @@ const CG_PLATFORM: Record<Chain, string> = {
   base: "base",
   bsc: "binance-smart-chain",
   arbitrum: "arbitrum-one",
+  hyperevm: "hyperevm",
 };
 
 /** CoinGecko coin by contract. A 404 means "not listed", not an error. Other failures become a note. */

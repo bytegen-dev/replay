@@ -23,6 +23,8 @@ export interface TokenInfo {
   volume24h: number | null;
   liquidityUsd: number | null;
   poolCount: number;
+  /** The earliest date the token can have a price (YYYY-MM-DD): its oldest pool, or CoinGecko's genesis date, whichever is earlier. */
+  launchedAt: string | null;
   rank: number | null;
   links: TokenLink[];
   sources: TokenLink[];
@@ -36,6 +38,7 @@ export interface CgCoin {
   symbol?: string;
   name?: string;
   description?: { en?: string };
+  genesis_date?: string | null;
   image?: { large?: string; small?: string };
   market_cap_rank?: number | null;
   links?: {
@@ -62,6 +65,8 @@ export interface DexPair {
   chainId?: string;
   dexId?: string;
   url?: string;
+  /** When the pool was created, in milliseconds. */
+  pairCreatedAt?: number;
   baseToken?: { address?: string; name?: string; symbol?: string };
   priceUsd?: string | number;
   liquidity?: { usd?: number };
@@ -85,6 +90,7 @@ export const DEX_CHAIN: Record<Chain, string | null> = {
   base: "base",
   bsc: "bsc",
   arbitrum: "arbitrum",
+  hyperevm: "hyperevm",
 };
 
 const num = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : null);
@@ -165,6 +171,11 @@ export function buildTokenInfo(cg: CgCoin | null, rawPairs: DexPair[], chain: Ch
   if (cg?.id) addLink(sources, "CoinGecko", `https://www.coingecko.com/en/coins/${cg.id}`);
   if (top?.url) addLink(sources, "DexScreener", top.url);
 
+  const created = pairs.map((p) => p.pairCreatedAt).filter((n): n is number => typeof n === "number" && n > 0);
+  const fromPools = created.length ? new Date(Math.min(...created)).toISOString().slice(0, 10) : null;
+  const genesis = typeof cg?.genesis_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(cg.genesis_date) ? cg.genesis_date : null;
+  const launchedAt = [fromPools, genesis].filter((d): d is string => d !== null).sort()[0] ?? null;
+
   const notes: string[] = [];
   if (!cg) notes.push("Not listed on CoinGecko, so supply and market cap are missing.");
   if (!top && DEX_CHAIN[chain]) notes.push("No DEX pool found on DexScreener, so liquidity and volume are missing.");
@@ -186,6 +197,7 @@ export function buildTokenInfo(cg: CgCoin | null, rawPairs: DexPair[], chain: Ch
     volume24h: pairs.length ? volume : pos(md?.total_volume?.usd),
     liquidityUsd: pairs.length ? liquidity : null,
     poolCount: pairs.length,
+    launchedAt,
     rank: pos(cg?.market_cap_rank),
     links,
     sources,

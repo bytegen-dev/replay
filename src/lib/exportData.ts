@@ -15,6 +15,8 @@ export interface ExportPayload {
   sources: SourceLink[];
   /** What was bought: "tokens" for crypto, "shares" for stocks. Only changes wording. */
   unit?: "tokens" | "shares";
+  /** Set when `amount` is in a currency other than USD; each row then carries its exchange rate in `fx`. */
+  currency?: { code: string; symbol: string; perUsdToday: number | null };
 }
 
 export interface Prepared {
@@ -24,7 +26,7 @@ export interface Prepared {
 }
 
 export function prepare(p: ExportPayload): Prepared {
-  const effective = p.rows.map((r) => ({ price: p.overrides[r.month] > 0 ? p.overrides[r.month] : r.price }));
+  const effective = p.rows.map((r) => ({ price: p.overrides[r.month] > 0 ? p.overrides[r.month] : r.price, fx: r.fx }));
   const decimals = chooseDecimals(effective, p.amount);
   const buys = buildBuys(p.rows, p.amount, p.currentPrice, p.overrides, decimals);
   return { buys, summary: summarize(buys, p.currentPrice), decimals };
@@ -52,18 +54,19 @@ export function parsePayload(x: unknown): ExportPayload | string {
     overrides: (p.overrides ?? {}) as Overrides,
     sources: Array.isArray(p.sources) ? (p.sources as SourceLink[]) : [],
     unit: p.unit === "shares" ? "shares" : "tokens",
+    ...(p.currency && typeof p.currency.code === "string" && /^[A-Z]{3}$/.test(p.currency.code) ? { currency: { code: p.currency.code, symbol: String(p.currency.symbol ?? "").slice(0, 6), perUsdToday: typeof p.currency.perUsdToday === "number" && p.currency.perUsdToday > 0 ? p.currency.perUsdToday : null } } : {}),
   };
 }
 
 /**
- * File name for the spreadsheet: the token and the months it covers, e.g. dca-pepe-2024-12-to-2026-10.xlsx.
- * One month gives dca-pepe-2025-10.xlsx. Anything unsafe in the token label is flattened to a dash.
+ * File name for the spreadsheet: the token and the months it covers, e.g. replay-pepe-2024-12-to-2026-10.xlsx.
+ * One month gives replay-pepe-2025-10.xlsx. Anything unsafe in the token label is flattened to a dash.
  */
 export function xlsxFileName(p: { tokenLabel: string; rows: { month: string }[] }): string {
   const slug = p.tokenLabel.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "result";
   const months = p.rows.map((r) => r.month).filter((m) => /^\d{4}-\d{2}$/.test(m)).sort();
   const range = months.length === 0 ? "" : months[0] === months[months.length - 1] ? `-${months[0]}` : `-${months[0]}-to-${months[months.length - 1]}`;
-  return `dca-${slug}${range}.xlsx`;
+  return `replay-${slug}${range}.xlsx`;
 }
 
 export function noteText(b: BuyRow): string {

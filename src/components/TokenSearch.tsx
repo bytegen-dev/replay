@@ -1,7 +1,7 @@
 "use client";
 
 import { ChainLogo } from "@/components/ChainLogo";
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2, Search } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -131,6 +131,7 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
         if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
       }}
     >
+      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
       <Input
         id={id}
         role="combobox"
@@ -139,7 +140,7 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
         aria-autocomplete="list"
         aria-activedescendant={visible && hits[active] ? `${listId}-${active}` : undefined}
         aria-invalid={invalid}
-        className="form-control-h pr-9 text-sm"
+        className="form-control-h pr-9 pl-10 text-sm"
         value={value}
         onChange={(e) => {
           onChange(e.target.value);

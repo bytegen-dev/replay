@@ -2,6 +2,7 @@
 
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
+import { RollText } from "@/components/RollText";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -105,7 +106,7 @@ export function MonthPicker({ id, value, onChange, min, max, minYear, invalid }:
           aria-invalid={invalid}
           className="form-control-h w-full justify-between rounded-none font-normal"
         >
-          <span className={value ? "" : "text-muted-foreground"}>{value ? formatMonth(value) : "Pick a month"}</span>
+          {value ? <RollText text={formatMonth(value)} /> : <span className="text-muted-foreground">Pick a month</span>}
           <CalendarDays />
         </Button>
       </PopoverTrigger>

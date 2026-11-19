@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     endMonth: String(body.endMonth),
     basis: body.basis!,
     ...(body.chain === "equity" && body.reinvest === true ? { reinvest: true } : {}),
+    ...(typeof body.currency === "string" && body.currency.trim() !== "" && body.currency.trim().toUpperCase() !== "USD" ? { currency: body.currency.trim().toUpperCase() } : {}),
     ...(body.basis === "day-of-month" ? { basisDay: Number(body.basisDay) } : {}),
   };
 

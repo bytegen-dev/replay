@@ -1,4 +1,4 @@
-export const CHAINS = ["ethereum", "solana", "base", "bsc", "arbitrum", "cardano"] as const;
+export const CHAINS = ["ethereum", "solana", "base", "bsc", "arbitrum", "hyperevm", "cardano"] as const;
 export type Chain = (typeof CHAINS)[number];
 
 export const CHAIN_LABELS: Record<Chain, string> = {
@@ -7,6 +7,7 @@ export const CHAIN_LABELS: Record<Chain, string> = {
   base: "Base",
   bsc: "BSC",
   arbitrum: "Arbitrum",
+  hyperevm: "Hyperliquid",
   cardano: "Cardano",
 };
 
@@ -44,7 +45,7 @@ export interface Note {
   text: string;
 }
 
-export type PriceSource = "CoinGecko" | "GeckoTerminal" | "DexHunter" | "Yahoo" | "manual" | "none";
+export type PriceSource = "CoinGecko" | "GeckoTerminal" | "DexHunter" | "Yahoo" | "Nasdaq" | "manual" | "none";
 
 export interface MonthRow {
   /** YYYY-MM */
@@ -57,6 +58,8 @@ export interface MonthRow {
   price: number | null;
   source: PriceSource;
   notes: Note[];
+  /** When the monthly amount is in another currency: units of it per 1 USD on this buy's date. Absent for plain USD. */
+  fx?: number;
 }
 
 export interface SourceLink {
@@ -78,6 +81,8 @@ export interface DcaResponse {
   rows: MonthRow[];
   sources: SourceLink[];
   warnings: string[];
+  /** Present when the monthly amount was in a currency other than USD. */
+  currency?: { code: string; name: string; symbol: string; perUsdToday: number | null; firstRateDate: string | null };
 }
 
 export interface DcaRequest {
@@ -93,4 +98,6 @@ export interface DcaRequest {
   unit?: string;
   /** Stocks only: treat dividends as reinvested (total return) instead of price only. */
   reinvest?: boolean;
+  /** The currency `amount` is in (an ISO code such as "NGN"). USD when absent. Each month's buy is converted at that day's rate. */
+  currency?: string;
 }

@@ -5,10 +5,19 @@
 /* Single theme: `dark:` utilities only apply under a .dark ancestor, which this app never sets. */
 @custom-variant dark (&:is(.dark *));
 
+/* JetBrains Mono has no glyph for several currency signs (the naira, rupee, lira, ruble, won), so the browser picked a wide
+   system font and they looked oversized. These come from a plain sans face instead, sized to sit level with the digits. */
+@font-face {
+  font-family: "Replay Currency";
+  src: local("Arial"), local("Helvetica Neue"), local("Helvetica"), local("Segoe UI"), local("Roboto");
+  unicode-range: U+20A6, U+20A9, U+20AA, U+20AB, U+20B1, U+20B4, U+20B9, U+20BA, U+20BD, U+0E3F;
+  size-adjust: 76%;
+}
+
 @theme inline {
-  --font-sans: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --font-heading: var(--font-sans);
+  --font-sans: "Replay Currency", var(--font-data), ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-mono: "Replay Currency", var(--font-data), ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-heading: var(--font-display), ui-sans-serif, system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-ring: var(--ring);
@@ -36,28 +45,115 @@
   --radius-4xl: 0px;
 }
 
-/* One theme only: monochrome with soft borders and a quiet grid, no chroma accents. */
+/* Dark is the default theme. [data-theme="light"], [data-contrast="high"] and [data-motion="reduce"] on <html> (set from the
+   Settings dialog, and before first paint by a script in <head>) override the tokens below. */
 :root {
-  --background: #000000;
-  --foreground: #f5f5f5;
-  --card: #0a0a0a;
-  --card-foreground: #f5f5f5;
-  --popover: #0a0a0a;
-  --popover-foreground: #f5f5f5;
-  --primary: #ffffff;
-  --primary-foreground: #000000;
-  --secondary: #141414;
-  --secondary-foreground: #f5f5f5;
-  --muted: #141414;
-  --muted-foreground: #a3a3a3;
-  --accent: #ffffff;
-  --accent-foreground: #000000;
-  --destructive: #ffffff;
-  --border: rgba(255, 255, 255, 0.18);
-  --input: rgba(255, 255, 255, 0.22);
-  --ring: rgba(255, 255, 255, 0.45);
+  /* Deep teal-black ground, mint for action and gains, a cool blue-teal accent. Taken from stonkfun.xyz's palette. */
+  --background: #03090b;
+  --foreground: #f3f8f8;
+  --card: #071215;
+  --card-foreground: #f3f8f8;
+  --popover: #0a181c;
+  --popover-foreground: #f3f8f8;
+  --primary: #39d6a3;
+  --primary-foreground: #03090b;
+  --secondary: #0f1a1e;
+  --secondary-foreground: #f3f8f8;
+  --muted: #0f1a1e;
+  --muted-foreground: #8ea4ad;
+  --accent: #69aac1;
+  --accent-foreground: #03090b;
+  --destructive: #fb7185;
+  --border: #25414a;
+  --input: #2f4f58;
+  --ring: #69aac1;
   --radius: 0px;
+  /* Colours for the backdrop and the glows, so each theme can tune them. */
+  --glow-a: rgba(57, 214, 163, 0.085);
+  --glow-b: rgba(105, 170, 193, 0.06);
+  --hatch: rgba(105, 170, 193, 0.09);
+  --cta-glow: rgba(57, 214, 163, 0.55);
+  --cta-ring: rgba(57, 214, 163, 0.18);
+  --selection: rgba(57, 214, 163, 0.28);
   color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --background: #f2f7f7;
+  --foreground: #0b171b;
+  --card: #ffffff;
+  --card-foreground: #0b171b;
+  --popover: #ffffff;
+  --popover-foreground: #0b171b;
+  --primary: #0c8f69;
+  --primary-foreground: #ffffff;
+  --secondary: #e4eeee;
+  --secondary-foreground: #0b171b;
+  --muted: #e4eeee;
+  --muted-foreground: #4b636b;
+  --accent: #1d7893;
+  --accent-foreground: #ffffff;
+  --destructive: #c8203f;
+  --border: #c5d6d9;
+  --input: #b3c8cc;
+  --ring: #1d7893;
+  --glow-a: rgba(12, 143, 105, 0.075);
+  --glow-b: rgba(29, 120, 147, 0.05);
+  --hatch: rgba(29, 120, 147, 0.1);
+  --cta-glow: rgba(12, 143, 105, 0.45);
+  --cta-ring: rgba(12, 143, 105, 0.18);
+  --selection: rgba(12, 143, 105, 0.25);
+  color-scheme: light;
+}
+
+/* High contrast: brighter text, stronger borders, a plain background and a thick focus ring. */
+:root[data-contrast="high"] {
+  --foreground: #ffffff;
+  --muted-foreground: #d6e3e6;
+  --border: #7fa4af;
+  --input: #9fc0c9;
+  --ring: #ffffff;
+  --destructive: #ff8fa0;
+}
+:root[data-theme="light"][data-contrast="high"] {
+  --foreground: #000000;
+  --muted-foreground: #1c2e34;
+  --primary: #00634a;
+  --border: #35545d;
+  --input: #2a444c;
+  --ring: #000000;
+  --destructive: #a0102c;
+}
+:root[data-contrast="high"] body::before,
+:root[data-contrast="high"] body::after {
+  display: none;
+}
+:root[data-contrast="high"] :focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Reduce animations: the same thing the system "reduce motion" setting does, switchable from Settings. */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* The logo mark comes in a white-outline and a dark-outline version; show the one that suits the theme. */
+.brand-on-light {
+  display: none;
+}
+:root[data-theme="light"] .brand-on-dark {
+  display: none;
+}
+:root[data-theme="light"] .brand-on-light {
+  display: inline-block;
 }
 
 @keyframes spin-once {
@@ -87,13 +183,183 @@
   }
 }
 
+/* Micro-animations. Each one answers something the person did (a result arriving, a press, a hover) and plays once.
+   Nothing loops. Reduced-motion users get none: the global rule above collapses every duration, and these sit inside
+   a no-preference query as well. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+/* No "to": it ends at the element's own opacity (the chart fill is only 10%). */
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes bar-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* A result lands: the blocks rise in one after another. */
+  .reveal {
+    animation: rise 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .reveal-stack > * {
+    animation: rise 0.38s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .reveal-stack > :nth-child(2) {
+    animation-delay: 0.07s;
+  }
+  .reveal-stack > :nth-child(3) {
+    animation-delay: 0.14s;
+  }
+  .reveal-stack > :nth-child(4) {
+    animation-delay: 0.21s;
+  }
+  .reveal-stack > :nth-child(n + 5) {
+    animation-delay: 0.28s;
+  }
+  /* Chart: the main line draws itself left to right, the fill and the end labels fade up behind it. */
+  .draw-line {
+    stroke-dasharray: 1;
+    animation: draw 0.9s cubic-bezier(0.3, 0.6, 0.2, 1) both;
+  }
+  /* The accent bar beside a result sentence grows from a sliver to full height, then the text rolls in. */
+  .accent-grow {
+    transform-origin: top;
+    animation: accent-grow 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @keyframes accent-grow {
+    from {
+      transform: scaleY(0.06);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+  .fade-late {
+    animation: fade 0.7s ease-out 0.5s both;
+  }
+  /* Entrance for a page: each child rises in turn. Nest it (form, then its rows) and offset the inner one with --stagger-base. */
+  .stagger-in > * {
+    animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    animation-delay: var(--stagger-base, 0ms);
+  }
+  /* The animated rows each form their own layer, so a dropdown in an earlier row would sit under the next row. Lift the row being used. */
+  .stagger-in > *:focus-within {
+    position: relative;
+    z-index: 30;
+  }
+  .stagger-in > :nth-child(2) {
+    animation-delay: calc(var(--stagger-base, 0ms) + 60ms);
+  }
+  .stagger-in > :nth-child(3) {
+    animation-delay: calc(var(--stagger-base, 0ms) + 120ms);
+  }
+  .stagger-in > :nth-child(4) {
+    animation-delay: calc(var(--stagger-base, 0ms) + 180ms);
+  }
+  .stagger-in > :nth-child(5) {
+    animation-delay: calc(var(--stagger-base, 0ms) + 240ms);
+  }
+  .stagger-in > :nth-child(6) {
+    animation-delay: calc(var(--stagger-base, 0ms) + 300ms);
+  }
+  .stagger-in > :nth-child(7) {
+    animation-delay: calc(var(--stagger-base, 0ms) + 360ms);
+  }
+  .stagger-in > :nth-child(n + 8) {
+    animation-delay: calc(var(--stagger-base, 0ms) + 420ms);
+  }
+  .pop-in {
+    animation: pop 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  }
+  /* Controls feel pressed and lit. */
+  button:not(:disabled),
+  a {
+    transition-property: color, background-color, border-color, box-shadow, scale, translate;
+    transition-duration: 0.15s;
+    transition-timing-function: ease-out;
+  }
+  button:not(:disabled):active {
+    scale: 0.97;
+  }
+  /* The main buttons: on hover a streak of light sweeps across, the icon nudges, and a glow eases in. */
+  .form-cta {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    transition-duration: 0.25s;
+  }
+  .form-cta::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.38) 50%, transparent 65%);
+    transform: translateX(-130%);
+  }
+  .form-cta:not(:disabled):hover {
+    box-shadow: 0 0 0 4px var(--cta-ring), 0 6px 22px -6px var(--cta-glow);
+  }
+  .form-cta:not(:disabled):hover::after {
+    animation: sweep 0.75s cubic-bezier(0.3, 0.6, 0.2, 1);
+  }
+  .form-cta:not(:disabled):hover svg:not(.animate-spin) {
+    animation: nudge 0.5s ease-out;
+  }
+}
+@keyframes sweep {
+  to {
+    transform: translateX(130%);
+  }
+}
+@keyframes nudge {
+  30% {
+    transform: translateY(-2px) rotate(-8deg);
+  }
+  60% {
+    transform: translateY(0) rotate(5deg);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   html {
     @apply font-sans text-sm;
-    background: #000;
+    background: var(--background);
     -webkit-tap-highlight-color: transparent;
     text-size-adjust: 100%;
   }
@@ -103,6 +369,10 @@
     isolation: isolate;
     overflow-x: clip;
   }
+  /* The page backdrop: soft mint and teal light from two corners, with faint 45-degree hatch lines fading down from the top
+     (the same slant as the cut corners and the logo). Both layers are fixed, so the page scrolls over them. --p (0 at the top
+     of the page, 1 at the bottom, eased by BackgroundMotion) moves them only a little: the glows drift a few tens of percent,
+     the lines slide a short way and their fades travel with them. Without --p, or with reduced motion, it sits still. */
   body::before {
     content: "";
     position: fixed;
@@ -110,18 +380,111 @@
     z-index: 0;
     pointer-events: none;
     background-image:
-      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-    background-size: 48px 48px;
-    background-position: center top;
+      radial-gradient(60% 50% at calc(92% - var(--p, 0) * 22%) calc(-6% + var(--p, 0) * 16%), var(--glow-a), transparent 70%),
+      radial-gradient(50% 40% at calc(0% + var(--p, 0) * 24%) calc(104% - var(--p, 0) * 18%), var(--glow-b), transparent 70%);
   }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 18px);
+    background-position: calc(var(--p, 0) * 60px) calc(var(--p, 0) * -60px);
+    /* Fades out toward the bottom and into the top-left corner (the two masks are intersected); both fades shift a little with --p. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent calc(50% + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to bottom, #000 0%, transparent calc(50% + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
+    mask-composite: intersect;
+  }
+  /* The display face is for things you read as labels or press: headings, the nav, buttons and tab switches. Data stays in the mono. */
+  h1,
+  h2,
+  h3,
+  h4,
+  nav a,
+  button:not([role="combobox"]) {
+    font-family: var(--font-heading);
+  }
+  /* Anything you can press shows a pointing hand (Tailwind's reset sets buttons back to the arrow). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="combobox"],
+  [role="radio"],
+  [role="option"],
+  [role="tab"],
+  a[href],
+  summary,
+  label[for],
+  select {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  /* Selected text: a soft mint tint, text colour unchanged, so it reads as a highlight and not a solid block. */
   ::selection {
-    background: #fff;
-    color: #000;
+    background: var(--selection);
+    color: inherit;
   }
 }
 
 @layer utilities {
+  /* Rubber-band scrolling (iOS, trackpads) pulls the page past its ends and shows what is behind it. These extend the header
+     and footer backgrounds into that area, so the bounce looks like more of the same bar and not a mismatched strip.
+     A box-shadow is used because, unlike a real element, it adds no scrollable space. */
+  .overscroll-top {
+    box-shadow: 0 -50vh 0 50vh color-mix(in srgb, var(--background) 80%, transparent);
+  }
+  .overscroll-bottom {
+    box-shadow: 0 50vh 0 50vh var(--background);
+  }
+  /* A box with its top-right and bottom-left corners cut at 45 degrees (cards and the Subscribe button). The fill and the
+     1px edge are drawn on two layers behind the content, not with clip-path on the element itself, so dropdowns can still
+     hang out past a card's edge. --edge and --fill are the two layer colours. */
+  .cut-card,
+  .cut-btn {
+    --edge: var(--border);
+    --fill: var(--card);
+    --cut-in: calc(var(--cut) - 0.59px); /* the inner layer's cut, so the edge stays 1px thick along the diagonals */
+    position: relative;
+    isolation: isolate;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .cut-card {
+    --cut: 18px;
+  }
+  .cut-btn {
+    --cut: 11px;
+    --edge: var(--primary);
+    --fill: var(--background);
+  }
+  .cut-btn:not(:disabled):hover {
+    --fill: color-mix(in srgb, var(--primary) 16%, var(--background));
+  }
+  .cut-card::before,
+  .cut-card::after,
+  .cut-btn::before,
+  .cut-btn::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .cut-card::before,
+  .cut-btn::before {
+    inset: -1px;
+    background: var(--edge);
+    clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+  }
+  .cut-card::after,
+  .cut-btn::after {
+    inset: 0;
+    background: var(--fill);
+    clip-path: polygon(0 0, calc(100% - var(--cut-in)) 0, 100% var(--cut-in), 100% 100%, var(--cut-in) 100%, 0 calc(100% - var(--cut-in)));
+  }
+
   .form-control-h {
     height: 2.5rem;
     min-height: 2.5rem;

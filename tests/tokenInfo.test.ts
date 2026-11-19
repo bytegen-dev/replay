@@ -82,3 +82,14 @@ test("missing sources leave fields null and explain why; nothing known returns n
   assert.equal(buildTokenInfo(null, [], "ethereum", ADDR), null);
   assert.equal(buildTokenInfo(null, [pair({ chainId: "base" })], "ethereum", ADDR), null);
 });
+
+test("launch date is the earliest of the oldest pool and CoinGecko's genesis date", () => {
+  const addr = "0x6982508145454Ce325dDbE47a25d4ec3d2311933";
+  const pair = (created: number) => ({ chainId: "ethereum", baseToken: { address: addr }, pairCreatedAt: created, priceUsd: "1", liquidity: { usd: 10 } });
+  const a = buildTokenInfo(null, [pair(Date.UTC(2023, 3, 17)), pair(Date.UTC(2024, 0, 2))], "ethereum", addr);
+  assert.equal(a?.launchedAt, "2023-04-17");
+  const b = buildTokenInfo({ id: "x", genesis_date: "2021-05-01" }, [pair(Date.UTC(2023, 3, 17))], "ethereum", addr);
+  assert.equal(b?.launchedAt, "2021-05-01");
+  const c = buildTokenInfo({ id: "x", genesis_date: "nope" }, [], "ethereum", addr);
+  assert.equal(c?.launchedAt, null);
+});

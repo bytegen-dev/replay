@@ -13,11 +13,53 @@ import { dexhunterSeries } from "./dexhunter.ts";
 import { fillGaps, gtCardanoSeries, resolveCardanoUnit } from "./gtCardano.ts";
 import { selectAllMonths } from "./select.ts";
 import { runStockDca } from "./stocks.ts";
+import { currencyByCode } from "./fxCurrencies.ts";
+import { rateOn } from "./fx.ts";
+import { getFxSeries } from "./fxSources.ts";
 import type { DailyPoint, DcaRequest, DcaResponse, PriceSource, SourceLink } from "./types.ts";
 
 export { DcaError };
 
+/**
+ * The backtest. Prices are always worked out in dollars; when the monthly amount is in another currency, each month's row
+ * then gets that day's exchange rate (units per dollar), so a ₦100,000 buy is converted at the rate of the month it was made.
+ */
 export async function runDca(req: DcaRequest, now: number = Date.now()): Promise<DcaResponse> {
+  const res = await runDcaUsd(req, now);
+  const code = req.currency?.trim().toUpperCase();
+  if (!code || code === "USD") return res;
+  const cur = currencyByCode(code);
+  if (!cur) throw new DcaError(422, `Unknown currency "${req.currency}".`);
+  let series;
+  try {
+    series = await getFxSeries(code, now);
+  } catch (e) {
+    throw new DcaError(502, e instanceof Error ? e.message : `Could not load exchange rates for ${code}.`);
+  }
+  const rows = res.rows.map((r) => {
+    if (r.price === null) return r;
+    const hit = rateOn(series.points, r.priceDate ?? r.targetDate);
+    if (hit) return { ...r, fx: hit.perUsd };
+    // No rate for that day: the buy cannot be priced, so it is left out like any other month without data.
+    return { ...r, price: null, priceDate: null, source: "none" as const, notes: [...r.notes, { code: "no-data" as const, text: `No ${code} exchange rate for ${r.priceDate ?? r.targetDate}` }] };
+  });
+  const missing = rows.filter((r, i) => res.rows[i].price !== null && r.price === null).length;
+  const first = series.points[0]?.date ?? null;
+  const today = rateOn(series.points, todayUtc(now));
+  return {
+    ...res,
+    rows,
+    sources: [...res.sources, ...series.sources],
+    warnings: [
+      ...res.warnings,
+      `Your monthly amount is in ${cur.name} (${code}). Each buy is converted to dollars at that day's official exchange rate, then used to buy at the asset's dollar price.`,
+      ...(missing ? [`${missing} month(s) have no ${code} exchange rate (they come before ${first ?? "the rate history"}) and are left out.`] : []),
+    ],
+    currency: { code, name: cur.name, symbol: cur.symbol, perUsdToday: today?.perUsd ?? null, firstRateDate: first },
+  };
+}
+
+async function runDcaUsd(req: DcaRequest, now: number): Promise<DcaResponse> {
   if (req.chain === "equity") return runStockDca({ ...req, chain: "equity" }, now);
   const today = todayUtc(now);
   const months = monthsBetween(req.startMonth, req.endMonth);

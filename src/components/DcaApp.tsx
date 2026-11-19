@@ -1,12 +1,23 @@
 "use client";
 
 import { ChainLogo, CoinLogo } from "@/components/ChainLogo";
-import { AlertTriangle, Calculator, Check, Copy, FileSpreadsheet, Loader2, Settings, Share2, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertTriangle, Check, Copy, FileSpreadsheet, History, Loader2, Settings, Share2, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
-import { MonthPicker } from "@/components/MonthPicker";
+import { MonthPicker, formatMonth } from "@/components/MonthPicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
 import { GrowthChart } from "@/components/GrowthChart";
+import { InsightsCard } from "@/components/InsightsCard";
+import { FxPanel } from "@/components/FxPanel";
+import { MonthFilterBar } from "@/components/MonthFilterBar";
+import { AmountInput } from "@/components/AmountInput";
+import { CoinPicker } from "@/components/CoinPicker";
+import { CurrencyPicker } from "@/components/CurrencyPicker";
+import { currencyByCode, isCurrency } from "@/lib/fxCurrencies.ts";
+import { cleanAmount, formatAmountInput, parseAmount, decodeRange, encodeRange, readQuery, writeQuery } from "@/lib/urlState.ts";
+import { RollText } from "@/components/RollText";
+import { applyMonthFilters, NO_FILTER, type MonthFilter } from "@/lib/monthFilters.ts";
+import { motionReduced } from "@/lib/settings.ts";
 import { TokenDetails } from "@/components/TokenDetails";
 import { TokenSearchInput } from "@/components/TokenSearch";
 import { cn } from "@/lib/utils";
@@ -24,7 +35,7 @@ import { EXAMPLES, exampleRequest, type Example } from "@/lib/examples.ts";
 import { xlsxFileName, type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
-import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel } from "@/lib/months.ts";
+import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel, isMonth, monthsBetween } from "@/lib/months.ts";
 import { CHAINS, CHAIN_LABELS, MARKET_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
 import { MAJORS, isMajorSymbol } from "@/lib/majors.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
@@ -41,7 +52,7 @@ function tokenSymbol(t: { symbol: string | null; name: string | null }): string 
 }
 
 /** The answer in one plain sentence, so the numbers below are the evidence, not the headline. */
-function ResultSentence({ amount, symbol, summary, decimals, total, shares }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number; shares: boolean }) {
+function ResultSentence({ amount, symbol, summary, decimals, total, shares, currency }: { amount: number; symbol: string; summary: Summary; decimals: number; total: number; shares: boolean; currency?: DcaResponse["currency"] }) {
   if (summary.pricedMonths === 0) {
     return (
       <p className="max-w-3xl text-lg leading-snug font-bold">
@@ -55,21 +66,39 @@ function ResultSentence({ amount, symbol, summary, decimals, total, shares }: { 
       ? `${summary.pricedMonths} of ${total} months`
       : `${summary.pricedMonths} ${summary.pricedMonths === 1 ? "month" : "months"}`;
   const loss = (summary.gain ?? 0) < 0;
+  // When the amount is in another currency, say it in that currency, then add what it all came to in that currency too.
+  const local = (n: number) => `${currency!.symbol}${n.toLocaleString("en-US", { maximumFractionDigits: n >= 100 ? 0 : 2 })}`;
+  const putInLocal = currency ? amount * summary.pricedMonths : null;
+  const worthLocal = currency && currency.perUsdToday !== null && summary.valueToday !== null ? summary.valueToday * currency.perUsdToday : null;
   return (
-    <p className="text-base leading-relaxed sm:text-lg">
-      {fmtUsd(amount)} a month for <b>{months}</b> bought{" "}
-      <b>
-        {fmtNum(summary.tokens, decimals)} {shares ? `shares of ${symbol}` : symbol}
-      </b>{" "}
-      for <b>{fmtUsd(summary.invested)}</b>.
-      {summary.valueToday !== null && summary.gain !== null && (
-        <>
-          {" "}
-          Today that is worth <b>{fmtUsd(summary.valueToday)}</b>, a {loss ? "loss" : "gain"} of{" "}
-          <b>{fmtUsd(Math.abs(summary.gain))}</b> ({fmtPct(summary.gainPct)}).
-        </>
+    <>
+      <p className="text-base leading-relaxed sm:text-lg">
+        {currency ? local(amount) : fmtUsd(amount)} a month for <b>{months}</b> bought{" "}
+        <b>
+          {fmtNum(summary.tokens, decimals)} {shares ? `shares of ${symbol}` : symbol}
+        </b>{" "}
+        for <b>{fmtUsd(summary.invested)}</b>.
+        {summary.valueToday !== null && summary.gain !== null && (
+          <>
+            {" "}
+            Today that is worth <b>{fmtUsd(summary.valueToday)}</b>, a {loss ? "loss" : "gain"} of{" "}
+            <b>{fmtUsd(Math.abs(summary.gain))}</b> ({fmtPct(summary.gainPct)}).
+          </>
+        )}
+      </p>
+      {currency && putInLocal !== null && (
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          In {currency.name}: you put in <b className="text-foreground">{local(putInLocal)}</b>
+          {worthLocal !== null && (
+            <>
+              {" "}
+              and it is worth about <b className="text-foreground">{local(worthLocal)}</b> today at {currency.perUsdToday!.toLocaleString("en-US", { maximumFractionDigits: 2 })} {currency.code} to the dollar ({fmtPct(((worthLocal - putInLocal) / putInLocal) * 100)}).
+            </>
+          )}
+          {worthLocal === null && "."}
+        </p>
       )}
-    </p>
+    </>
   );
 }
 
@@ -97,7 +126,7 @@ export function DcaApp() {
   const [address, setAddress] = useState("");
   const [chain, setChain] = useState<Chain>("ethereum");
   // "equity" is an ordinary listed stock or ETF, looked up by ticker. It is the default; "token" is an on-chain token.
-  const [mode, setMode] = useState<"token" | "equity">("equity");
+  const [mode, setMode] = useState<"token" | "equity" | "fx">("equity");
   // Inside Crypto: a major coin picked from a short list (long history), or any token by address (pool history).
   const [cryptoKind, setCryptoKind] = useState<"major" | "token">("major");
   const [major, setMajor] = useState("BTC-USD");
@@ -109,21 +138,114 @@ export function DcaApp() {
   // The line of context shown under a ready-made check's result.
   const [exampleNote, setExampleNote] = useState<string | null>(null);
   const [amount, setAmount] = useState("500");
+  // The currency the monthly amount is in. Each buy is converted to dollars at that day's rate.
+  const [currency, setCurrency] = useState("USD");
   // Defaults depend on the current date, so set them after mount (not during prerender).
   const [startMonth, setStartMonth] = useState("");
   const [endMonth, setEndMonth] = useState("");
+  const [basis, setBasis] = useState<Basis>("month-end");
+  const [basisDay, setBasisDay] = useState(15);
   const [formReady, setFormReady] = useState(false);
+  // A link with run=1 (the footer timeline makes them) fills the form and runs it once the form is ready.
+  const autoRun = useRef(false);
+  // Which months the list below the result shows (the totals always use every month).
+  const [monthFilter, setMonthFilter] = useState<MonthFilter>(NO_FILTER);
+  // The first day the chosen asset has a price. Months before it can't be picked.
+  const [yahooLaunch, setYahooLaunch] = useState<string | null>(null);
+  const [tokenLaunch, setTokenLaunch] = useState<string | null>(null);
+  const launchDate = usesYahoo ? yahooLaunch : tokenLaunch;
+  const launchMonth = launchDate ? launchDate.slice(0, 7) : undefined;
+  // A start month from before the asset existed moves up to its first month.
+  const onTokenLaunch = useCallback((d: string | null) => {
+    setTokenLaunch(d);
+    if (d) setStartMonth((s) => (s && s < d.slice(0, 7) ? d.slice(0, 7) : s));
+  }, []);
+  const clampStart = (m: string) => (launchMonth && m < launchMonth ? launchMonth : m);
   useEffect(() => {
     const id = setTimeout(() => {
+      // What the address bar remembers: the tab, the asset, the amount, the range. Restored before the form shows, so it never flashes the defaults.
+      const q = readQuery();
+      const last = shiftMonth(currentMonth(), -1);
+      const tab = q.get("tab");
+      if (tab === "fx") setMode("fx");
+      else if (tab === "crypto") {
+        setMode("token");
+        const kind = q.get("kind") === "token" ? "token" : "major";
+        setCryptoKind(kind);
+        const coin = q.get("coin")?.toUpperCase();
+        if (coin && isMajorSymbol(coin)) setMajor(coin);
+        const ch = q.get("chain");
+        if (ch && (CHAINS as readonly string[]).includes(ch)) setChain(ch as Chain);
+        const addr = q.get("a");
+        if (addr && /^[A-Za-z0-9]{20,100}$/.test(addr)) setAddress(addr);
+      } else if (tab === "stocks") {
+        const t = q.get("s")?.toUpperCase();
+        if (t && /^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(t)) setTicker(t);
+        if (q.get("drip") === "1") setReinvest(true);
+      }
+      if (q.get("run") === "1") autoRun.current = true;
+      const a = cleanAmount(q.get("amt"));
+      if (a) setAmount(formatAmountInput(a));
+      const cur = q.get("cur")?.toUpperCase();
+      if (cur && isCurrency(cur)) setCurrency(cur);
+      const b = q.get("basis");
+      if (b === "first-of-month" || b === "day-of-month" || b === "month-end") setBasis(b);
+      const day = Number(q.get("day"));
+      if (Number.isInteger(day) && day >= 1 && day <= 31) setBasisDay(day);
+      const r = decodeRange(q, last);
+      if (r) {
+        setStartMonth(r.start);
+        setEndMonth(r.end);
+      }
       setStartMonth((s) => s || shiftMonth(currentMonth(), -120));
-      setEndMonth((e) => e || shiftMonth(currentMonth(), -1));
+      setEndMonth((e) => e || last);
       setFormReady(true);
     }, 0);
     return () => clearTimeout(id);
   }, []);
-  const [basis, setBasis] = useState<Basis>("month-end");
-  const [basisDay, setBasisDay] = useState(15);
+  // Stocks and major coins: ask when this ticker first traded, once it has stopped changing.
+  const yahooSymbol = isMajor ? major : mode === "equity" ? ticker.trim().toUpperCase() : "";
+  useEffect(() => {
+    if (!/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(yahooSymbol)) {
+      const id = setTimeout(() => setYahooLaunch(null), 0);
+      return () => clearTimeout(id);
+    }
+    const controller = new AbortController();
+    const id = setTimeout(async () => {
+      try {
+        const r = await fetch(`/api/asset-start?symbol=${encodeURIComponent(yahooSymbol)}`, { signal: controller.signal });
+        const j = await r.json().catch(() => null);
+        const first = r.ok && typeof j?.firstDate === "string" ? (j.firstDate as string) : null;
+        setYahooLaunch(first);
+        if (first) setStartMonth((s) => (s && s < first.slice(0, 7) ? first.slice(0, 7) : s));
+      } catch {
+        /* an aborted or failed lookup just leaves the form unrestricted */
+      }
+    }, 500);
+    return () => {
+      clearTimeout(id);
+      controller.abort();
+    };
+  }, [yahooSymbol]);
 
+  // Keep the address bar in step with the form (the Currencies tab does this for itself), so a reload or a copied link restores it.
+  useEffect(() => {
+    if (!formReady || mode === "fx") return;
+    const last = shiftMonth(currentMonth(), -1);
+    writeQuery({
+      tab: mode === "equity" ? "stocks" : "crypto",
+      ...(mode === "equity"
+        ? { s: ticker.trim().toUpperCase(), drip: reinvest && "1" }
+        : cryptoKind === "major"
+          ? { coin: major }
+          : { kind: "token", chain, a: address.trim() }),
+      amt: cleanAmount(amount) ?? undefined,
+      cur: currency !== "USD" && currency,
+      ...encodeRange(startMonth, endMonth, last),
+      basis: basis !== "month-end" && basis,
+      day: basis === "day-of-month" && String(basisDay),
+    });
+  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -137,10 +259,101 @@ export function DcaApp() {
   const [share, setShare] = useState<{ url: string; id: string; token: string; edits: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // A sentence describing exactly what pressing the button will run, so the form can be checked at a glance.
+  const assetName = isMajor ? (MAJORS.find((m) => m.symbol === major)?.name ?? major) : mode === "equity" ? ticker.trim().toUpperCase() : address.trim() ? "this token" : "";
+  const amountNum = parseAmount(amount);
+  // Whole dollars (fmtUsd always shows cents and throws if asked for none).
+  // In the currency picked beside the amount (naira shows ₦, euros €), not always dollars.
+  const usd0 = (n: number) => `${currencyByCode(currency)?.symbol ?? "$"}${n.toLocaleString("en-US", { maximumFractionDigits: n % 1 === 0 ? 0 : 2 })}`;
+  const runMonths = isMonth(startMonth) && isMonth(endMonth) && startMonth <= endMonth ? monthsBetween(startMonth, endMonth).length : 0;
+  const runSummary = !assetName
+    ? mode === "equity"
+      ? "Choose a stock or ETF to check."
+      : "Choose a coin or paste a token address to check."
+    : !(amountNum > 0)
+      ? "Enter how much you buy each month."
+      : runMonths === 0
+        ? "Pick a start month that comes before the end month."
+        : `${usd0(amountNum)} a month into ${assetName}, ${formatMonth(startMonth)} to ${formatMonth(endMonth)}: ${runMonths} ${runMonths === 1 ? "buy" : "buys"}, ${usd0(amountNum * runMonths)} in all.`;
+
+  // The Stocks / Crypto / Currencies switch (and the Majors / Other tokens filter under Crypto). Shared by the form and the Currencies tab.
+  // The Stocks / Crypto / Currencies tabs sit in the card header. Majors / Other tokens (under Crypto) stays with the form.
+  const modeTabs = (
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  spacing={0}
+                  value={mode}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const next = v as "token" | "equity" | "fx";
+                    const end = endMonth || shiftMonth(currentMonth(), -1);
+                    const longHistory = next === "equity" || cryptoKind === "major";
+                    // Stocks have decades of history, tokens at most six years: move the start so the range stays valid.
+                    if (next !== "fx") {
+                      if (longHistory && (!startMonth || startMonth > shiftMonth(end, -59))) setStartMonth(shiftMonth(end, -119));
+                      if (!longHistory && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
+                    }
+                    setMode(next);
+                    setApiError(null);
+                    setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
+                  }}
+                  className="form-control-h w-full sm:w-96"
+                  aria-label="What to check"
+                >
+                  {(
+                    [
+                      ["equity", "Stocks"],
+                      ["token", "Crypto"],
+                      ["fx", "Currencies"],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <ToggleGroupItem
+                      key={v}
+                      value={v}
+                      className="form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                    >
+                      {label}
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+  );
+  const kindRow = (
+    <>
+                {mode === "token" && (
+                  <div role="group" aria-label="Kind of crypto" className="flex gap-4 text-sm min-[480px]:col-span-full">
+                    {(
+                      [
+                        ["major", "Majors"],
+                        ["token", "Other tokens"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        aria-pressed={cryptoKind === v}
+                        onClick={() => {
+                          const end = endMonth || shiftMonth(currentMonth(), -1);
+                          if (v === "major" && (!startMonth || startMonth > shiftMonth(end, -35))) setStartMonth(shiftMonth(end, -59));
+                          if (v === "token" && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
+                          setCryptoKind(v);
+                          setApiError(null);
+                          setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
+                        }}
+                        className={cn("underline-offset-4", cryptoKind === v ? "font-bold underline decoration-2" : "text-muted-foreground hover:text-foreground hover:underline")}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+    </>
+  );
+
   function applyPreset(months: number) {
     const end = shiftMonth(currentMonth(), -1);
     setEndMonth(end);
-    setStartMonth(shiftMonth(end, -(months - 1)));
+    setStartMonth(clampStart(shiftMonth(end, -(months - 1))));
     setErrors((e) => ({ ...e, startMonth: undefined, endMonth: undefined }));
   }
 
@@ -148,14 +361,14 @@ export function DcaApp() {
   const resultsRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!data) return;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const reduce = motionReduced();
     resultsRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   }, [data]);
 
   /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const common = { amount: Number(amount), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
         ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
@@ -217,9 +430,16 @@ export function DcaApp() {
     }
   }
 
+  useEffect(() => {
+    if (!formReady || !autoRun.current || mode === "fx") return;
+    autoRun.current = false;
+    void submit({ preventDefault() {} } as React.FormEvent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formReady]);
+
   const computed = useMemo(() => {
     if (!data) return null;
-    const effective = data.rows.map((r) => ({ price: overrides[r.month] > 0 ? overrides[r.month] : r.price }));
+    const effective = data.rows.map((r) => ({ price: overrides[r.month] > 0 ? overrides[r.month] : r.price, fx: r.fx }));
     const decimals = chooseDecimals(effective, data.amount);
     const buys = buildBuys(data.rows, data.amount, data.currentPrice, overrides, decimals);
     return { buys, decimals, summary: summarize(buys, data.currentPrice) };
@@ -266,6 +486,7 @@ export function DcaApp() {
       overrides,
       sources: data.sources,
       unit: isEquity ? "shares" : "tokens",
+      ...(data.currency ? { currency: { code: data.currency.code, symbol: data.currency.symbol, perUsdToday: data.currency.perUsdToday } } : {}),
     };
     try {
       await downloadFile("/api/export/xlsx", payload, xlsxFileName(payload));
@@ -294,6 +515,7 @@ export function DcaApp() {
       sources: data.sources,
       warnings: data.warnings,
       unit: isEquity ? "shares" : "tokens",
+      ...(data.currency ? { currency: { code: data.currency.code, symbol: data.currency.symbol, perUsdToday: data.currency.perUsdToday } } : {}),
     };
     try {
       const res = await fetch("/api/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
@@ -337,6 +559,8 @@ export function DcaApp() {
   const shareStale = share !== null && share.edits !== JSON.stringify(overrides);
 
   const isEquity = data?.chain === "equity" && !isMajorSymbol(data.address);
+  // The months the list shows after filtering and ordering. Totals, charts and exports still use every month.
+  const shownBuys = useMemo(() => (computed ? applyMonthFilters(computed.buys, monthFilter) : []), [computed, monthFilter]);
   // Inside the open list only the ticked item keeps its colour; the others go grey. The value shown on the closed select is coloured.
   const selectContent = "rounded-none border border-border bg-popover ring-0 [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:grayscale [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:opacity-70";
 
@@ -355,101 +579,23 @@ export function DcaApp() {
   return (
     <div className="mt-6 flex flex-col gap-6 sm:mt-8 sm:gap-8">
       {/* overflow-visible: the search dropdown has to extend past the card's bottom edge */}
-      <Card className="overflow-visible rounded-none border border-border bg-card ring-0">
-        <CardHeader className="border-b border-border pb-4">
-          <div className="flex items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center border border-border bg-background leading-none">
-              <Settings className="size-4 shrink-0 origin-center animate-spin-once" aria-hidden />
-            </span>
-            <CardTitle className="text-lg font-bold">Settings</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="pt-6">
+      <Card className="cut-card overflow-visible rounded-none border border-border bg-card ring-0">
+        <CardHeader className="border-b border-border pb-4">{modeTabs}</CardHeader>
+        <CardContent className="pt-5 pb-0 sm:pb-1">
           {!formReady ? (
             <ParametersFormSkeleton />
+          ) : mode === "fx" ? (
+            <div className="flex flex-col gap-6">
+              <FxPanel />
+            </div>
           ) : (
-          <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-4">
-              <div className="min-[480px]:col-span-full">
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  spacing={0}
-                  value={mode}
-                  onValueChange={(v) => {
-                    if (!v) return;
-                    const next = v as "token" | "equity";
-                    const end = endMonth || shiftMonth(currentMonth(), -1);
-                    const longHistory = next === "equity" || cryptoKind === "major";
-                    // Stocks have decades of history, tokens at most six years: move the start so the range stays valid.
-                    if (longHistory && (!startMonth || startMonth > shiftMonth(end, -59))) setStartMonth(shiftMonth(end, -119));
-                    if (!longHistory && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
-                    setMode(next);
-                    setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
-                  }}
-                  className="form-control-h w-full sm:w-72"
-                  aria-label="What to check"
-                >
-                  {(
-                    [
-                      ["equity", "Stocks"],
-                      ["token", "Crypto"],
-                    ] as const
-                  ).map(([v, label]) => (
-                    <ToggleGroupItem
-                      key={v}
-                      value={v}
-                      className="form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
-                    >
-                      {label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-                {mode === "token" && (
-                  <div role="group" aria-label="Kind of crypto" className="mt-3 flex gap-4 text-sm">
-                    {(
-                      [
-                        ["major", "Majors"],
-                        ["token", "Other tokens"],
-                      ] as const
-                    ).map(([v, label]) => (
-                      <button
-                        key={v}
-                        type="button"
-                        aria-pressed={cryptoKind === v}
-                        onClick={() => {
-                          const end = endMonth || shiftMonth(currentMonth(), -1);
-                          if (v === "major" && (!startMonth || startMonth > shiftMonth(end, -35))) setStartMonth(shiftMonth(end, -59));
-                          if (v === "token" && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
-                          setCryptoKind(v);
-                          setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
-                        }}
-                        className={cn("underline-offset-4", cryptoKind === v ? "font-bold underline decoration-2" : "text-muted-foreground hover:text-foreground hover:underline")}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+          <form onSubmit={submit} noValidate className="stagger-in flex flex-col gap-4 [--stagger-base:140ms]">
+            <div className="stagger-in grid grid-cols-1 gap-4 [--stagger-base:200ms] min-[480px]:grid-cols-2 lg:grid-cols-4">
+              {kindRow}
               <div className="min-[480px]:col-span-2">
                 {isMajor ? (
                   <Field id="major" label="Coin">
-                    <Select value={major} onValueChange={setMajor}>
-                      <SelectTrigger id="major" className="form-control-h w-full rounded-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className={selectContent}>
-                        {MAJORS.map((m) => (
-                          <SelectItem key={m.symbol} value={m.symbol} className="rounded-none">
-                            <span className="flex items-center gap-2">
-                              <CoinLogo symbol={m.symbol} />
-                              {m.name} ({m.ticker})
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <CoinPicker id="major" value={major} onChange={setMajor} />
                   </Field>
                 ) : mode === "equity" ? (
                   <Field id="ticker" label="Search or enter a ticker" error={errors.address}>
@@ -467,7 +613,7 @@ export function DcaApp() {
                         setErrors((e) => ({ ...e, address: undefined }));
                       }}
                     />
-                    {tickerName && <p className="text-xs text-muted-foreground">{tickerName}</p>}
+                    {tickerName && <RollText text={tickerName} className="text-xs text-muted-foreground" />}
                   </Field>
                 ) : (
                   <Field id="address" label={chain === "cardano" ? "Search or paste policy ID" : "Search or paste contract address"} error={errors.address}>
@@ -533,111 +679,134 @@ export function DcaApp() {
                   </Select>
                 </Field>
               )}
-              <Field id="amount" label="Monthly amount (USD)" error={errors.amount}>
-                <Input
-                  id="amount"
-                  className="form-control-h text-sm"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  aria-invalid={!!errors.amount}
-                />
+              <Field id="amount" label="Monthly amount" error={errors.amount ?? errors.currency}>
+                {/* The currency sits in front of the number. Anything other than USD is converted at each month's own rate. */}
+                <div className="flex">
+                  <CurrencyPicker id="currency" ariaLabel="Currency" variant="compact" value={currency} onChange={setCurrency} className="w-[6.5rem]! shrink-0 border-r-0" />
+                  <AmountInput
+                    id="amount"
+                    className="form-control-h min-w-0 flex-1 text-sm"
+                    value={amount}
+                    onValueChange={setAmount}
+                    aria-invalid={!!errors.amount}
+                  />
+                </div>
               </Field>
-              <Field id="startMonth" label="Start month" error={errors.startMonth}>
-                <MonthPicker id="startMonth" value={startMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} max={endMonth || undefined} invalid={!!errors.startMonth} onChange={setStartMonth} />
-              </Field>
-              <Field id="endMonth" label="End month" error={errors.endMonth}>
-                <MonthPicker id="endMonth" value={endMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} min={startMonth || undefined} invalid={!!errors.endMonth} onChange={setEndMonth} />
-              </Field>
+              {/* Start and end always sit side by side, at every width. */}
+              <div className="grid grid-cols-2 gap-4 min-[480px]:col-span-2">
+                <Field id="startMonth" label="Start month" error={errors.startMonth}>
+                  <MonthPicker id="startMonth" value={startMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} min={launchMonth} max={endMonth || undefined} invalid={!!errors.startMonth} onChange={setStartMonth} />
+                  {launchDate && <p className="text-xs text-muted-foreground">First price: {formatMonth(launchMonth!)}</p>}
+                </Field>
+                <Field id="endMonth" label="End month" error={errors.endMonth}>
+                  <MonthPicker id="endMonth" value={endMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} min={startMonth && launchMonth && startMonth < launchMonth ? launchMonth : startMonth || launchMonth} invalid={!!errors.endMonth} onChange={setEndMonth} />
+                </Field>
+              </div>
               <div className="flex flex-col gap-2 min-[480px]:col-span-2">
-                <Field id="basis" label="Price basis" error={errors.basis}>
-                  <ToggleGroup
-                    id="basis"
-                    type="single"
-                    variant="outline"
-                    spacing={0}
-                    value={basis}
-                    onValueChange={(v) => {
-                      if (!v) return;
-                      setBasis(v as Basis);
-                      setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
-                    }}
-                    className="form-control-h w-full"
-                    aria-label="Price basis"
-                  >
+                <Field id="basis" label="Buy on" error={errors.basis ?? errors.basisDay}>
+                  {/* One segmented control. "Day" carries its own day-of-month picker inside the segment. */}
+                  <div role="radiogroup" aria-label="Which day of each month you buy" className="form-control-h grid w-full grid-cols-3 border border-border">
                     {(
                       [
                         ["month-end", "Month-end"],
                         ["first-of-month", "1st"],
-                        ["day-of-month", "Day"],
                       ] as const
                     ).map(([v, label]) => (
-                      <ToggleGroupItem
+                      <button
                         key={v}
-                        value={v}
-                        className="form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                        type="button"
+                        role="radio"
+                        aria-checked={basis === v}
+                        onClick={() => {
+                          setBasis(v);
+                          setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
+                        }}
+                        className={cn("border-r border-border text-sm transition-colors", basis === v ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}
                       >
                         {label}
-                      </ToggleGroupItem>
+                      </button>
                     ))}
-                  </ToggleGroup>
+                    <div className={cn("flex min-w-0 items-stretch text-sm transition-colors", basis === "day-of-month" ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}>
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={basis === "day-of-month"}
+                        onClick={() => {
+                          setBasis("day-of-month");
+                          setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
+                        }}
+                        className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2"
+                      >
+                        <Settings className="size-3.5 shrink-0" aria-hidden />
+                        Custom
+                      </button>
+                      {basis === "day-of-month" && (
+                        <Select
+                          value={String(basisDay)}
+                          onValueChange={(v) => {
+                            setBasisDay(Number(v));
+                            setErrors((e) => ({ ...e, basisDay: undefined }));
+                          }}
+                        >
+                          <SelectTrigger
+                            id="basisDay"
+                            aria-label="Day of the month (1 to 31)"
+                            style={{ width: "3.75rem", flex: "0 0 3.75rem", height: "100%" }}
+                            className="gap-1 rounded-none border-0 border-l border-primary-foreground/30 bg-transparent px-2 text-sm font-bold shadow-none focus-visible:ring-0 [&_svg]:text-primary-foreground"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className={selectContent}>
+                            {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                              <SelectItem key={d} value={String(d)} className="rounded-none">
+                                {d}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                  {basis === "day-of-month" && basisDay > 28 && <p className="text-xs text-muted-foreground">Shorter months use their last day.</p>}
                 </Field>
-                {basis === "day-of-month" && (
-                  <Field id="basisDay" label="Day of month (1–31)" error={errors.basisDay}>
-                    <Select
-                      value={String(basisDay)}
-                      onValueChange={(v) => {
-                        setBasisDay(Number(v));
-                        setErrors((e) => ({ ...e, basisDay: undefined }));
-                      }}
-                    >
-                      <SelectTrigger id="basisDay" className="form-control-h w-full rounded-none">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className={selectContent}>
-                        {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                          <SelectItem key={d} value={String(d)} className="rounded-none">
-                            {d}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Shorter months use the last day (e.g. day 31 in February uses 28, or 29 in a leap year).
-                    </p>
-                  </Field>
-                )}
               </div>
-              <div className="flex flex-col gap-3 min-[480px]:col-span-2 lg:col-span-4">
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm text-muted-foreground">Quick range, ending last month</span>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(usesYahoo ? (isMajor ? [36, 60, 96] : [60, 120, 240]) : [6, 12, 24]).map((n) => (
-                      <Button key={n} type="button" variant="outline" className="form-control-h rounded-none text-sm" onClick={() => applyPreset(n)}>
-                        {usesYahoo ? `Last ${n / 12} years` : `Last ${n} months`}
-                      </Button>
-                    ))}
-                  </div>
+              <div className="flex flex-col gap-6 min-[480px]:col-span-2 lg:col-span-4">
+                {/* Quick range: small chips on one line, not a labelled row of big buttons. */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                  <span className="mr-1 text-sm text-muted-foreground">Quick range</span>
+                  {(usesYahoo ? (isMajor ? [36, 60, 96] : [60, 120, 240]) : [6, 12, 24]).map((n) => (
+                    <button key={n} type="button" onClick={() => applyPreset(n)} className="h-8 border border-border px-3 text-xs text-muted-foreground hover:border-primary hover:text-foreground sm:text-sm">
+                      {usesYahoo ? `${n / 12} years` : `${n} months`}
+                    </button>
+                  ))}
+                  <span className="text-xs text-muted-foreground">up to last month</span>
                 </div>
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  variant="default"
-                  className="form-cta h-12 w-full gap-2 rounded-none border-2 border-foreground text-base font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border"
-                >
-                  {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <Calculator className="size-5" aria-hidden />}
-                  {loading ? "Calculating" : "Calculate DCA"}
-                </Button>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-sm text-muted-foreground">Or try a ready-made check</span>
-                  <div className="flex flex-wrap gap-2">
-                    {EXAMPLES.map((ex) => (
-                      <Button key={ex.id} type="button" variant="outline" disabled={loading} title={ex.question} className="h-9 w-auto! rounded-none px-3 text-xs sm:text-sm" onClick={() => runExample(ex)}>
-                        {ex.label}
-                      </Button>
-                    ))}
-                  </div>
+
+                {/* The action: what you are about to run, in a sentence, and a button that is only as wide as its words. */}
+                <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                  <p className="text-sm leading-snug text-muted-foreground" aria-live="polite">
+                    {runSummary}
+                  </p>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    variant="default"
+                    className="form-cta h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border sm:w-auto sm:min-w-56"
+                  >
+                    {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <History className="size-5" aria-hidden />}
+                    {loading ? "Checking prices" : "See what it's worth"}
+                  </Button>
                 </div>
+
+                {/* Shortcuts, not controls: plain underlined text. */}
+                <p className="flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1.5 text-sm">
+                  <span className="text-muted-foreground">Try one:</span>
+                  {EXAMPLES.map((ex) => (
+                    <button key={ex.id} type="button" disabled={loading} title={ex.question} onClick={() => runExample(ex)} className="underline underline-offset-4 hover:text-muted-foreground disabled:opacity-50">
+                      {ex.label}
+                    </button>
+                  ))}
+                </p>
               </div>
             </div>
           </form>
@@ -645,7 +814,7 @@ export function DcaApp() {
         </CardContent>
       </Card>
 
-      <TokenDetails chain={chain} address={usesYahoo ? "" : address} />
+      <TokenDetails chain={chain} address={usesYahoo || mode === "fx" ? "" : address} onLaunch={onTokenLaunch} />
 
       {loading && (
         <div className="flex flex-col gap-4">
@@ -666,7 +835,7 @@ export function DcaApp() {
       )}
 
       {data && computed && !loading && (
-        <div ref={resultsRef} className="flex scroll-mt-[calc(4.5rem+env(safe-area-inset-top))] flex-col gap-6 sm:scroll-mt-28 sm:gap-8">
+        <div ref={resultsRef} className="reveal-stack flex scroll-mt-[calc(4.5rem+env(safe-area-inset-top))] flex-col gap-6 sm:scroll-mt-28 sm:gap-8">
           <section className="border border-border bg-card p-4 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold tracking-tight">{data.token.name ?? "Unknown token"}</h2>
@@ -684,9 +853,10 @@ export function DcaApp() {
               )}
             </div>
             {exampleNote && <p className="mb-4 text-sm text-muted-foreground">{exampleNote}</p>}
-            <div className="border-l-2 border-foreground pl-4">
+            <div className="border-l-2 border-primary pl-4">
               <ResultSentence
                 amount={data.amount}
+                currency={data.currency}
                 symbol={tokenSymbol(data.token)}
                 summary={computed.summary}
                 decimals={computed.decimals}
@@ -719,13 +889,17 @@ export function DcaApp() {
               >
                 <CardHeader>
                   <CardDescription className="text-sm text-muted-foreground">{key}</CardDescription>
-                  <CardTitle className="break-all text-base font-bold tabular-nums sm:text-lg">{value}</CardTitle>
+                  <CardTitle className="break-all text-base font-bold tabular-nums sm:text-lg">
+                    <RollText text={value} />
+                  </CardTitle>
                 </CardHeader>
               </Card>
             ))}
           </div>
 
           <GrowthChart buys={computed.buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} />
+
+          <InsightsCard buys={computed.buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate} amount={data.amount} />
 
           {computed.summary.skippedMonths > 0 && (
             <p className="flex items-start gap-2 text-sm">
@@ -737,8 +911,19 @@ export function DcaApp() {
             </p>
           )}
 
+          <MonthFilterBar buys={computed.buys} filter={monthFilter} onChange={setMonthFilter} shown={shownBuys.length} />
+
+          {shownBuys.length === 0 && (
+            <p className="border border-border p-6 text-center text-sm text-muted-foreground">
+              No months match these filters.{" "}
+              <button type="button" onClick={() => setMonthFilter(NO_FILTER)} className="underline underline-offset-4 hover:text-foreground">
+                Reset the filters
+              </button>
+            </p>
+          )}
+
           <div className="flex flex-col gap-3 md:hidden">
-            {computed.buys.map((b) => {
+            {shownBuys.map((b) => {
               const original = data.rows.find((r) => r.month === b.month)?.price ?? null;
               return (
                 <article key={b.month} className="border border-border bg-card p-4">
@@ -827,16 +1012,16 @@ export function DcaApp() {
 
           <div className="hidden overflow-x-auto border border-border bg-background/80 backdrop-blur-xl md:block">
             <p className="sr-only">Monthly buy breakdown table</p>
-            <Table className="min-w-[900px]">
+            <Table className="min-w-[900px]" containerClassName="max-h-[34rem] overflow-y-auto">
               <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow className="hover:bg-transparent">
                   {(["Month", "Price date", "Price (USD)", "Amount (USD)", isEquity ? "Shares bought" : "Tokens bought", "Value today (USD)", "Source", "Note"] as const).map((h, i) => (
-                    <TableHead key={h} className={cn("text-sm text-muted-foreground", i >= 2 && i <= 5 && "text-right")}>{h}</TableHead>
+                    <TableHead key={h} className={cn("sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]", i >= 2 && i <= 5 && "text-right")}>{h}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {computed.buys.map((b) => {
+                {shownBuys.map((b) => {
                   const original = data.rows.find((r) => r.month === b.month)?.price ?? null;
                   return (
                     <TableRow key={b.month} className="align-top odd:bg-muted/40 hover:bg-muted/60">

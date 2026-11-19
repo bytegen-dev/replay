@@ -1,18 +1,26 @@
 import type { Metadata, Viewport } from "next";
+import { Chakra_Petch, JetBrains_Mono } from "next/font/google";
+import { BackgroundMotion } from "@/components/BackgroundMotion";
 import { PwaRegister } from "@/components/PwaRegister";
+import { SettingsProvider } from "@/components/SettingsProvider";
+import { HEAD_SCRIPT } from "@/lib/settings.ts";
 import "./globals.css";
+
+// Chakra Petch (angular, game-HUD) for the wordmark, headings, buttons and tabs; JetBrains Mono for prices, tables and body text.
+const display = Chakra_Petch({ subsets: ["latin", "latin-ext"], weight: ["500", "700"], variable: "--font-display", display: "swap" });
+const data = JetBrains_Mono({ subsets: ["latin", "latin-ext"], weight: ["400", "700"], variable: "--font-data", display: "swap" });
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "DCA", template: "%s | DCA" },
+  title: { default: "Replay", template: "%s | Replay" },
   description: "What a fixed monthly buy of a stock or token would be worth today.",
-  applicationName: "DCA",
+  applicationName: "Replay",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/dca-logo.png", type: "image/png" },
+      { url: "/replay-logo.png", type: "image/png" },
       { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
@@ -20,21 +28,21 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "DCA",
+    title: "Replay",
     statusBarStyle: "black-translucent",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "DCA",
-    title: "DCA",
-    description: "Backtest a fixed monthly purchase of any stock or token, month by month.",
-    images: [{ url: "/og-image.png", width: 512, height: 512, alt: "DCA" }],
+    siteName: "Replay",
+    title: "Replay",
+    description: "See what a fixed monthly purchase of any stock or token would be worth today.",
+    images: [{ url: "/og-image.png", width: 512, height: 512, alt: "Replay" }],
   },
   twitter: {
     card: "summary",
-    title: "DCA",
-    description: "Backtest a fixed monthly purchase of any stock or token, month by month.",
+    title: "Replay",
+    description: "See what a fixed monthly purchase of any stock or token would be worth today.",
     images: ["/og-image.png"],
   },
   formatDetection: { telephone: false },
@@ -44,15 +52,23 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#000000",
+  themeColor: "#03090b",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full font-sans">
+    // suppressHydrationWarning: the script in <head> sets data-theme and friends on <html> before React starts, by design.
+    <html lang="en" suppressHydrationWarning className={`h-full font-sans ${display.variable} ${data.variable}`}>
+      <head>
+        {/* Applies the saved theme before the first paint, so a light-mode visitor never sees a dark flash. */}
+        <script dangerouslySetInnerHTML={{ __html: HEAD_SCRIPT }} />
+      </head>
       <body className="flex min-h-dvh flex-col bg-background text-foreground antialiased">
-        <div className="relative z-10 flex min-h-dvh w-full flex-1 flex-col">{children}</div>
-        <PwaRegister />
+        <SettingsProvider>
+          <div className="relative z-10 flex min-h-dvh w-full flex-1 flex-col">{children}</div>
+          <PwaRegister />
+          <BackgroundMotion />
+        </SettingsProvider>
       </body>
     </html>
   );

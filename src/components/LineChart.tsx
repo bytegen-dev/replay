@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatChartTime, niceScale, timeTicks } from "@/lib/charts.ts";
 
 /**
- * A small line chart drawn as plain SVG, so it needs no charting library and matches the black-and-white theme:
- * solid white for the main line, dashed grey for the comparison, thin grid, labels in the page font.
- * Hover (or arrow keys) shows the exact values at a point. x values are milliseconds (UTC).
+ * A chart drawn as plain SVG, so it needs no charting library. It borrows from trading terminals: the price axis is on the
+ * right, the latest value wears a tag on that axis, hovering draws a crosshair with price and time pills, the line is
+ * green when it ends up and red when it ends down, and the fill fades out under it. Arrow keys move the crosshair too.
+ * x values are milliseconds (UTC).
  */
 
 export interface ChartSeries {
@@ -15,8 +16,12 @@ export interface ChartSeries {
   points: { x: number; y: number }[];
   /** A dashed, quieter line, for a comparison. */
   dashed?: boolean;
-  /** Fill the area under the line. */
+  /** Fill the area under the line with a fading gradient. */
   area?: boolean;
+  /** Line colour. Defaults to the up colour. Use the down colour for a losing line. */
+  color?: string;
+  /** Mark every point with a small dot (for purchases). Skipped when there are too many to read. */
+  dots?: boolean;
 }
 
 interface Props {
@@ -29,15 +34,37 @@ interface Props {
   marker?: { x: number; label: string };
   /** Show the clock in the readout (for short spans). */
   withClock?: boolean;
+  /** Keeps the axes where they are while the data grows, so a replay draws into a fixed frame. */
+  fixedRange?: { xMin: number; xMax: number; yMin: number; yMax: number };
   height?: number;
   /** What the chart shows, for screen readers. */
   ariaLabel: string;
 }
 
-const M = { top: 14, right: 14, bottom: 26, left: 58 };
+export const UP = "var(--primary)";
+export const DOWN = "var(--destructive)";
 
-export function LineChart({ series, yFormat, zeroBaseline = true, marker, withClock = false, height = 250, ariaLabel }: Props) {
+const M = { top: 18, right: 66, bottom: 28, left: 10 };
+const CHAR = 6.7; // width of one 11px mono character, for sizing the pills
+const PILL_H = 18;
+
+/** A small rounded tag on an axis. */
+function Pill({ x, y, text, fill, ink, anchor = "start" }: { x: number; y: number; text: string; fill: string; ink: string; anchor?: "start" | "middle" }) {
+  const w = text.length * CHAR + 12;
+  const left = anchor === "middle" ? x - w / 2 : x;
+  return (
+    <g pointerEvents="none">
+      <rect x={left} y={y - PILL_H / 2} width={w} height={PILL_H} rx="2" fill={fill} />
+      <text x={left + w / 2} y={y} dy="0.34em" textAnchor="middle" fontSize="11" fontWeight="700" fill={ink}>
+        {text}
+      </text>
+    </g>
+  );
+}
+
+export function LineChart({ series, yFormat, zeroBaseline = true, marker, withClock = false, fixedRange, height = 280, ariaLabel }: Props) {
   const box = useRef<HTMLDivElement>(null);
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const [width, setWidth] = useState(320);
   const [hover, setHover] = useState<number | null>(null);
 
@@ -59,9 +86,13 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
       xMin = Math.min(xMin, marker.x);
       xMax = Math.max(xMax, marker.x);
     }
-    const scale = niceScale(Math.min(...ys), Math.max(...ys), zeroBaseline);
-    return { xMin, xMax, scale, xTicks: timeTicks(xMin, xMax, width < 480 ? 4 : 6) };
-  }, [series, marker, zeroBaseline, width]);
+    if (fixedRange) {
+      xMin = fixedRange.xMin;
+      xMax = fixedRange.xMax;
+    }
+    const scale = fixedRange ? niceScale(fixedRange.yMin, fixedRange.yMax, zeroBaseline) : niceScale(Math.min(...ys), Math.max(...ys), zeroBaseline);
+    return { xMin, xMax, scale, xTicks: timeTicks(xMin, xMax, width < 480 ? 3 : 6) };
+  }, [series, marker, zeroBaseline, width, fixedRange]);
 
   if (!model) return null;
   const { xMin, xMax, scale, xTicks } = model;
@@ -71,12 +102,13 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
   const sy = (y: number) => M.top + (1 - (y - scale.lo) / (scale.hi - scale.lo)) * ih;
   const line = (pts: { x: number; y: number }[]) => pts.map((p, i) => `${i === 0 ? "M" : "L"}${sx(p.x).toFixed(1)} ${sy(p.y).toFixed(1)}`).join(" ");
   const area = (pts: { x: number; y: number }[]) => `${line(pts)} L${sx(pts[pts.length - 1].x).toFixed(1)} ${sy(scale.lo).toFixed(1)} L${sx(pts[0].x).toFixed(1)} ${sy(scale.lo).toFixed(1)} Z`;
+  const colorOf = (s: ChartSeries) => (s.dashed ? "var(--muted-foreground)" : (s.color ?? UP));
 
-  // The first series decides where the readout can snap to.
+  // The first series decides where the crosshair can snap to.
   const driver = series[0].points;
   const nearest = (x: number) => driver.reduce((best, p, i) => (Math.abs(p.x - x) < Math.abs(driver[best].x - x) ? i : best), 0);
   const at = (s: ChartSeries, x: number) => s.points.reduce((best, p) => (Math.abs(p.x - x) < Math.abs(best.x - x) ? p : best), s.points[0]);
-  const hoverX = hover === null ? null : driver[hover]?.x ?? null;
+  const hoverPoint = hover === null ? null : (driver[hover] ?? null);
 
   function onMove(e: React.PointerEvent<SVGSVGElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -91,8 +123,20 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
     e.preventDefault();
   }
 
-  const tipLeft = hoverX === null ? 0 : Math.min(Math.max(sx(hoverX) + 12, 4), width - 190);
   const markerAt = marker ? series[0].points.filter((p) => p.x <= marker.x).pop() : undefined;
+  const axisX = width - M.right;
+
+  // The latest value of each line, tagged on the price axis. Tags that would overlap are pushed apart.
+  const lasts = series
+    .filter((s) => s.points.length > 1)
+    .map((s) => ({ s, y: sy(s.points[s.points.length - 1].y), v: s.points[s.points.length - 1].y }))
+    .sort((a, b) => a.y - b.y);
+  for (let i = 1; i < lasts.length; i++) if (lasts[i].y - lasts[i - 1].y < PILL_H + 2) lasts[i].y = lasts[i - 1].y + PILL_H + 2;
+
+  const hoverLabel = hoverPoint ? formatChartTime(hoverPoint.x, withClock) : "";
+  const timeW = hoverLabel.length * CHAR + 12;
+  const timeX = hoverPoint ? Math.min(Math.max(sx(hoverPoint.x), M.left + timeW / 2), axisX - timeW / 2 + 4) : 0;
+  const tipLeft = hoverPoint ? Math.min(Math.max(sx(hoverPoint.x) + 14, 4), width - M.right - 216) : 0;
 
   return (
     // min-w-0 + overflow-hidden: the chart is as wide as the space it is given, never the other way round. Without them
@@ -102,7 +146,7 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
         {series.map((s) => (
           <li key={s.key} className="flex items-center gap-2">
             <svg width="22" height="8" aria-hidden>
-              <line x1="0" x2="22" y1="4" y2="4" stroke={s.dashed ? "var(--muted-foreground)" : "currentColor"} strokeWidth={s.dashed ? 1.5 : 2.5} strokeDasharray={s.dashed ? "4 3" : undefined} />
+              <line x1="0" x2="22" y1="4" y2="4" stroke={colorOf(s)} strokeWidth={s.dashed ? 1.5 : 2.5} strokeDasharray={s.dashed ? "4 3" : undefined} />
             </svg>
             {s.label}
           </li>
@@ -122,68 +166,86 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
         className="block touch-pan-y text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
       >
         <title>{ariaLabel}</title>
+        <defs>
+          {series.filter((s) => s.area).map((s) => (
+            <linearGradient key={s.key} id={`${uid}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+              {/* style, not attributes: only CSS properties can use var(--colour) here */}
+              <stop offset="0" style={{ stopColor: colorOf(s), stopOpacity: 0.38 }} />
+              <stop offset="1" style={{ stopColor: colorOf(s), stopOpacity: 0 }} />
+            </linearGradient>
+          ))}
+        </defs>
 
         {scale.ticks.map((t) => (
           <g key={t}>
-            <line x1={M.left} x2={width - M.right} y1={sy(t)} y2={sy(t)} stroke="var(--border)" strokeWidth="1" />
-            <text x={M.left - 8} y={sy(t)} dy="0.32em" textAnchor="end" fontSize="11" fill="var(--muted-foreground)">
+            <line x1={M.left} x2={axisX} y1={sy(t)} y2={sy(t)} stroke="var(--border)" strokeWidth="1" opacity="0.55" />
+            <text x={axisX + 8} y={sy(t)} dy="0.32em" fontSize="11" fill="var(--muted-foreground)">
               {yFormat(t)}
             </text>
           </g>
         ))}
         {xTicks.map((t) => (
           <g key={t.t}>
-            <line x1={sx(t.t)} x2={sx(t.t)} y1={M.top + ih} y2={M.top + ih + 4} stroke="var(--border)" />
-            <text x={sx(t.t)} y={height - 8} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)">
+            <line x1={sx(t.t)} x2={sx(t.t)} y1={M.top} y2={M.top + ih + 4} stroke="var(--border)" strokeWidth="1" opacity="0.3" />
+            <text x={sx(t.t)} y={height - 9} textAnchor="middle" fontSize="11" fill="var(--muted-foreground)">
               {t.label}
             </text>
           </g>
         ))}
 
-        {series.filter((s) => s.area && s.points.length > 1).map((s) => <path key={`${s.key}-area`} d={area(s.points)} fill="currentColor" opacity="0.1" />)}
+        {series.filter((s) => s.area && s.points.length > 1).map((s) => <path className="fade-late" key={`${s.key}-area`} d={area(s.points)} fill={`url(#${uid}-${s.key})`} />)}
         {series.filter((s) => s.points.length > 1).map((s) => (
-          <path key={s.key} d={line(s.points)} fill="none" stroke={s.dashed ? "var(--muted-foreground)" : "currentColor"} strokeWidth={s.dashed ? 1.5 : 2} strokeDasharray={s.dashed ? "5 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
+          <path key={s.key} className={s.dashed ? "fade-late" : "draw-line"} pathLength={s.dashed ? undefined : 1} d={line(s.points)} fill="none" stroke={colorOf(s)} strokeWidth={s.dashed ? 1.5 : 2.25} strokeDasharray={s.dashed ? "5 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
         ))}
 
-        {/* Direct labels: each line ends with its own value, so the reader needs no legend lookup. Hidden while hovering. */}
-        {!marker && hoverX === null && series.filter((s) => s.points.length > 1).map((s, i) => {
-          const p = s.points[s.points.length - 1];
-          const above = series.length > 1 && series.filter((o) => o.points.length > 1).every((o) => o === s || sy(o.points[o.points.length - 1].y) >= sy(p.y) || i === 0);
-          return (
-            <text key={`${s.key}-end`} x={sx(p.x)} y={sy(p.y) + (above ? -10 : 16)} textAnchor="end" fontSize="11" fontWeight={s.dashed ? 400 : 700} fill={s.dashed ? "var(--muted-foreground)" : "currentColor"}>
-              {yFormat(p.y)}
-            </text>
-          );
-        })}
+        {/* A dot on each purchase, when there are few enough to tell apart. */}
+        {series.filter((s) => s.dots && s.points.length <= 72).map((s) => (
+          <g key={`${s.key}-dots`} className="fade-late">
+            {s.points.map((p) => (
+              <circle key={p.x} cx={sx(p.x)} cy={sy(p.y)} r="2.6" fill="var(--background)" stroke={colorOf(s)} strokeWidth="1.5" />
+            ))}
+          </g>
+        ))}
+
+        {/* Latest value: a dotted line across and a tag on the price axis. */}
+        {lasts.map(({ s, y, v }, i) => (
+          <g key={`${s.key}-last`}>
+            {i === 0 || !s.dashed ? <line x1={M.left} x2={axisX} y1={sy(v)} y2={sy(v)} stroke={colorOf(s)} strokeWidth="1" strokeDasharray="1 4" strokeLinecap="round" opacity="0.7" /> : null}
+            <Pill x={axisX + 2} y={y} text={yFormat(v)} fill={s.dashed ? "var(--secondary)" : colorOf(s)} ink={s.dashed ? "var(--muted-foreground)" : "var(--primary-foreground)"} />
+          </g>
+        ))}
 
         {marker && (
           <g>
-            <line x1={sx(marker.x)} x2={sx(marker.x)} y1={M.top} y2={M.top + ih} stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />
-            {markerAt && <circle cx={sx(marker.x)} cy={sy(markerAt.y)} r="5" fill="var(--background)" stroke="currentColor" strokeWidth="2" />}
-            <text x={Math.min(sx(marker.x), width - M.right - 4)} y={M.top - 3} textAnchor={sx(marker.x) > width - 90 ? "end" : "middle"} fontSize="11" fontWeight="700" fill="currentColor">
+            <line x1={sx(marker.x)} x2={sx(marker.x)} y1={M.top} y2={M.top + ih} stroke="var(--foreground)" strokeWidth="1" strokeDasharray="3 3" opacity="0.7" />
+            {markerAt && <circle cx={sx(marker.x)} cy={sy(markerAt.y)} r="5" fill="var(--background)" stroke="var(--foreground)" strokeWidth="2" />}
+            <text x={Math.min(sx(marker.x), axisX - 4)} y={M.top - 5} textAnchor={sx(marker.x) > width - 150 ? "end" : "middle"} fontSize="11" fontWeight="700" fill="var(--foreground)">
               {marker.label}
             </text>
           </g>
         )}
 
-        {hoverX !== null && (
+        {/* Crosshair, with the price and time pills on the axes. */}
+        {hoverPoint && (
           <g pointerEvents="none">
-            <line x1={sx(hoverX)} x2={sx(hoverX)} y1={M.top} y2={M.top + ih} stroke="var(--muted-foreground)" strokeWidth="1" />
+            <line x1={sx(hoverPoint.x)} x2={sx(hoverPoint.x)} y1={M.top} y2={M.top + ih} stroke="var(--muted-foreground)" strokeWidth="1" strokeDasharray="3 3" />
+            <line x1={M.left} x2={axisX} y1={sy(hoverPoint.y)} y2={sy(hoverPoint.y)} stroke="var(--muted-foreground)" strokeWidth="1" strokeDasharray="3 3" />
             {series.map((s) => {
-              const p = at(s, hoverX);
-              return <circle key={s.key} cx={sx(p.x)} cy={sy(p.y)} r="4" fill="var(--background)" stroke={s.dashed ? "var(--muted-foreground)" : "currentColor"} strokeWidth="2" />;
+              const p = at(s, hoverPoint.x);
+              return <circle key={s.key} cx={sx(p.x)} cy={sy(p.y)} r="4.5" fill="var(--background)" stroke={colorOf(s)} strokeWidth="2" />;
             })}
+            <Pill x={axisX + 2} y={sy(hoverPoint.y)} text={yFormat(hoverPoint.y)} fill="var(--foreground)" ink="var(--background)" />
+            <Pill x={timeX} y={M.top + ih + 14} text={hoverLabel} fill="var(--foreground)" ink="var(--background)" anchor="middle" />
           </g>
         )}
       </svg>
 
-      {hoverX !== null && (
-        <div className="pointer-events-none absolute top-8 z-10 w-44 border border-border bg-popover p-2 text-xs shadow-md" style={{ left: tipLeft }} role="status">
-          <p className="mb-1 font-bold">{formatChartTime(hoverX, withClock)}</p>
+      {hoverPoint && series.length > 1 && (
+        <div className="pointer-events-none absolute top-8 z-10 w-52 border border-border bg-popover p-2 text-xs shadow-md" style={{ left: tipLeft }} role="status">
           {series.map((s) => (
             <p key={s.key} className="flex justify-between gap-2 tabular-nums">
               <span className="text-muted-foreground">{s.label}</span>
-              <span className="font-bold">{yFormat(at(s, hoverX).y)}</span>
+              <span className="font-bold">{yFormat(at(s, hoverPoint.x).y)}</span>
             </p>
           ))}
         </div>

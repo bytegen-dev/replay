@@ -23,10 +23,10 @@ export function openApiSpec(origin: string): Record<string, unknown> {
   return {
     openapi: "3.1.0",
     info: {
-      title: "DCA API",
+      title: "Replay API",
       version: "1.0.0",
       description:
-        "What would a fixed monthly purchase have been worth today? Works for US stocks and ETFs (decades of history) and for tokens on Ethereum, Base, BSC, Arbitrum, Solana and Cardano. Prices are historical and indicative only. This is not financial advice.",
+        "What would a fixed monthly purchase have been worth today? Works for US stocks and ETFs (decades of history) and for tokens on Ethereum, Base, BSC, Arbitrum, Hyperliquid, Solana and Cardano. Prices are historical and indicative only. This is not financial advice.",
     },
     servers: [{ url: origin }],
     security: [{}, { ApiKey: [] }, { Bearer: [] }],

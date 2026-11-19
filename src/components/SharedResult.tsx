@@ -1,5 +1,6 @@
 import { AlertTriangle } from "lucide-react";
 import { GrowthChart } from "@/components/GrowthChart";
+import { InsightsCard } from "@/components/InsightsCard";
 import { SharedExport } from "@/components/SharedExport";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -31,7 +32,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
   ];
 
   return (
-    <div className="flex flex-col gap-6 sm:gap-8">
+    <div className="reveal-stack flex flex-col gap-6 sm:gap-8">
       <section className="border border-border bg-card p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <h2 className="text-xl font-bold tracking-tight">{data.tokenName || data.tokenLabel || "Unknown token"}</h2>
@@ -46,12 +47,12 @@ export function SharedResult({ data }: { data: SharePayload }) {
             </Badge>
           )}
         </div>
-        <div className="border-l-2 border-foreground pl-4">
+        <div className="border-l-2 border-primary pl-4">
           {summary.pricedMonths === 0 ? (
             <p className="text-base leading-relaxed sm:text-lg">No month in this result has a price, so there is nothing to total.</p>
           ) : (
             <p className="text-base leading-relaxed sm:text-lg">
-              {fmtUsd(data.amount)} a month for <b>{months}</b> bought{" "}
+              {data.currency ? `${data.currency.symbol}${data.amount.toLocaleString("en-US", { maximumFractionDigits: data.amount >= 100 ? 0 : 2 })}` : fmtUsd(data.amount)} a month for <b>{months}</b> bought{" "}
               <b>
                 {fmtNum(summary.tokens, decimals)} {symbol}
               </b>{" "}
@@ -90,6 +91,8 @@ export function SharedResult({ data }: { data: SharePayload }) {
       </div>
 
       <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} />
+
+      <InsightsCard buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} amount={data.amount} />
 
       {summary.skippedMonths > 0 && (
         <p className="flex items-start gap-2 text-sm">

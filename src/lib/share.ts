@@ -19,7 +19,7 @@ const MAX_WARNINGS = 10;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const NOTE_CODES: NoteCode[] = ["nearest-day", "low-volume", "outlier", "no-data", "out-of-range", "future", "manual"];
-const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "DexHunter", "manual", "none"];
+const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "DexHunter", "Yahoo", "Nasdaq", "manual", "none"];
 
 /** 8 URL-safe characters (48 random bits). Unguessable enough for an unlisted link. */
 export function newShareId(): string {
@@ -57,6 +57,7 @@ function cleanRow(x: unknown): MonthRow | null {
     price: r.price ?? null,
     source: SOURCES.includes(r.source as PriceSource) ? (r.source as PriceSource) : "none",
     notes,
+    ...(posNum(r.fx) !== null ? { fx: posNum(r.fx)! } : {}),
   };
 }
 
@@ -110,5 +111,10 @@ export function parseShare(x: unknown): SharePayload | string {
     overrides,
     sources: cleanSources(p.sources),
     warnings: (Array.isArray(p.warnings) ? p.warnings.slice(0, MAX_WARNINGS) : []).map((w) => str(w, 500)).filter(Boolean),
+    ...(() => {
+      const c = p.currency as { code?: unknown; symbol?: unknown; perUsdToday?: unknown } | null | undefined;
+      const code = typeof c?.code === "string" && /^[A-Z]{3}$/.test(c.code) ? c.code : null;
+      return code ? { currency: { code, symbol: str(c?.symbol, 6), perUsdToday: posNum(c?.perUsdToday) } } : {};
+    })(),
   };
 }

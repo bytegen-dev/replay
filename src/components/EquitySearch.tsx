@@ -1,9 +1,13 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
+import { StockLogo } from "@/components/StockLogo";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { scramble } from "@/components/RollText";
+import { POPULAR_STOCKS } from "@/lib/popularStocks.ts";
+import { motionReduced } from "@/lib/settings.ts";
 import type { StockHit } from "@/lib/stocks.ts";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +32,9 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
   const listRef = useRef<HTMLUListElement>(null);
   const q = value.trim();
   const searching = open && q.length >= 1;
+  const showPopular = open && q.length === 0;
+  // When a stock is picked, its ticker rolls into the box the way the month names do.
+  const [rolled, setRolled] = useState<string | null>(null);
 
   useEffect(() => {
     if (!searching) return;
@@ -53,16 +60,33 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
   }, [active]);
 
   const cur = res?.q === q ? res : null;
-  const hits = cur && "hits" in cur ? cur.hits : [];
+  const hits = showPopular ? POPULAR_STOCKS : cur && "hits" in cur ? cur.hits : [];
   const loading = searching && !cur;
+  const listOpen = searching || showPopular;
 
   function pick(h: StockHit) {
     onPick(h);
     setOpen(false);
+    if (motionReduced()) return;
+    const start = performance.now();
+    const id = setInterval(() => {
+      const t = performance.now() - start;
+      let done = true;
+      const out = [...h.symbol].map((ch, i) => {
+        if (!/[0-9A-Za-z]/.test(ch) || t >= 110 + i * 60) return ch;
+        done = false;
+        return scramble(ch);
+      });
+      setRolled(done ? null : out.join(""));
+      if (done) clearInterval(id);
+    }, 45);
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (!searching) return;
+    if (!listOpen) {
+      if (e.key === "ArrowDown") setOpen(true);
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActive((a) => Math.min(a + 1, hits.length - 1));
@@ -78,18 +102,22 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
   }
 
   return (
-    <div className="relative" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
+    <div className={cn("relative", listOpen && "z-40")} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
+      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
       <Input
         id={id}
         role="combobox"
-        aria-expanded={searching}
-        aria-controls={searching ? listId : undefined}
+        aria-expanded={listOpen}
+        aria-controls={listOpen ? listId : undefined}
         aria-autocomplete="list"
-        aria-activedescendant={searching && hits[active] ? `${listId}-${active}` : undefined}
+        aria-activedescendant={listOpen && hits[active] ? `${listId}-${active}` : undefined}
         aria-invalid={invalid}
-        className="h-11 pr-9 text-base uppercase placeholder:normal-case sm:h-10 sm:text-sm"
-        value={value}
+        className="h-11 pr-9 pl-10 text-base uppercase placeholder:normal-case sm:h-10 sm:text-sm"
+        value={rolled ?? value}
+        onFocus={() => setOpen(true)}
+        onClick={() => setOpen(true)}
         onChange={(e) => {
+          setRolled(null);
           onChange(e.target.value);
           setOpen(true);
           setActive(0);
@@ -102,8 +130,9 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
       />
       {loading && <Loader2 className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-label="Searching" />}
 
-      {searching && (cur || loading) && (
+      {listOpen && (cur || loading || showPopular) && (
         <div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-50 mt-1 border border-border bg-popover shadow-lg">
+          {showPopular && <p className="px-3 pt-2 pb-1 text-xs text-muted-foreground">Popular. Or type a ticker or company name.</p>}
           {loading && <p className="p-4 text-sm text-muted-foreground">Searching stocks</p>}
           {cur && "error" in cur && (
             <p role="alert" className="p-4 text-sm">
@@ -112,7 +141,7 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
           )}
           {cur && "hits" in cur && hits.length === 0 && <p className="p-4 text-sm text-muted-foreground">No stock or ETF found for &ldquo;{q}&rdquo;. You can still try the ticker as typed.</p>}
           {hits.length > 0 && (
-            <ul ref={listRef} id={listId} role="listbox" aria-label="Matching stocks" className="max-h-72 overflow-y-auto py-1">
+            <ul ref={listRef} id={listId} role="listbox" aria-label={showPopular ? "Popular stocks" : "Matching stocks"} className="max-h-72 overflow-y-auto py-1">
               {hits.map((h, i) => (
                 <li
                   key={`${h.symbol}:${h.exchange}`}
@@ -124,6 +153,7 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
                   onClick={() => pick(h)}
                   className={cn("flex cursor-pointer items-center gap-3 px-3 py-2", i === active && "bg-primary text-primary-foreground")}
                 >
+                  <StockLogo symbol={h.symbol} />
                   <span className="w-16 shrink-0 text-sm font-bold">{h.symbol}</span>
                   <span className="min-w-0 flex-1 truncate text-sm">{h.name}</span>
                   <span className={cn("shrink-0 text-xs", i === active ? "text-primary-foreground" : "text-muted-foreground")}>{h.exchange}</span>

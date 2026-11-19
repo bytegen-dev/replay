@@ -23,7 +23,7 @@ function hideBroken(e: React.SyntheticEvent<HTMLImageElement>) {
 }
 
 /** Looks the token up as soon as the address is valid, so mistakes show before you calculate. */
-export function TokenDetails({ chain, address }: { chain: Chain; address: string }) {
+export function TokenDetails({ chain, address, onLaunch }: { chain: Chain; address: string; onLaunch?: (launchedAt: string | null) => void }) {
   const valid = address.trim() !== "" && validateAddress(address, chain) === null;
   const key = valid ? `${chain}:${normalizeAddress(address, chain)}` : null;
   const [res, setRes] = useState<Result | null>(null);
@@ -58,8 +58,14 @@ export function TokenDetails({ chain, address }: { chain: Chain; address: string
     };
   }, [key]);
 
+  const cur = key && res?.key === key ? res : null;
+  // Tell the form when this token first had a price, so it can stop earlier months being picked.
+  const launched = cur?.status === "ok" ? cur.info.launchedAt : null;
+  useEffect(() => {
+    onLaunch?.(launched);
+  }, [launched, onLaunch]);
+
   if (!key) return null;
-  const cur = res?.key === key ? res : null;
 
   if (!cur) {
     return (

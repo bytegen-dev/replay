@@ -57,6 +57,10 @@ const PREFIXES: Record<string, Market> = {
   binance: "bsc",
   arb: "arbitrum",
   arbitrum: "arbitrum",
+  hype: "hyperevm",
+  hyper: "hyperevm",
+  hyperevm: "hyperevm",
+  hyperliquid: "hyperevm",
   ada: "cardano",
   cardano: "cardano",
   stock: "equity",
@@ -67,7 +71,7 @@ const PREFIXES: Record<string, Market> = {
 };
 
 /** The short prefix a chat command uses for each market. */
-export const PREFIX_FOR: Record<Market, string> = { solana: "SOL", ethereum: "ETH", base: "BASE", bsc: "BSC", arbitrum: "ARB", cardano: "ADA", equity: "STOCK" };
+export const PREFIX_FOR: Record<Market, string> = { solana: "SOL", ethereum: "ETH", base: "BASE", bsc: "BSC", arbitrum: "ARB", hyperevm: "HYPE", cardano: "ADA", equity: "STOCK" };
 
 export const PREFIX_HELP = "SOL, ETH, BASE, BSC, ARB, ADA or STOCK";
 

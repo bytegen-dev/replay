@@ -54,11 +54,11 @@ export interface ApiResult {
 const round = (x: number | null, d = 6): number | null => (x === null ? null : Math.round(x * 10 ** d) / 10 ** d);
 
 /** The sentence, in plain text. Mirrors the one on the page. */
-export function describeResult(opts: { amount: number; symbol: string; unit: "shares" | "tokens"; priced: number; total: number; skipped: number; invested: number; units: number; decimals: number; valueToday: number | null; gain: number | null; gainPct: number | null }): string {
+export function describeResult(opts: { amountText?: string; amount: number; symbol: string; unit: "shares" | "tokens"; priced: number; total: number; skipped: number; invested: number; units: number; decimals: number; valueToday: number | null; gain: number | null; gainPct: number | null }): string {
   if (opts.priced === 0) return "No month has a price, so there is nothing to total.";
   const months = opts.skipped > 0 ? `${opts.priced} of ${opts.total} months` : `${opts.priced} ${opts.priced === 1 ? "month" : "months"}`;
   const bought = opts.unit === "shares" ? `${fmtNum(opts.units, opts.decimals)} shares of ${opts.symbol}` : `${fmtNum(opts.units, opts.decimals)} ${opts.symbol}`;
-  let s = `${fmtUsd(opts.amount)} a month for ${months} bought ${bought} for ${fmtUsd(opts.invested)}.`;
+  let s = `${opts.amountText ?? fmtUsd(opts.amount)} a month for ${months} bought ${bought} for ${fmtUsd(opts.invested)}.`;
   if (opts.valueToday !== null && opts.gain !== null) {
     s += ` Today that is worth ${fmtUsd(opts.valueToday)}, a ${opts.gain < 0 ? "loss" : "gain"} of ${fmtUsd(Math.abs(opts.gain))} (${fmtPct(opts.gainPct)}).`;
   }
@@ -74,11 +74,12 @@ export function toApiResult(res: DcaResponse, req: DcaRequest, detail: "summary"
   const market = res.chain === "equity" ? (isMajorSymbol(res.address) ? "crypto" : "stock") : res.chain;
 
   const out: ApiResult = {
-    answer: describeResult({ amount: req.amount, symbol, unit, priced: s.pricedMonths, total: buys.length, skipped: s.skippedMonths, invested: s.invested, units: s.tokens, decimals, valueToday: s.valueToday, gain: s.gain, gainPct: s.gainPct }),
+    answer: describeResult({ amountText: res.currency ? `${res.currency.symbol}${fmtNum(req.amount, req.amount % 1 === 0 ? 0 : 2)}` : undefined, amount: req.amount, symbol, unit, priced: s.pricedMonths, total: buys.length, skipped: s.skippedMonths, invested: s.invested, units: s.tokens, decimals, valueToday: s.valueToday, gain: s.gain, gainPct: s.gainPct }),
     request: {
       market,
       asset: res.address,
       amountPerMonth: req.amount,
+      ...(res.currency ? { currency: res.currency.code } : {}),
       from: req.startMonth,
       to: req.endMonth,
       basis: res.basis,

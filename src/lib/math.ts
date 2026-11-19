@@ -37,8 +37,9 @@ export function tokensBought(amount: number, price: number, decimals: number): n
  * rounds expensive ones (e.g. $200 / $3,000) to zero, so fall back to 6
  * decimals when any unrounded purchase is under 100 tokens.
  */
-export function chooseDecimals(rows: { price: number | null }[], amount: number): number {
-  const small = rows.some((r) => r.price !== null && r.price > 0 && amount / r.price < 100);
+export function chooseDecimals(rows: { price: number | null; fx?: number }[], amount: number): number {
+  // `amount` is in the user's currency; `fx` (units per dollar) turns it into the dollars actually spent that month.
+  const small = rows.some((r) => r.price !== null && r.price > 0 && amount / (r.fx ?? 1) / r.price < 100);
   return small ? 6 : 0;
 }
 
@@ -60,14 +61,16 @@ export function buildBuys(
     if (price === null) {
       return { ...row, amount: 0, tokens: null, valueToday: null, manual: false };
     }
-    const tokens = tokensBought(amount, price, decimals);
+    // `amount` is what the user buys each month in their own currency; this month's dollars are amount / rate (rate 1 for USD).
+    const usd = row.fx && row.fx > 0 ? amount / row.fx : amount;
+    const tokens = tokensBought(usd, price, decimals);
     return {
       ...row,
       price,
       source: manual ? "manual" : row.source,
       priceDate: manual ? null : row.priceDate,
       notes: manual ? [{ code: "manual", text: "Price entered manually" }] : row.notes,
-      amount,
+      amount: usd,
       tokens,
       valueToday: priceToday === null ? null : tokens * priceToday,
       manual,

@@ -1,3 +1,4 @@
+import { isCurrency } from "./fxCurrencies.ts";
 import { isMonth } from "./months.ts";
 import { CHAINS, type Chain, type DcaRequest, type Market } from "./types.ts";
 
@@ -27,7 +28,7 @@ function detectKind(a: string): AddressKind | null {
 const kindOf = (chain: Chain): AddressKind => (chain === "cardano" ? "cardano" : chain === "solana" ? "solana" : "evm");
 
 const WRONG_CHAIN_HINT: Record<AddressKind, string> = {
-  evm: "That looks like an EVM address. Choose Ethereum, Base, BSC or Arbitrum.",
+  evm: "That looks like an EVM address. Choose Ethereum, Base, BSC, Arbitrum or Hyperliquid.",
   cardano: "That looks like a Cardano policy ID. Choose Cardano.",
   solana: "That looks like a Solana address. Choose Solana.",
 };
@@ -68,7 +69,7 @@ export function validateAddress(address: string, chain: Market): string | null {
 }
 
 export type FieldErrors = Partial<
-  Record<"address" | "chain" | "amount" | "startMonth" | "endMonth" | "basis" | "basisDay", string>
+  Record<"address" | "chain" | "amount" | "currency" | "startMonth" | "endMonth" | "basis" | "basisDay", string>
 >;
 
 export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>>): FieldErrors {
@@ -83,6 +84,7 @@ export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>
 
   const amount = Number(input.amount);
   if (!Number.isFinite(amount) || amount <= 0) errors.amount = "Amount must be greater than 0";
+  if (input.currency !== undefined && input.currency !== "" && !isCurrency(input.currency)) errors.currency = `Unknown currency "${String(input.currency)}". Use a three-letter code such as USD, EUR or NGN.`;
 
   const s = String(input.startMonth ?? "");
   const e = String(input.endMonth ?? "");

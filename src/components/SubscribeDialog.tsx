@@ -38,7 +38,7 @@ export function SubscribeDialog() {
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" className="h-8 rounded-none border-foreground px-3 text-xs font-bold sm:h-9 sm:text-sm">
+        <Button type="button" variant="outline" className="cut-btn h-10 rounded-none border-primary text-primary px-4 text-sm font-bold sm:h-11 sm:px-6 sm:text-base">
           Subscribe
         </Button>
       </DialogTrigger>
@@ -46,15 +46,15 @@ export function SubscribeDialog() {
         {state === "done" ? (
           <div className="flex flex-col gap-2 pt-2">
             <DialogTitle className="flex items-center gap-2">
-              <Check className="size-5" aria-hidden /> You&rsquo;re on the list
+              <Check className="pop-in size-5 text-primary" aria-hidden /> You&rsquo;re on the list
             </DialogTitle>
-            <DialogDescription>We&rsquo;ll email {email.trim()} when DCA gets something new.</DialogDescription>
+            <DialogDescription>We&rsquo;ll email {email.trim()} when Replay gets something new.</DialogDescription>
           </div>
         ) : (
           <form onSubmit={submit} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5 pr-6">
               <DialogTitle>Get notified of updates</DialogTitle>
-              <DialogDescription>One email when DCA gets new features or data sources. Nothing else.</DialogDescription>
+              <DialogDescription>One email when Replay gets new features or data sources. Nothing else.</DialogDescription>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="subscribe-email" className="text-sm text-muted-foreground">
@@ -67,7 +67,7 @@ export function SubscribeDialog() {
                 </p>
               )}
             </div>
-            <Button type="submit" disabled={state === "sending"} className="h-11 w-full gap-2 rounded-none border-2 border-foreground font-bold">
+            <Button type="submit" disabled={state === "sending"} className="h-11 w-full gap-2 rounded-none border-2 border-primary font-bold">
               {state === "sending" && <Loader2 className="size-4 animate-spin" aria-hidden />}
               {state === "sending" ? "Subscribing" : "Subscribe"}
             </Button>

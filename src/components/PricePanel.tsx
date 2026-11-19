@@ -1,10 +1,11 @@
 "use client";
 
 import { ChainLogo } from "@/components/ChainLogo";
-import { AlertTriangle, Check, Copy, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Clock, Copy, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { DatePickerButton } from "@/components/DatePicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
-import { LineChart } from "@/components/LineChart";
+import { DOWN, LineChart, UP } from "@/components/LineChart";
 import { TokenSearchInput } from "@/components/TokenSearch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,9 @@ import { PRICE_EXAMPLES, type PriceExample } from "@/lib/examples.ts";
 import type { HistoricalPriceResult } from "@/lib/historicalPrice.ts";
 import { formatAge, formatUsdPrice } from "@/lib/priceAt.ts";
 import type { Chain, Market } from "@/lib/types.ts";
+import { readQuery, writeQuery } from "@/lib/urlState.ts";
 import { PREFIX_FOR, parseWhen } from "@/lib/when.ts";
+import { cn } from "@/lib/utils";
 
 const MARKETS: { value: Market; label: string }[] = [
   { value: "ethereum", label: "Ethereum (ETH)" },
@@ -23,6 +26,7 @@ const MARKETS: { value: Market; label: string }[] = [
   { value: "base", label: "Base (BASE)" },
   { value: "bsc", label: "BNB Chain (BSC)" },
   { value: "arbitrum", label: "Arbitrum (ARB)" },
+  { value: "hyperevm", label: "Hyperliquid (HYPE)" },
   { value: "cardano", label: "Cardano (ADA)" },
   { value: "equity", label: "Stock (STOCK)" },
 ];
@@ -59,12 +63,12 @@ function PriceChart({ r }: { r: HistoricalPriceResult }) {
   const name = r.asset.symbol ?? r.asset.name ?? "The price";
   return (
     <LineChart
-      series={[{ key: "price", label: `${name} price`, area: true, points }]}
+      series={[{ key: "price", label: `${name} price`, area: true, color: points[points.length - 1].y >= points[0].y ? UP : DOWN, points }]}
       yFormat={formatUsdPrice}
       zeroBaseline={false}
       withClock={span < 3 * 86_400_000}
       marker={{ x: Date.parse(r.when.instantUtc), label: `${when} · ${formatUsdPrice(r.price.usd)}` }}
-      height={230}
+      height={260}
       ariaLabel={`Line chart of the ${name} price around ${r.when.description}. The marked moment was ${formatUsdPrice(r.price.usd)}.`}
     />
   );
@@ -80,6 +84,28 @@ export function PricePanel() {
   const [date, setDate] = useState("yesterday");
   const [time, setTime] = useState("");
   const [tz, setTz] = useState("");
+  // The address bar remembers the chain, asset, date, time and zone, so a reload or a copied link brings them back.
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const q = readQuery();
+      const m = q.get("chain");
+      if (m && MARKETS.some((x) => x.value === m)) setMarket(m as Market);
+      const a = q.get("asset");
+      if (a && /^[A-Za-z0-9.=-]{1,100}$/.test(a)) setAsset(a);
+      const d = q.get("date");
+      if (d && d.length <= 60) setDate(d);
+      const t = q.get("time");
+      if (t && t.length <= 20) setTime(t);
+      const z = q.get("tz");
+      if (z && z.length <= 40) setTz(z);
+      setRestored(true);
+    }, 0);
+    return () => clearTimeout(id);
+  }, []);
+  useEffect(() => {
+    if (restored) writeQuery({ chain: market, asset: asset.trim(), date: date.trim(), time: time.trim(), tz: tz.trim() });
+  }, [restored, market, asset, date, time, tz]);
   // The clock is read after mount, so what is shown never depends on when the page was built.
   const [nowMs, setNowMs] = useState<number | null>(null);
   useEffect(() => {
@@ -174,8 +200,8 @@ export function PricePanel() {
 
   return (
     <div className="mt-6 flex flex-col gap-6 sm:mt-8 sm:gap-8">
-      <form onSubmit={submit} noValidate className="flex flex-col gap-5 border border-border bg-card p-4 sm:p-6">
-        <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-4">
+      <form onSubmit={submit} noValidate className="cut-card stagger-in flex flex-col gap-5 border border-border bg-card p-4 pb-7 [--stagger-base:140ms] sm:p-6 sm:pb-9">
+        <div className="stagger-in grid grid-cols-1 gap-4 [--stagger-base:200ms] min-[480px]:grid-cols-2 lg:grid-cols-4">
           <div className="min-[480px]:col-span-2 lg:col-span-4 lg:grid lg:grid-cols-4 lg:gap-4">
             <div className="mb-4 lg:mb-0">
               <Field id="market" label="Chain" error={fieldErrors.market}>
@@ -243,10 +269,13 @@ export function PricePanel() {
 
           <div className="min-[480px]:col-span-2">
             <Field id="date" label="Date" error={fieldErrors.date}>
-              <Input id="date" className="form-control-h text-sm" value={date} onChange={(e) => setDate(e.target.value)} placeholder="15/09/2026, September 15, or 5 days ago" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.date} />
-              <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <div className="relative">
+                <Input id="date" className="form-control-h pr-12 text-sm" value={date} onChange={(e) => setDate(e.target.value)} placeholder="15/09/2026, September 15, or 5 days ago" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.date} />
+                <DatePickerButton selected={reading && reading.ok ? reading.value.dateUtc : null} onPick={setDate} />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
                 {DATE_CHIPS.map((c) => (
-                  <button key={c} type="button" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={() => setDate(c)}>
+                  <button key={c} type="button" aria-pressed={date.trim().toLowerCase() === c} className={cn("h-7 border px-2.5 text-xs transition-colors", date.trim().toLowerCase() === c ? "border-primary text-foreground" : "border-border text-muted-foreground hover:border-primary hover:text-foreground")} onClick={() => setDate(c)}>
                     {c}
                   </button>
                 ))}
@@ -265,21 +294,24 @@ export function PricePanel() {
         </div>
 
         {/* The one thing this page does that others don't: it shows how your words were read, before you commit. */}
-        <p aria-live="polite" className={`border-l-2 pl-4 text-base leading-snug ${reading && !reading.ok ? "border-foreground font-bold" : "border-foreground"}`}>
-          {reading === null ? (
-            <span className="text-muted-foreground">Reading your date…</span>
-          ) : reading.ok ? (
-            <>
-              <span className="text-muted-foreground">Reads as </span>
-              <b>{reading.value.description}</b>
-              {reading.value.assumptions.length > 0 && <span className="mt-1 block text-sm text-muted-foreground">{reading.value.assumptions.join(" ")}</span>}
-            </>
-          ) : (
-            reading.error
-          )}
-        </p>
+        <div aria-live="polite" className={cn("flex items-start gap-3 border bg-background/40 p-4", reading && !reading.ok ? "border-destructive" : "border-border")}>
+          <Clock className={cn("mt-1 size-4 shrink-0", reading && !reading.ok ? "text-destructive" : "text-primary")} aria-hidden />
+          <p className="text-base leading-snug">
+            {reading === null ? (
+              <span className="text-muted-foreground">Reading your date…</span>
+            ) : reading.ok ? (
+              <>
+                <span className="text-muted-foreground">Reads as </span>
+                <b>{reading.value.description}</b>
+                {reading.value.assumptions.length > 0 && <span className="mt-1 block text-sm text-muted-foreground">{reading.value.assumptions.join(" ")}</span>}
+              </>
+            ) : (
+              <b>{reading.error}</b>
+            )}
+          </p>
+        </div>
 
-        <Button type="submit" disabled={loading} className="form-cta h-12 w-full gap-2 rounded-none border-2 border-foreground text-base font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
+        <Button type="submit" disabled={loading} className="form-cta h-12 w-full gap-2 rounded-none border-2 border-primary text-base font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
           {loading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : null}
           {loading ? "Looking up" : "Get price"}
         </Button>
@@ -303,7 +335,7 @@ export function PricePanel() {
       )}
 
       {result && !loading && (
-        <section className="flex flex-col gap-5 border border-border bg-card p-4 sm:p-6" aria-label="Price result">
+        <section className="reveal flex flex-col gap-5 border border-border bg-card p-4 sm:p-6" aria-label="Price result">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold tracking-tight">{result.asset.name ?? result.asset.symbol ?? "Token"}</h2>
             {result.asset.symbol && <span className="text-sm text-muted-foreground">{result.asset.symbol}</span>}
@@ -313,7 +345,7 @@ export function PricePanel() {
           </div>
 
           {/* The answer, once: the price, when it was, and how it has moved. */}
-          <div className="flex flex-col gap-1.5 border-l-2 border-foreground pl-4">
+          <div className="flex flex-col gap-1.5 border-l-2 border-primary pl-4">
             <p className="text-4xl font-bold tabular-nums sm:text-5xl">{formatUsdPrice(result.price.usd)}</p>
             <p className="text-sm sm:text-base">
               {result.when.description}
