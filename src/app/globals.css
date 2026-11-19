@@ -363,40 +363,35 @@
     box-shadow: none;
     filter: brightness(1.08);
   }
-  /* The tab selector: the first tab is cut at the bottom left and the last at the top right. The 1px border follows each cut
-     through a thin diagonal drawn in the corner (hidden on the selected tab, which is filled). */
+  /* The tab selector: the first tab is cut at the bottom left and the last at the top right. No clip-path: the corner square is
+     painted half in the card's colour (hiding the tab's own corner) with a 1px diagonal exactly on the cut, so the line sits on the
+     edge instead of being clipped. The diagonal matches the tab's border, or its fill when selected. */
   .cut-tab-first,
   .cut-tab-last {
     position: relative;
+    --tab-line: var(--border);
   }
-  .cut-tab-first {
-    clip-path: polygon(0 0, 100% 0, 100% 100%, 11px 100%, 0 calc(100% - 11px));
-  }
-  .cut-tab-last {
-    clip-path: polygon(0 0, calc(100% - 11px) 0, 100% 11px, 100% 100%, 0 100%);
+  .cut-tab-first[data-state="on"],
+  .cut-tab-last[data-state="on"] {
+    --tab-line: var(--primary);
   }
   .cut-tab-first::after,
   .cut-tab-last::after {
     content: "";
     position: absolute;
-    width: 11px;
-    height: 11px;
+    width: 12px;
+    height: 12px;
     pointer-events: none;
   }
-  /* The line is drawn a hair inside the cut (on the side that stays visible), because the cut's own edge would clip half of it. */
   .cut-tab-first::after {
     bottom: -1px;
     left: -1px;
-    background: linear-gradient(to top right, transparent calc(50% + 0.3px), var(--border) calc(50% + 0.3px), var(--border) calc(50% + 1.5px), transparent calc(50% + 1.5px));
+    background: linear-gradient(to top right, var(--card) calc(50% - 0.6px), var(--tab-line) calc(50% - 0.6px), var(--tab-line) calc(50% + 0.6px), transparent calc(50% + 0.6px));
   }
   .cut-tab-last::after {
     top: -1px;
     right: -1px;
-    background: linear-gradient(to top right, transparent calc(50% - 1.5px), var(--border) calc(50% - 1.5px), var(--border) calc(50% - 0.3px), transparent calc(50% - 0.3px));
-  }
-  .cut-tab-first[data-state="on"]::after,
-  .cut-tab-last[data-state="on"]::after {
-    display: none;
+    background: linear-gradient(to top right, transparent calc(50% - 0.6px), var(--tab-line) calc(50% - 0.6px), var(--tab-line) calc(50% + 0.6px), var(--card) calc(50% + 0.6px));
   }
   .form-cta:not(:disabled):hover::after {
     animation: sweep 0.75s cubic-bezier(0.3, 0.6, 0.2, 1);
@@ -576,4 +571,5 @@
     min-height: 3rem;
   }
 }
+
 
