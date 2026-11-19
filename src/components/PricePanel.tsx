@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Check, Clock, Copy, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Copy, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EquitySearchInput } from "@/components/EquitySearch";
 import { LineChart } from "@/components/LineChart";
@@ -49,26 +49,23 @@ function Field({ id, label, hint, error, children }: { id: string; label: string
   );
 }
 
-/** The price around the moment, with that moment marked. */
+/** The prices around the moment, with that moment marked and its price written on the marker. */
 function PriceChart({ r }: { r: HistoricalPriceResult }) {
   const points = r.series.map((s) => ({ x: s.t * 1000, y: s.usd }));
   const span = points[points.length - 1].x - points[0].x;
   const isNow = r.when.description.startsWith("now");
-  const label = isNow ? "now" : r.when.precision === "day" ? "day's close" : `${r.when.timeUtc} UTC`;
+  const when = isNow ? "now" : r.when.precision === "day" ? "close" : `${r.when.timeUtc} UTC`;
   const name = r.asset.symbol ?? r.asset.name ?? "The price";
   return (
-    <div className="flex flex-col gap-2">
-      <LineChart
-        series={[{ key: "price", label: `${name} price`, area: true, points }]}
-        yFormat={formatUsdPrice}
-        zeroBaseline={false}
-        withClock={span < 3 * 86_400_000}
-        marker={{ x: Date.parse(r.when.instantUtc), label }}
-        height={230}
-        ariaLabel={`Line chart of the ${name} price around ${r.when.description}. The marked moment was ${formatUsdPrice(r.price.usd)}.`}
-      />
-      <p className="text-xs text-muted-foreground">The marked line is the moment you asked about. Hover or use the arrow keys to read other points. Each point is a {r.price.resolution === "daily" ? "day's close" : r.price.resolution === "hourly snapshot" ? "snapshot" : `${r.price.resolution} candle close`}.</p>
-    </div>
+    <LineChart
+      series={[{ key: "price", label: `${name} price`, area: true, points }]}
+      yFormat={formatUsdPrice}
+      zeroBaseline={false}
+      withClock={span < 3 * 86_400_000}
+      marker={{ x: Date.parse(r.when.instantUtc), label: `${when} · ${formatUsdPrice(r.price.usd)}` }}
+      height={230}
+      ariaLabel={`Line chart of the ${name} price around ${r.when.description}. The marked moment was ${formatUsdPrice(r.price.usd)}.`}
+    />
   );
 }
 
@@ -157,12 +154,28 @@ export function PricePanel() {
   const apiUrl = () => `${window.location.origin}/api/v1/historical-price?format=text&q=${encodeURIComponent(line)}`;
   const selectContent = "rounded-none border border-border bg-popover ring-0";
 
+  // What the result shows beside the price: the candle when there is one, and the split figure for a stock that has split.
+  const details: { k: string; v: string }[] = result
+    ? [
+        ...(result.price.open !== null
+          ? [
+              { k: "Open", v: formatUsdPrice(result.price.open) },
+              { k: "High", v: formatUsdPrice(result.price.high ?? result.price.open) },
+              { k: "Low", v: formatUsdPrice(result.price.low ?? result.price.open) },
+              { k: "Close", v: formatUsdPrice(result.price.close ?? result.price.usd) },
+            ]
+          : []),
+        ...(result.price.volumeUsd !== null ? [{ k: "Volume", v: `$${Math.round(result.price.volumeUsd).toLocaleString("en-US")}` }] : []),
+        ...(result.price.splitAdjustedUsd !== undefined ? [{ k: "In today's shares", v: formatUsdPrice(result.price.splitAdjustedUsd) }] : []),
+      ]
+    : [];
+
   return (
     <div className="mt-6 flex flex-col gap-6 sm:mt-8 sm:gap-8">
-      <form onSubmit={submit} noValidate className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-6">
+      <form onSubmit={submit} noValidate className="flex flex-col gap-5 border border-border bg-card p-4 sm:p-6">
         <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-4">
-          <div className="flex flex-col gap-4 min-[480px]:col-span-2 lg:col-span-4 lg:grid lg:grid-cols-4">
-            <div className="lg:col-span-1">
+          <div className="min-[480px]:col-span-2 lg:col-span-4 lg:grid lg:grid-cols-4 lg:gap-4">
+            <div className="mb-4 lg:mb-0">
               <Field id="market" label="Chain" error={fieldErrors.market}>
                 <Select
                   value={market}
@@ -224,33 +237,41 @@ export function PricePanel() {
           </div>
 
           <div className="min-[480px]:col-span-2">
-            <Field id="date" label="Date" error={fieldErrors.date} hint="15/09/2026, September 15, 5 days ago, 3 months ago, yesterday, or now.">
-              <Input id="date" className="form-control-h text-sm" value={date} onChange={(e) => setDate(e.target.value)} placeholder="e.g. 15/09/2026 or 5 days ago" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.date} />
-              <div className="flex flex-wrap gap-1.5">
+            <Field id="date" label="Date" error={fieldErrors.date}>
+              <Input id="date" className="form-control-h text-sm" value={date} onChange={(e) => setDate(e.target.value)} placeholder="15/09/2026, September 15, or 5 days ago" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.date} />
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
                 {DATE_CHIPS.map((c) => (
-                  <Button key={c} type="button" variant="outline" size="sm" className="h-7 w-auto! rounded-none px-2 text-xs" onClick={() => setDate(c)}>
+                  <button key={c} type="button" className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={() => setDate(c)}>
                     {c}
-                  </Button>
+                  </button>
                 ))}
               </div>
             </Field>
           </div>
-          <Field id="time" label="Time (optional)" error={fieldErrors.time} hint="13:40 or 1:40pm. Leave empty for the day's closing price.">
-            <Input id="time" className="form-control-h text-sm" value={time} onChange={(e) => setTime(e.target.value)} placeholder="13:40" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.time} />
+          <Field id="time" label="Time" error={fieldErrors.time} hint="Optional. Empty means the day's close.">
+            <Input id="time" className="form-control-h text-sm" value={time} onChange={(e) => setTime(e.target.value)} placeholder="13:40 or 1:40pm" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.time} />
           </Field>
-          <Field id="tz" label="Timezone (optional)" error={fieldErrors.tz} hint="UTC if empty. Try UTC+1, EST or Europe/London.">
+          <Field id="tz" label="Timezone" error={fieldErrors.tz}>
             <Input id="tz" className="form-control-h text-sm" value={tz} onChange={(e) => setTz(e.target.value)} placeholder="UTC" autoComplete="off" spellCheck={false} aria-invalid={!!fieldErrors.tz} />
-            <Button type="button" variant="outline" size="sm" className="h-7 w-auto! self-start rounded-none px-2 text-xs" onClick={() => setTz(Intl.DateTimeFormat().resolvedOptions().timeZone)}>
+            <button type="button" className="self-start text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" onClick={() => setTz(Intl.DateTimeFormat().resolvedOptions().timeZone)}>
               Use my timezone
-            </Button>
+            </button>
           </Field>
         </div>
 
-        <p aria-live="polite" className={`flex items-start gap-2 border-l-2 pl-3 text-sm ${reading && !reading.ok ? "border-foreground font-bold" : "border-border text-muted-foreground"}`}>
-          <Clock className="mt-0.5 size-4 shrink-0" aria-hidden />
-          <span>
-            {reading === null ? "Reading your date…" : reading.ok ? <>Reads as <b className="text-foreground">{reading.value.description}</b>{reading.value.assumptions.length > 0 && ` · ${reading.value.assumptions.join(" ")}`}</> : reading.error}
-          </span>
+        {/* The one thing this page does that others don't: it shows how your words were read, before you commit. */}
+        <p aria-live="polite" className={`border-l-2 pl-4 text-base leading-snug ${reading && !reading.ok ? "border-foreground font-bold" : "border-foreground"}`}>
+          {reading === null ? (
+            <span className="text-muted-foreground">Reading your date…</span>
+          ) : reading.ok ? (
+            <>
+              <span className="text-muted-foreground">Reads as </span>
+              <b>{reading.value.description}</b>
+              {reading.value.assumptions.length > 0 && <span className="mt-1 block text-sm text-muted-foreground">{reading.value.assumptions.join(" ")}</span>}
+            </>
+          ) : (
+            reading.error
+          )}
         </p>
 
         <Button type="submit" disabled={loading} className="form-cta h-12 w-full gap-2 rounded-none border-2 border-foreground text-base font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
@@ -258,16 +279,15 @@ export function PricePanel() {
           {loading ? "Looking up" : "Get price"}
         </Button>
 
-        <div className="flex flex-col gap-1.5">
-          <span className="text-sm text-muted-foreground">Or try a ready-made lookup</span>
-          <div className="flex flex-wrap gap-2">
-            {PRICE_EXAMPLES.map((ex) => (
-              <Button key={ex.id} type="button" variant="outline" disabled={loading} className="h-9 w-auto! rounded-none px-3 text-xs sm:text-sm" onClick={() => runExample(ex)}>
-                {ex.label}
-              </Button>
-            ))}
-          </div>
-        </div>
+        {/* Shortcuts, not controls: plain underlined text, so they don't read as more fields or buttons. */}
+        <p className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5 text-sm">
+          <span className="text-muted-foreground">Try one:</span>
+          {PRICE_EXAMPLES.map((ex) => (
+            <button key={ex.id} type="button" disabled={loading} className="underline underline-offset-4 hover:text-muted-foreground disabled:opacity-50" onClick={() => runExample(ex)}>
+              {ex.label}
+            </button>
+          ))}
+        </p>
       </form>
 
       {error && (
@@ -280,41 +300,44 @@ export function PricePanel() {
       {result && !loading && (
         <section className="flex flex-col gap-5 border border-border bg-card p-4 sm:p-6" aria-label="Price result">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-bold tracking-tight">{result.asset.name ?? result.asset.symbol ?? "Token"}</h2>
+            <h2 className="text-lg font-bold tracking-tight">{result.asset.name ?? result.asset.symbol ?? "Token"}</h2>
             {result.asset.symbol && <span className="text-sm text-muted-foreground">{result.asset.symbol}</span>}
-            <Badge variant="outline" className="rounded-none font-normal">
-              {result.asset.market === "stock" ? "Stock" : result.asset.market}
-            </Badge>
             <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
-              {result.price.resolution}
+              {result.asset.market === "stock" ? "Stock" : result.asset.market}
             </Badge>
           </div>
 
-          <div className="flex flex-col gap-1 border-l-2 border-foreground pl-4">
-            <p className="text-3xl font-bold tabular-nums sm:text-4xl">{formatUsdPrice(result.price.usd)}</p>
-            <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">{result.answer}</p>
+          {/* The answer, once: the price, when it was, and how it has moved. */}
+          <div className="flex flex-col gap-1.5 border-l-2 border-foreground pl-4">
+            <p className="text-4xl font-bold tabular-nums sm:text-5xl">{formatUsdPrice(result.price.usd)}</p>
+            <p className="text-sm sm:text-base">
+              {result.when.description}
+              {result.current && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · now {formatUsdPrice(result.current.usd)}, {result.current.changePercent >= 0 ? "+" : ""}
+                  {result.current.changePercent.toLocaleString("en-US")}% since
+                </span>
+              )}
+            </p>
           </div>
 
           {result.series.length >= 3 && <PriceChart r={result} />}
 
-          <dl className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
-            {[
-              { k: "Moment (UTC)", v: result.when.precision === "day" ? `${result.when.dateUtc}, closing price` : asOf(result.when.instantUtc) },
-              { k: "Price set", v: result.price.ageSeconds > 60 ? `${asOf(result.price.asOfUtc)} (${formatAge(result.price.ageSeconds)} earlier)` : asOf(result.price.asOfUtc) },
-              ...(result.current ? [{ k: "Now", v: `${formatUsdPrice(result.current.usd)} (${result.current.changePercent >= 0 ? "+" : ""}${result.current.changePercent.toLocaleString("en-US")}% since)` }] : []),
-              ...(result.price.volumeUsd !== null ? [{ k: "Volume in that period", v: `$${Math.round(result.price.volumeUsd).toLocaleString("en-US")}` }] : []),
-              ...(result.price.open !== null ? [{ k: "Open", v: formatUsdPrice(result.price.open) }, { k: "High", v: formatUsdPrice(result.price.high ?? result.price.open) }, { k: "Low", v: formatUsdPrice(result.price.low ?? result.price.open) }, { k: "Close", v: formatUsdPrice(result.price.close ?? result.price.usd) }] : []),
-              ...(result.price.splitAdjustedUsd !== undefined ? [{ k: "In today's shares", v: formatUsdPrice(result.price.splitAdjustedUsd) }] : []),
-            ].map((c) => (
-              <div key={c.k} className="flex flex-col gap-0.5 bg-card p-3">
-                <dt className="text-xs text-muted-foreground">{c.k}</dt>
-                <dd className="text-sm font-bold break-words tabular-nums">{c.v}</dd>
-              </div>
-            ))}
-          </dl>
+          {details.length > 0 && (
+            <dl className="flex flex-wrap gap-x-8 gap-y-3 border-y border-border py-3">
+              {details.map((c) => (
+                <div key={c.k} className="flex flex-col gap-0.5">
+                  <dt className="text-xs text-muted-foreground">{c.k}</dt>
+                  <dd className="text-sm font-bold tabular-nums">{c.v}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
 
           <p className="text-sm text-muted-foreground">
-            Read as {result.price.basis}. Source:{" "}
+            {result.price.resolution} price: {result.price.basis}
+            {result.price.ageSeconds > 60 && `, set ${formatAge(result.price.ageSeconds)} earlier (${asOf(result.price.asOfUtc)})`}. Source:{" "}
             <a href={result.source.url} target="_blank" rel="noopener noreferrer nofollow" className="underline underline-offset-2 hover:text-foreground">
               {result.source.label}
             </a>
@@ -332,21 +355,23 @@ export function PricePanel() {
             </ul>
           )}
 
-          <div className="flex flex-col gap-2 border-t border-border pt-4">
-            <p className="text-sm text-muted-foreground">The same lookup from a chat bot or another app:</p>
-            {[
-              { key: "command", label: "Bot command", text: command },
-              { key: "api", label: "API call (plain text for chat)", text: null as string | null },
-            ].map((row) => (
-              <div key={row.key} className="flex flex-col gap-1 sm:flex-row sm:items-center">
-                <code className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-xs break-all">{row.text ?? apiUrl()}</code>
-                <Button type="button" variant="outline" className="form-control-h w-full rounded-none sm:w-auto" onClick={() => copy(row.text ?? apiUrl(), row.key)} aria-label={`Copy ${row.label}`}>
-                  {copied === row.key ? <Check /> : <Copy />}
-                  {copied === row.key ? "Copied" : "Copy"}
-                </Button>
-              </div>
-            ))}
-          </div>
+          <details className="group border-t border-border pt-4">
+            <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Use this lookup in a bot or app</summary>
+            <div className="mt-3 flex flex-col gap-2">
+              {[
+                { key: "command", label: "Bot command", text: command },
+                { key: "api", label: "API call (plain text for chat)", text: null as string | null },
+              ].map((row) => (
+                <div key={row.key} className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                  <code className="min-w-0 flex-1 border border-border bg-background px-3 py-2 text-xs break-all">{row.text ?? apiUrl()}</code>
+                  <Button type="button" variant="outline" className="form-control-h w-full rounded-none sm:w-auto" onClick={() => copy(row.text ?? apiUrl(), row.key)} aria-label={`Copy ${row.label}`}>
+                    {copied === row.key ? <Check /> : <Copy />}
+                    {copied === row.key ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </details>
         </section>
       )}
     </div>

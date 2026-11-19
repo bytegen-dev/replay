@@ -18,8 +18,8 @@ export default function PricePage() {
           <Link href="/" className="flex min-w-0 flex-1 items-center gap-3">
             <Image src="/dca-logo.png" alt="" width={40} height={40} className="size-10 shrink-0 object-contain" />
             <div className="min-w-0">
-              <p className="text-[0.6rem] font-bold tracking-[0.18em] text-muted-foreground uppercase sm:text-[0.65rem] sm:tracking-[0.2em]">Price lookup</p>
-              <span className="text-xl font-bold tracking-tight sm:text-3xl">Dripcast</span>
+              <p className="text-xs text-muted-foreground sm:text-sm">Price lookup</p>
+              <span className="text-xl font-bold tracking-tight sm:text-3xl">DCA</span>
             </div>
           </Link>
           <SiteNav />

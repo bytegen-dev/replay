@@ -83,7 +83,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
       <div className="grid grid-cols-1 gap-px border border-border bg-border min-[400px]:grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
         {tiles.map(({ key, value, highlight }) => (
           <div key={key} className={`flex flex-col gap-1 p-4 ${highlight ? "bg-secondary" : "bg-card"}`}>
-            <span className="text-xs tracking-wide text-muted-foreground uppercase">{key}</span>
+            <span className="text-sm text-muted-foreground">{key}</span>
             <span className="text-base font-bold break-all tabular-nums sm:text-lg">{value}</span>
           </div>
         ))}

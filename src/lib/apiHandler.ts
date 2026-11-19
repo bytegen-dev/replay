@@ -68,7 +68,7 @@ export async function guarded(request: Request, handler: () => Promise<Response>
   const key = presentedKey(request);
   const valid = key !== null && keys.some((k) => sameKey(k, key));
   if (keys.length > 0 && !valid) {
-    return apiError(401, key ? "invalid_api_key" : "api_key_required", key ? "That API key is not valid." : "This API needs a key. Send it as `Authorization: Bearer <key>` or `x-api-key: <key>`.", undefined, { "www-authenticate": 'Bearer realm="dripcast"' });
+    return apiError(401, key ? "invalid_api_key" : "api_key_required", key ? "That API key is not valid." : "This API needs a key. Send it as `Authorization: Bearer <key>` or `x-api-key: <key>`.", undefined, { "www-authenticate": 'Bearer realm="dca"' });
   }
 
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";

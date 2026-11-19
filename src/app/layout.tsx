@@ -6,9 +6,9 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "Dripcast", template: "%s | Dripcast" },
+  title: { default: "DCA", template: "%s | DCA" },
   description: "What a fixed monthly buy of a stock or token would be worth today.",
-  applicationName: "Dripcast",
+  applicationName: "DCA",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
@@ -20,20 +20,20 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Dripcast",
+    title: "DCA",
     statusBarStyle: "black-translucent",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "Dripcast",
-    title: "Dripcast",
+    siteName: "DCA",
+    title: "DCA",
     description: "Backtest a fixed monthly purchase of any stock or token, month by month.",
-    images: [{ url: "/og-image.png", width: 512, height: 512, alt: "Dripcast" }],
+    images: [{ url: "/og-image.png", width: 512, height: 512, alt: "DCA" }],
   },
   twitter: {
     card: "summary",
-    title: "Dripcast",
+    title: "DCA",
     description: "Backtest a fixed monthly purchase of any stock or token, month by month.",
     images: ["/og-image.png"],
   },

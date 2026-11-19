@@ -1,3 +1,4 @@
+import { isMajorSymbol } from "./majors.ts";
 import { fmtNum, fmtPct, fmtUsd } from "./format.ts";
 import { buildBuys, chooseDecimals, summarize } from "./math.ts";
 import { compressMonths } from "./months.ts";
@@ -68,9 +69,9 @@ export function toApiResult(res: DcaResponse, req: DcaRequest, detail: "summary"
   const decimals = chooseDecimals(res.rows, req.amount);
   const buys = buildBuys(res.rows, req.amount, res.currentPrice, {}, decimals);
   const s = summarize(buys, res.currentPrice);
-  const unit = res.chain === "equity" ? "shares" : "tokens";
+  const unit = res.chain === "equity" && !isMajorSymbol(res.address) ? "shares" : "tokens";
   const symbol = res.token.symbol?.replace(/^\$/, "").toUpperCase() ?? res.token.name ?? "units";
-  const market = res.chain === "equity" ? "stock" : res.chain;
+  const market = res.chain === "equity" ? (isMajorSymbol(res.address) ? "crypto" : "stock") : res.chain;
 
   const out: ApiResult = {
     answer: describeResult({ amount: req.amount, symbol, unit, priced: s.pricedMonths, total: buys.length, skipped: s.skippedMonths, invested: s.invested, units: s.tokens, decimals, valueToday: s.valueToday, gain: s.gain, gainPct: s.gainPct }),

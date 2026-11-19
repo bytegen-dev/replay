@@ -12,7 +12,7 @@ const BOLD = { bold: true };
 export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   const { buys, summary, decimals } = prepare(p);
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Dripcast";
+  wb.creator = "DCA";
 
   const n = buys.length;
   const last = n + 1; // header is row 1
@@ -67,7 +67,7 @@ export async function buildWorkbook(p: ExportPayload): Promise<Buffer> {
   ];
   sum.getRow(1).height = 44;
   sum.mergeCells("B1:D1");
-  sum.getCell("B1").value = "Dripcast";
+  sum.getCell("B1").value = "DCA";
   sum.getCell("B1").font = { bold: true, size: 14 };
   sum.getCell("B1").alignment = { vertical: "middle" };
   if (fs.existsSync(LOGO_PATH)) {

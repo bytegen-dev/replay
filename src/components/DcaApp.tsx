@@ -6,10 +6,8 @@ import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/Dca
 import { MonthPicker } from "@/components/MonthPicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
 import { GrowthChart } from "@/components/GrowthChart";
-import { StockPicker } from "@/components/StockPicker";
 import { TokenDetails } from "@/components/TokenDetails";
 import { TokenSearchInput } from "@/components/TokenSearch";
-import { type XStock } from "@/lib/xstocks.ts";
 import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -27,6 +25,7 @@ import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
 import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel } from "@/lib/months.ts";
 import { CHAINS, CHAIN_LABELS, MARKET_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
+import { MAJORS, isMajorSymbol } from "@/lib/majors.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
 
 function shiftMonth(m: string, delta: number): string {
@@ -96,15 +95,18 @@ function Field({ id, label, error, children }: { id: string; label: string; erro
 export function DcaApp() {
   const [address, setAddress] = useState("");
   const [chain, setChain] = useState<Chain>("ethereum");
-  // "stock" mode picks a tokenized stock (xStock) from a list instead of typing an address; it is always Solana.
-  // "equity" is an ordinary listed stock or ETF, looked up by ticker.
-  const [mode, setMode] = useState<"token" | "stock" | "equity">("token");
+  // "equity" is an ordinary listed stock or ETF, looked up by ticker. It is the default; "token" is an on-chain token.
+  const [mode, setMode] = useState<"token" | "equity">("equity");
+  // Inside Crypto: a major coin picked from a short list (long history), or any token by address (pool history).
+  const [cryptoKind, setCryptoKind] = useState<"major" | "token">("major");
+  const [major, setMajor] = useState("BTC-USD");
+  const isMajor = mode === "token" && cryptoKind === "major";
+  const usesYahoo = mode === "equity" || isMajor;
   const [ticker, setTicker] = useState("");
   const [tickerName, setTickerName] = useState("");
   const [reinvest, setReinvest] = useState(false);
   // The line of context shown under a ready-made check's result.
   const [exampleNote, setExampleNote] = useState<string | null>(null);
-  const [stock, setStock] = useState<XStock | null>(null);
   const [amount, setAmount] = useState("500");
   // Defaults depend on the current date, so set them after mount (not during prerender).
   const [startMonth, setStartMonth] = useState("");
@@ -112,7 +114,7 @@ export function DcaApp() {
   const [formReady, setFormReady] = useState(false);
   useEffect(() => {
     const id = setTimeout(() => {
-      setStartMonth((s) => s || shiftMonth(currentMonth(), -12));
+      setStartMonth((s) => s || shiftMonth(currentMonth(), -120));
       setEndMonth((e) => e || shiftMonth(currentMonth(), -1));
       setFormReady(true);
     }, 0);
@@ -154,11 +156,10 @@ export function DcaApp() {
     e.preventDefault();
     const common = { amount: Number(amount), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
-      mode === "equity"
-        ? { address: ticker.trim(), chain: "equity", ...common, ...(reinvest ? { reinvest: true } : {}) }
-        : { address: mode === "stock" ? (stock?.mint ?? "") : address, chain: mode === "stock" ? "solana" : chain, ...common };
+      usesYahoo
+        ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
+        : { address, chain, ...common };
     const errs = validateRequest(input);
-    if (mode === "stock" && !stock) errs.address = "Pick a stock from the list";
     setErrors(errs);
     if (Object.keys(errs).length) return;
     setExampleNote(null);
@@ -263,7 +264,7 @@ export function DcaApp() {
       rows: data.rows,
       overrides,
       sources: data.sources,
-      unit: data.chain === "equity" ? "shares" : "tokens",
+      unit: isEquity ? "shares" : "tokens",
     };
     try {
       await downloadFile("/api/export/xlsx", payload, xlsxFileName(payload));
@@ -291,7 +292,7 @@ export function DcaApp() {
       overrides,
       sources: data.sources,
       warnings: data.warnings,
-      unit: data.chain === "equity" ? "shares" : "tokens",
+      unit: isEquity ? "shares" : "tokens",
     };
     try {
       const res = await fetch("/api/share", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
@@ -334,7 +335,7 @@ export function DcaApp() {
 
   const shareStale = share !== null && share.edits !== JSON.stringify(overrides);
 
-  const isEquity = data?.chain === "equity";
+  const isEquity = data?.chain === "equity" && !isMajorSymbol(data.address);
   const selectContent = "rounded-none border border-border bg-popover ring-0";
 
   const statTiles: { key: string; value: string; highlight?: boolean }[] = computed
@@ -375,11 +376,12 @@ export function DcaApp() {
                   value={mode}
                   onValueChange={(v) => {
                     if (!v) return;
-                    const next = v as "token" | "stock" | "equity";
+                    const next = v as "token" | "equity";
                     const end = endMonth || shiftMonth(currentMonth(), -1);
+                    const longHistory = next === "equity" || cryptoKind === "major";
                     // Stocks have decades of history, tokens at most six years: move the start so the range stays valid.
-                    if (next === "equity" && (!startMonth || startMonth > shiftMonth(end, -59))) setStartMonth(shiftMonth(end, -119));
-                    if (next !== "equity" && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
+                    if (longHistory && (!startMonth || startMonth > shiftMonth(end, -59))) setStartMonth(shiftMonth(end, -119));
+                    if (!longHistory && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
                     setMode(next);
                     setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
                   }}
@@ -388,9 +390,8 @@ export function DcaApp() {
                 >
                   {(
                     [
-                      ["token", "Token"],
-                      ["stock", "xStocks"],
                       ["equity", "Stocks"],
+                      ["token", "Crypto"],
                     ] as const
                   ).map(([v, label]) => (
                     <ToggleGroupItem
@@ -402,9 +403,50 @@ export function DcaApp() {
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
+                {mode === "token" && (
+                  <div role="group" aria-label="Kind of crypto" className="mt-3 flex gap-4 text-sm">
+                    {(
+                      [
+                        ["major", "Majors"],
+                        ["token", "Other tokens"],
+                      ] as const
+                    ).map(([v, label]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        aria-pressed={cryptoKind === v}
+                        onClick={() => {
+                          const end = endMonth || shiftMonth(currentMonth(), -1);
+                          if (v === "major" && (!startMonth || startMonth > shiftMonth(end, -35))) setStartMonth(shiftMonth(end, -59));
+                          if (v === "token" && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
+                          setCryptoKind(v);
+                          setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
+                        }}
+                        className={cn("underline-offset-4", cryptoKind === v ? "font-bold underline decoration-2" : "text-muted-foreground hover:text-foreground hover:underline")}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="min-[480px]:col-span-2">
-                {mode === "equity" ? (
+                {isMajor ? (
+                  <Field id="major" label="Coin">
+                    <Select value={major} onValueChange={setMajor}>
+                      <SelectTrigger id="major" className="form-control-h w-full rounded-none">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className={selectContent}>
+                        {MAJORS.map((m) => (
+                          <SelectItem key={m.symbol} value={m.symbol} className="rounded-none">
+                            {m.name} ({m.ticker})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                ) : mode === "equity" ? (
                   <Field id="ticker" label="Search or enter a ticker" error={errors.address}>
                     <EquitySearchInput
                       id="ticker"
@@ -421,11 +463,6 @@ export function DcaApp() {
                       }}
                     />
                     {tickerName && <p className="text-xs text-muted-foreground">{tickerName}</p>}
-                  </Field>
-                ) : mode === "stock" ? (
-                  <Field id="stock" label="Stock (tokenized, on Solana)" error={errors.address}>
-                    <StockPicker id="stock" value={stock} invalid={!!errors.address} onChange={(s) => (setStock(s), setErrors((e) => ({ ...e, address: undefined })))} />
-                    {stock && <p className="text-xs break-all text-muted-foreground">{stock.mint}</p>}
                   </Field>
                 ) : (
                   <Field id="address" label={chain === "cardano" ? "Search or paste policy ID" : "Search or paste contract address"} error={errors.address}>
@@ -445,7 +482,7 @@ export function DcaApp() {
                   </Field>
                 )}
               </div>
-              {mode === "equity" ? (
+              {isMajor ? null : mode === "equity" ? (
                 <Field id="reinvest" label="Dividends">
                   <ToggleGroup
                     type="single"
@@ -474,7 +511,7 @@ export function DcaApp() {
                 </Field>
               ) : (
                 <Field id="chain" label="Chain" error={errors.chain}>
-                  <Select value={mode === "stock" ? "solana" : chain} disabled={mode === "stock"} onValueChange={(v) => setChain(v as Chain)}>
+                  <Select value={chain} onValueChange={(v) => setChain(v as Chain)}>
                     <SelectTrigger id="chain" className="form-control-h w-full rounded-none">
                       <SelectValue />
                     </SelectTrigger>
@@ -499,10 +536,10 @@ export function DcaApp() {
                 />
               </Field>
               <Field id="startMonth" label="Start month" error={errors.startMonth}>
-                <MonthPicker id="startMonth" value={startMonth} minYear={mode === "equity" ? 1980 : undefined} max={endMonth || undefined} invalid={!!errors.startMonth} onChange={setStartMonth} />
+                <MonthPicker id="startMonth" value={startMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} max={endMonth || undefined} invalid={!!errors.startMonth} onChange={setStartMonth} />
               </Field>
               <Field id="endMonth" label="End month" error={errors.endMonth}>
-                <MonthPicker id="endMonth" value={endMonth} minYear={mode === "equity" ? 1980 : undefined} min={startMonth || undefined} invalid={!!errors.endMonth} onChange={setEndMonth} />
+                <MonthPicker id="endMonth" value={endMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} min={startMonth || undefined} invalid={!!errors.endMonth} onChange={setEndMonth} />
               </Field>
               <div className="flex flex-col gap-2 min-[480px]:col-span-2">
                 <Field id="basis" label="Price basis" error={errors.basis}>
@@ -567,9 +604,9 @@ export function DcaApp() {
                 <div className="flex flex-col gap-1.5">
                   <span className="text-sm text-muted-foreground">Quick range, ending last month</span>
                   <div className="grid grid-cols-3 gap-2">
-                    {(mode === "equity" ? [60, 120, 240] : [6, 12, 24]).map((n) => (
+                    {(usesYahoo ? (isMajor ? [36, 60, 96] : [60, 120, 240]) : [6, 12, 24]).map((n) => (
                       <Button key={n} type="button" variant="outline" className="form-control-h rounded-none text-sm" onClick={() => applyPreset(n)}>
-                        {mode === "equity" ? `Last ${n / 12} years` : `Last ${n} months`}
+                        {usesYahoo ? `Last ${n / 12} years` : `Last ${n} months`}
                       </Button>
                     ))}
                   </div>
@@ -600,7 +637,7 @@ export function DcaApp() {
         </CardContent>
       </Card>
 
-      <TokenDetails chain={mode === "stock" ? "solana" : chain} address={mode === "equity" ? "" : mode === "stock" ? (stock?.mint ?? "") : address} />
+      <TokenDetails chain={chain} address={usesYahoo ? "" : address} />
 
       {loading && (
         <div className="flex flex-col gap-4">
@@ -631,7 +668,7 @@ export function DcaApp() {
               <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
                 {basisBadgeLabel(data.basis, data.basisDay)}
               </Badge>
-              {data.chain === "equity" && (
+              {data.chain === "equity" && isEquity && (
                 <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
                   {data.reinvest ? "Dividends reinvested" : "Price only"}
                 </Badge>
@@ -672,7 +709,7 @@ export function DcaApp() {
                 )}
               >
                 <CardHeader>
-                  <CardDescription className="text-xs tracking-wide uppercase">{key}</CardDescription>
+                  <CardDescription className="text-sm text-muted-foreground">{key}</CardDescription>
                   <CardTitle className="break-all text-base font-bold tabular-nums sm:text-lg">{value}</CardTitle>
                 </CardHeader>
               </Card>

@@ -1,13 +1,13 @@
 ---
-name: dripcast
-description: Answers "what would $X a month into <stock, ETF or token> since <date> be worth today?" by calling the Dripcast API. Use it whenever someone asks about dollar-cost averaging, monthly or recurring investing, "if I had invested", backtesting a fixed monthly purchase, or comparing what a regular investment into the S&P 500, Apple, Nasdaq, Berkshire, a crypto token or similar would be worth now. Also answers "what was X worth on <date> at <time>?" (the price of a token or stock at a past moment). Covers US stocks and ETFs with decades of history, and tokens on Ethereum, Base, BSC, Arbitrum, Solana and Cardano.
+name: dca
+description: Answers "what would $X a month into <stock, ETF or token> since <date> be worth today?" by calling the DCA API. Use it whenever someone asks about dollar-cost averaging, monthly or recurring investing, "if I had invested", backtesting a fixed monthly purchase, or comparing what a regular investment into the S&P 500, Apple, Nasdaq, Berkshire, a crypto token or similar would be worth now. Also answers "what was X worth on <date> at <time>?" (the price of a token or stock at a past moment). Covers US stocks and ETFs with decades of history, and tokens on Ethereum, Base, BSC, Arbitrum, Solana and Cardano.
 ---
 
-# Dripcast
+# DCA
 
 Backtests a fixed monthly purchase: invest a set dollar amount on the same day every month, then see what the holding is worth today. The API does all the math with real historical prices. Your job is to turn the question into one API call, then report the result faithfully.
 
-**Base URL:** `https://dca-checker-neon.vercel.app` (use `$DRIPCAST_URL` instead if the environment sets it; the address will change if the site is moved to its own domain).
+**Base URL:** `https://dca-checker-neon.vercel.app` (use `$DCA_URL` instead if the environment sets it; the address will change if the site is moved to its own domain).
 **Auth:** none by default. If the server was set up with keys, send `Authorization: Bearer <key>` (or `x-api-key`); a `401` means a key is needed.
 **Machine-readable spec:** `GET /api/v1/openapi.json`.
 

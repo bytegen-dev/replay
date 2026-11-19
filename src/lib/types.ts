@@ -1,13 +1,13 @@
-export const CHAINS = ["cardano", "ethereum", "solana", "base", "bsc", "arbitrum"] as const;
+export const CHAINS = ["ethereum", "solana", "base", "bsc", "arbitrum", "cardano"] as const;
 export type Chain = (typeof CHAINS)[number];
 
 export const CHAIN_LABELS: Record<Chain, string> = {
-  cardano: "Cardano",
   ethereum: "Ethereum",
   solana: "Solana",
   base: "Base",
   bsc: "BSC",
   arbitrum: "Arbitrum",
+  cardano: "Cardano",
 };
 
 /** Everything a request can target: a crypto chain, or "equity" for an ordinary listed stock or ETF (address = ticker). */

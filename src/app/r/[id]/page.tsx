@@ -38,7 +38,7 @@ export default function SharedPage({ params }: { params: Promise<{ id: string }>
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-4 sm:px-6">
           <Link href="/" className="flex items-center gap-3">
             <Image src="/dca-logo.png" alt="" width={40} height={40} className="size-10 shrink-0 object-contain" />
-            <span className="text-xl font-bold tracking-tight">Dripcast</span>
+            <span className="text-xl font-bold tracking-tight">DCA</span>
           </Link>
           <Link href="/" className="ml-auto text-sm underline underline-offset-4">
             Check your own

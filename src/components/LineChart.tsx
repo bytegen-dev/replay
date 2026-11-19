@@ -145,6 +145,17 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
           <path key={s.key} d={line(s.points)} fill="none" stroke={s.dashed ? "var(--muted-foreground)" : "currentColor"} strokeWidth={s.dashed ? 1.5 : 2} strokeDasharray={s.dashed ? "5 4" : undefined} strokeLinejoin="round" strokeLinecap="round" />
         ))}
 
+        {/* Direct labels: each line ends with its own value, so the reader needs no legend lookup. Hidden while hovering. */}
+        {!marker && hoverX === null && series.filter((s) => s.points.length > 1).map((s, i) => {
+          const p = s.points[s.points.length - 1];
+          const above = series.length > 1 && series.filter((o) => o.points.length > 1).every((o) => o === s || sy(o.points[o.points.length - 1].y) >= sy(p.y) || i === 0);
+          return (
+            <text key={`${s.key}-end`} x={sx(p.x)} y={sy(p.y) + (above ? -10 : 16)} textAnchor="end" fontSize="11" fontWeight={s.dashed ? 400 : 700} fill={s.dashed ? "var(--muted-foreground)" : "currentColor"}>
+              {yFormat(p.y)}
+            </text>
+          );
+        })}
+
         {marker && (
           <g>
             <line x1={sx(marker.x)} x2={sx(marker.x)} y1={M.top} y2={M.top + ih} stroke="currentColor" strokeWidth="1" strokeDasharray="3 3" />

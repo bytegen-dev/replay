@@ -1,6 +1,6 @@
-# Dripcast
+# DCA
 
-Dripcast backtests a fixed monthly purchase: pick a US stock or ETF (decades of history) or a token on Ethereum, Base, BSC, Arbitrum, Solana or Cardano, and it shows what the monthly buys would have bought and what they are worth today. It also has a public API and an AI agent skill. Next.js (App Router), TypeScript, Tailwind. Black and white, no accents.
+DCA backtests a fixed monthly purchase: pick a US stock or ETF (decades of history) or a token on Ethereum, Base, BSC, Arbitrum, Solana or Cardano, and it shows what the monthly buys would have bought and what they are worth today. It also has a public API and an AI agent skill. Next.js (App Router), TypeScript, Tailwind. Black and white, no accents.
 
 ## Setup
 
@@ -47,11 +47,9 @@ Once the address is valid, a card appears before you calculate, so a wrong token
 
 The address box is also the search box. Paste an address or policy ID and it works as a plain input, with the details card appearing below. Type a name or ticker and matching tokens drop down (arrow keys and Enter work); the search runs through DexScreener, across Ethereum, Base, BSC, Arbitrum, Solana and Cardano. Picking a result fills in the chain and address. A complete address from a different chain than the one selected also searches, so pasting it finds the token and switches the chain. Half-typed addresses don't search. Each token's pools are summed into one row, results whose own name and ticker don't match the query are dropped, and the rest are ranked by match quality, then liquidity. Pools under $500 of liquidity are hidden (paste the address to use one anyway). Results can be sorted by market cap (the default), liquidity, 24h volume or best match; a token with no value for the chosen key goes last. The market cap is DexScreener's estimate and can be wrong or missing, so check it against the token's details card. Copycat tokens are common, so the list shows the address, price and liquidity to check against the real one. Search covers whatever DexScreener has indexed, so a token with no DEX pool won't appear.
 
-## xStocks
+## Crypto: majors and other tokens
 
-The **xStocks** switch replaces the address field with a searchable list of tokenized stocks and ETFs on Solana (Backed Finance xStocks, such as Tesla `TSLAx`). Search matches name or ticker, and the trailing `x` is optional. Picking one fills in its mint and fixes the chain to Solana, then everything works as for any other token.
-
-The list is not hardcoded. `/api/xstocks` joins CoinGecko's `xstocks-ecosystem` category with each coin's Solana address and keeps the result for one hour; coins without a valid Solana mint are dropped. It uses your `COINGECKO_API_KEY` if set. These tokens trade on-chain around the clock and often in thin pools, so low-volume warnings are common, and a pool's history may start later than the token's launch (older months then show n/a).
+The **Crypto** switch has a **Majors | Other tokens** filter. **Majors** is a short list of the biggest coins (Bitcoin, Ethereum, BNB, XRP, Solana, Cardano, Dogecoin, Litecoin, Chainlink, Avalanche). They are priced from Yahoo Finance's USD pairs, so they have years of daily history (Bitcoin from 2014) with no API key, and run through the same pipeline as stocks. **Other tokens** is the address search described above, limited by what pools and free APIs keep. Through the API, a major is `market=stock&asset=BTC-USD`.
 
 ## Share
 
@@ -81,7 +79,7 @@ CoinGecko always wins on days it has a price. Whatever is still empty after both
 
 ## Stocks
 
-The **Stocks** switch checks ordinary US-listed stocks and ETFs, with decades of history: "what is $100 a month into Apple since 2013 worth today?" Type a ticker or a company name (`AAPL`, `apple`, `BRK-B`, `SPY`) and pick from the matches. (**xStocks** is something different: tokenized stocks that trade on Solana.)
+The **Stocks** switch checks ordinary US-listed stocks and ETFs, with decades of history: "what is $100 a month into Apple since 2013 worth today?" Type a ticker or a company name (`AAPL`, `apple`, `BRK-B`, `SPY`) and pick from the matches.
 
 - **Source:** Yahoo Finance's daily chart data, split-adjusted (Apple's 2014 7-for-1 and 2020 4-for-1 splits are already in the prices, so shares bought in 2013 are counted in today's shares). Ranges can run up to 40 years.
 - **Trading days:** a stock can only be bought on a day the market is open. With the month-end basis each purchase uses the last trading day on or before the month's last day, and with the first-of-month or day-of-month basis the first trading day on or after it, never a day from the neighbouring month. A closed-market month says so in its Note ("Market closed on 2013-03-31; used 2013-03-28").
@@ -163,14 +161,14 @@ Thin tokens can have quiet stretches; those are flagged, never smoothed over. Wh
 // For: /historical-price <address> SOL 13:40 15/09/2026
 const arg = ctx.message.text.replace(/^\/historical-price(@\w+)?\s*/i, "");
 const res = await fetch(`https://YOUR-SITE/api/v1/historical-price?format=text&q=${encodeURIComponent(arg)}`, {
-  headers: { "x-api-key": process.env.DRIPCAST_KEY }, // only if you set DCA_API_KEYS
+  headers: { "x-api-key": process.env.DCA_KEY }, // only if you set DCA_API_KEYS
 });
 await ctx.reply(await res.text());
 ```
 
 ## Agent skill
 
-`skills/dripcast/SKILL.md` teaches an AI agent to use the API: how to turn "$500 a month into the S&P 500 since 1998" into a call, which ticker stands for which index, how to report the answer and its caveats, and what each error means. To use it, copy the `skills/dripcast` folder into your agent's skills directory (for Claude Code, `~/.claude/skills/dripcast` or a project's `.claude/skills/dripcast`). It points at the deployed site by default; set `DRIPCAST_URL` to use another.
+`skills/dca/SKILL.md` teaches an AI agent to use the API: how to turn "$500 a month into the S&P 500 since 1998" into a call, which ticker stands for which index, how to report the answer and its caveats, and what each error means. To use it, copy the `skills/dca` folder into your agent's skills directory (for Claude Code, `~/.claude/skills/dca` or a project's `.claude/skills/dca`). It points at the deployed site by default; set `DCA_URL` to use another.
 
 ## Limits
 

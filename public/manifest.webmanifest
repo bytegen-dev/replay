@@ -1,6 +1,6 @@
 {
-  "name": "Dripcast",
-  "short_name": "Dripcast",
+  "name": "DCA",
+  "short_name": "DCA",
   "description": "What a fixed monthly buy of a stock or token would be worth today.",
   "start_url": "/",
   "scope": "/",

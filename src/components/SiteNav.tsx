@@ -27,6 +27,9 @@ export function SiteNav() {
           </Link>
         );
       })}
+      <a href="https://github.com/bytegen-dev/dripcast" target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline-offset-8 hover:text-foreground hover:underline">
+        Source
+      </a>
     </nav>
   );
 }

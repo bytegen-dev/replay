@@ -10,17 +10,17 @@ export default function Home() {
         <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-[max(1rem,env(safe-area-inset-left))] py-4 pr-[max(1rem,env(safe-area-inset-right))] pt-[max(1rem,env(safe-area-inset-top))] sm:gap-4 sm:px-6 sm:py-5">
           <Image
             src="/dca-logo.png"
-            alt="Dripcast"
+            alt="DCA"
             width={48}
             height={48}
             className="size-10 shrink-0 object-contain sm:size-12"
             priority
           />
           <div className="min-w-0 flex-1">
-            <p className="text-[0.6rem] font-bold tracking-[0.18em] text-muted-foreground uppercase sm:text-[0.65rem] sm:tracking-[0.2em]">
+            <p className="text-xs text-muted-foreground sm:text-sm">
               Backtest
             </p>
-            <h1 className="text-xl font-bold tracking-tight sm:text-3xl">Dripcast</h1>
+            <h1 className="text-xl font-bold tracking-tight sm:text-3xl">DCA</h1>
           </div>
           <SiteNav />
         </div>

@@ -1,3 +1,4 @@
+import { majorFor } from "./majors.ts";
 import { DcaError } from "./errors.ts";
 import { getJson, HttpError } from "./http.ts";
 import { addDays, monthsBetween, targetDate, todayUtc } from "./months.ts";
@@ -235,7 +236,8 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   const symbol = req.address.trim().toUpperCase();
   const months = monthsBetween(req.startMonth, req.endMonth);
   const firstTarget = targetDate(months[0], req.basis, req.basisDay);
-  const reinvest = req.reinvest === true;
+  const major = majorFor(symbol);
+  const reinvest = req.reinvest === true && !major;
 
   let loaded: Loaded;
   try {
@@ -264,7 +266,7 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   if (loaded.staleSince !== null) {
     warnings.push(`Yahoo Finance is not answering right now, so these prices come from a copy saved on ${new Date(loaded.staleSince).toISOString().slice(0, 10)}. Recent months and today's price may be out of date.`);
   }
-  warnings.push(
+  if (!major) warnings.push(
     reinvest
       ? "Dividends are treated as reinvested: prices are adjusted for dividends and splits, so they sit below the actual historical prices."
       : "Prices are adjusted for stock splits only. Dividends are not included; turn on dividend reinvestment for total return.",
@@ -277,7 +279,7 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
 
   const last = days[days.length - 1];
   return {
-    token: { id: symbol, symbol, name: meta.name },
+    token: { id: symbol, symbol: major?.ticker ?? symbol, name: major?.name ?? meta.name },
     chain: "equity",
     address: symbol,
     basis: req.basis,

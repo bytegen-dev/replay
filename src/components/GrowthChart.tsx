@@ -36,14 +36,14 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit }: { buys: 
     <section className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-6" aria-label="Charts">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-base font-bold">{view === "growth" ? "How it grew" : "Price against your average cost"}</h3>
-        <div role="group" aria-label="Chart" className="flex border border-border">
+        <div role="group" aria-label="Chart" className="flex gap-4 text-sm">
           {(
             [
               ["growth", "Growth"],
               ["price", "Price vs your cost"],
             ] as const
           ).map(([v, label]) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} className={cn("h-8 px-3 text-xs sm:text-sm", view === v ? "bg-primary text-primary-foreground" : "hover:bg-muted")}>
+            <button key={v} type="button" aria-pressed={view === v} onClick={() => setView(v)} className={cn("underline-offset-4", view === v ? "font-bold underline decoration-2" : "text-muted-foreground hover:text-foreground hover:underline")}>
               {label}
             </button>
           ))}
