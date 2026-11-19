@@ -3,6 +3,7 @@
 import { AlertTriangle, Check, Clock, Copy, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EquitySearchInput } from "@/components/EquitySearch";
+import { LineChart } from "@/components/LineChart";
 import { TokenSearchInput } from "@/components/TokenSearch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,29 @@ function Field({ id, label, hint, error, children }: { id: string; label: string
       ) : (
         hint && <p className="text-xs text-muted-foreground">{hint}</p>
       )}
+    </div>
+  );
+}
+
+/** The price around the moment, with that moment marked. */
+function PriceChart({ r }: { r: HistoricalPriceResult }) {
+  const points = r.series.map((s) => ({ x: s.t * 1000, y: s.usd }));
+  const span = points[points.length - 1].x - points[0].x;
+  const isNow = r.when.description.startsWith("now");
+  const label = isNow ? "now" : r.when.precision === "day" ? "day's close" : `${r.when.timeUtc} UTC`;
+  const name = r.asset.symbol ?? r.asset.name ?? "The price";
+  return (
+    <div className="flex flex-col gap-2">
+      <LineChart
+        series={[{ key: "price", label: `${name} price`, area: true, points }]}
+        yFormat={formatUsdPrice}
+        zeroBaseline={false}
+        withClock={span < 3 * 86_400_000}
+        marker={{ x: Date.parse(r.when.instantUtc), label }}
+        height={230}
+        ariaLabel={`Line chart of the ${name} price around ${r.when.description}. The marked moment was ${formatUsdPrice(r.price.usd)}.`}
+      />
+      <p className="text-xs text-muted-foreground">The marked line is the moment you asked about. Hover or use the arrow keys to read other points. Each point is a {r.price.resolution === "daily" ? "day's close" : r.price.resolution === "hourly snapshot" ? "snapshot" : `${r.price.resolution} candle close`}.</p>
     </div>
   );
 }
@@ -270,6 +294,8 @@ export function PricePanel() {
             <p className="text-3xl font-bold tabular-nums sm:text-4xl">{formatUsdPrice(result.price.usd)}</p>
             <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">{result.answer}</p>
           </div>
+
+          {result.series.length >= 3 && <PriceChart r={result} />}
 
           <dl className="grid grid-cols-2 gap-px border border-border bg-border sm:grid-cols-4">
             {[

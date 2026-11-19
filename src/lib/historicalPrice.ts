@@ -1,7 +1,7 @@
 import { DcaError } from "./errors.ts";
 import { resolveCardanoUnit } from "./gtCardano.ts";
 import { HttpError } from "./http.ts";
-import { formatAge, formatUsdPrice, pickCandle, toleranceSec, type Basis, type Candle, type Pick as PricePick } from "./priceAt.ts";
+import { formatAge, formatUsdPrice, pickCandle, toleranceSec, toSeries, type Basis, type Candle, type Pick as PricePick } from "./priceAt.ts";
 import {
   cardanoCandles,
   cgSnapshots,
@@ -72,6 +72,8 @@ export interface HistoricalPriceResult {
   };
   /** The price now, and how much it has moved since. Null when it isn't cheaply known. */
   current: { usd: number; changePercent: number } | null;
+  /** Prices around the moment, oldest first, for a small chart. Empty when there are too few to draw. */
+  series: { t: number; usd: number }[];
   source: { label: string; url: string };
   warnings: string[];
 }
@@ -184,6 +186,10 @@ interface Candidate {
   sourceUrl: string;
   /** Source-specific adjustments, filled in by the stock path. */
   extra?: { splitAdjusted?: number; actual?: number };
+  /** The candles this came from, kept so the answer can carry a small chart of the surroundings. */
+  candles?: Candle[];
+  /** How to turn a candle into the price to chart, when that isn't just its close (stocks that have split). */
+  pointPrice?: (c: Candle) => number;
 }
 
 class Attempts {
@@ -242,7 +248,7 @@ const notFound = (a: Attempts, what: string, when: When) =>
 async function coingeckoStep(a: Attempts, p: PriceProviders, coinId: string, instantSec: number, nowSec: number, latest: boolean): Promise<Candidate | null> {
   return a.run("CoinGecko", async () => {
     const { candles, stepSec } = await p.cgSnapshots(coinId, instantSec, nowSec);
-    return { pick: pickCandle(candles, instantSec, 0, latest), res: stepSec, label: snapshotLabel(stepSec), sourceLabel: "CoinGecko market data", sourceUrl: `https://www.coingecko.com/en/coins/${coinId}` };
+    return { pick: pickCandle(candles, instantSec, 0, latest), res: stepSec, label: snapshotLabel(stepSec), sourceLabel: "CoinGecko market data", sourceUrl: `https://www.coingecko.com/en/coins/${coinId}`, candles };
   });
 }
 
@@ -272,8 +278,9 @@ async function resolveToken(req: HistoricalPriceRequest, ctx: Ctx, p: PriceProvi
         found = a.take(
           await a.run("GeckoTerminal", async () => {
             const res = GT_RESOLUTION[tf];
-            const pick = pickCandle(await p.gtCandles(pool, tf, ctx.instantSec), ctx.instantSec, res, ctx.latest);
-            return { pick, res, label: resolutionLabel(res), sourceLabel: `GeckoTerminal pool candles (${tf})`, sourceUrl: `https://www.geckoterminal.com/${pool.network}/pools/${pool.pool}` };
+            const candles = await p.gtCandles(pool, tf, ctx.instantSec);
+            const pick = pickCandle(candles, ctx.instantSec, res, ctx.latest);
+            return { pick, res, label: resolutionLabel(res), sourceLabel: `GeckoTerminal pool candles (${tf})`, sourceUrl: `https://www.geckoterminal.com/${pool.network}/pools/${pool.pool}`, candles };
           }),
           ctx.latest,
         );
@@ -336,8 +343,9 @@ async function resolveCardano(req: HistoricalPriceRequest, ctx: Ctx, p: PricePro
       found = a.take(
         await a.run("DexHunter", async () => {
           const res = CARDANO_RESOLUTION[period];
-          const pick = pickCandle(await p.cardanoCandles(unit, period, ctx.instantSec), ctx.instantSec, res, ctx.latest);
-          return { pick, res, label: resolutionLabel(res), sourceLabel: "DexHunter Cardano DEX charts, converted to USD with Bitstamp ADA/USD", sourceUrl: "https://dexhunter.gitbook.io/dexhunter-partners/data/charts" };
+          const candles = await p.cardanoCandles(unit, period, ctx.instantSec);
+          const pick = pickCandle(candles, ctx.instantSec, res, ctx.latest);
+          return { pick, res, label: resolutionLabel(res), sourceLabel: "DexHunter Cardano DEX charts, converted to USD with Bitstamp ADA/USD", sourceUrl: "https://dexhunter.gitbook.io/dexhunter-partners/data/charts", candles };
         }),
         ctx.latest,
       );
@@ -393,7 +401,7 @@ async function resolveEquity(req: HistoricalPriceRequest, ctx: Ctx, p: PriceProv
     const c = await a.run("Yahoo Finance", async () => {
       const bars = await p.equityBars(symbol, interval, ctx.instantSec);
       const pick = pickCandle(bars, ctx.instantSec, res, ctx.latest);
-      return { pick, res, label: resolutionLabel(res), sourceLabel: "Yahoo Finance intraday prices", sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/` } as Candidate;
+      return { pick, res, label: resolutionLabel(res), sourceLabel: "Yahoo Finance intraday prices", sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/`, candles: bars } as Candidate;
     });
     // For a stock, "no trades lately" mostly means the market was closed, which is not worth a coarser source.
     if (c?.pick && (ctx.latest || c.pick.staleSec <= MARKET_CLOSED_MAX_SEC)) {
@@ -413,7 +421,17 @@ async function resolveEquity(req: HistoricalPriceRequest, ctx: Ctx, p: PriceProv
     const endSec = ctx.fine ? dateSec(new Date(ctx.instantSec * 1000).toISOString().slice(0, 10)) + 86400 : ctx.instantSec;
     const pick = pickCandle(dailyCandles, endSec, 86400, false);
     if (pick) {
-      chosen = { pick, res: 86400, label: "daily", sourceLabel: "Yahoo Finance daily history", sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/history/` };
+      // Chart the surrounding weeks, each close at what the stock actually traded at that day.
+      const around = dailyCandles.filter((c) => Math.abs(c.t - endSec) <= 45 * 86400);
+      chosen = {
+        pick,
+        res: 86400,
+        label: "daily",
+        sourceLabel: "Yahoo Finance daily history",
+        sourceUrl: `https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}/history/`,
+        candles: around,
+        pointPrice: (c) => c.close * splitFactorAfter(meta.splits, new Date(c.t * 1000).toISOString().slice(0, 10)),
+      };
       if (ctx.fine && !ctx.latest) warnings.push(interval === null ? "Intraday prices only go back about two years, so this is the closing price of that day." : "No intraday prices were found for that time, so this is the closing price of that day.");
       const lastTradingDay = new Date((pick.candle.t) * 1000).toISOString().slice(0, 10);
       const wanted = new Date((endSec - 1) * 1000).toISOString().slice(0, 10);
@@ -531,6 +549,7 @@ export async function historicalPrice(req: HistoricalPriceRequest, nowMs: number
       ...(chosen.extra?.splitAdjusted !== undefined ? { splitAdjustedUsd: chosen.extra.splitAdjusted } : {}),
     },
     current: r.current !== null && r.current > 0 && reported > 0 ? { usd: r.current, changePercent: Math.round((r.current / reported - 1) * 10000) / 100 } : null,
+    series: ((s) => (s.length >= 3 ? s : []))(toSeries(chosen.candles ?? [], pick.resolutionSec, chosen.pointPrice ?? ((c) => c.close * scale))),
     source: { label: chosen.sourceLabel, url: chosen.sourceUrl },
     warnings,
   };

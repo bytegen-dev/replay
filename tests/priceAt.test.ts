@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatAge, formatUsdPrice, pickCandle, toleranceSec, type Candle } from "../src/lib/priceAt.ts";
+import { formatAge, formatUsdPrice, pickCandle, toleranceSec, toSeries, type Candle } from "../src/lib/priceAt.ts";
 
 const c = (t: number, open: number, close: number, extra: Partial<Candle> = {}): Candle => ({ t, open, high: Math.max(open, close), low: Math.min(open, close), close, ...extra });
 const MIN = 60;
@@ -111,6 +111,7 @@ test("prices keep their meaningful digits", () => {
   assert.equal(formatUsdPrice(Number.NaN), "n/a");
   assert.equal(formatUsdPrice(0.00032), "$0.00032", "no meaningless trailing zeros on tiny prices");
   assert.equal(formatUsdPrice(0.00004), "$0.00004");
+  assert.equal(formatUsdPrice(0), "$0", "zero is not '$0.'");
 });
 
 test("a moment exactly where the next candle begins: the last finished candle stands, even across a gap", () => {
@@ -140,4 +141,29 @@ test("a moment partway into a candle, with an earlier gap, still uses the open w
   const p = pickCandle([c(990 * 60, 5, 6), c(t, 7, 9)], t + 30, 60);
   assert.equal(p?.priceUsd, 7);
   assert.equal(p?.basis, "open-of-candle");
+});
+
+test("chart points sit at the end of each candle, where its close was set", () => {
+  const pts = toSeries([c(120, 2, 3), c(60, 1, 2), c(180, 3, 4)], 60, (k) => k.close);
+  assert.deepEqual(pts, [{ t: 120, usd: 2 }, { t: 180, usd: 3 }, { t: 240, usd: 4 }]);
+  // so for a moment at 13:40, the last finished candle's point is exactly there
+  const T = 13 * 3600 + 40 * 60;
+  const near = toSeries([c(T - 120, 1, 1.1), c(T - 60, 1.1, 1.25)], 60, (k) => k.close);
+  assert.equal(near[near.length - 1].t, T);
+});
+
+test("chart points: snapshots keep their own time, bad values and duplicates are dropped, the price can be remapped", () => {
+  const snap = toSeries([{ t: 100, open: 5, high: 5, low: 5, close: 5 }, { t: 100, open: 6, high: 6, low: 6, close: 6 }, { t: 200, open: 0, high: 0, low: 0, close: 0 }, { t: Number.NaN, open: 1, high: 1, low: 1, close: 1 }], 0, (k) => k.close);
+  assert.deepEqual(snap, [{ t: 100, usd: 6 }], "the later duplicate wins; zero and NaN are gone");
+  assert.deepEqual(toSeries([c(0, 1, 2)], 60, (k) => k.close * 10), [{ t: 60, usd: 20 }]);
+});
+
+test("a long series is thinned evenly and always keeps its first and last point", () => {
+  const many = Array.from({ length: 1000 }, (_, i) => c(i * 60, 1, i + 1));
+  const pts = toSeries(many, 60, (k) => k.close, 100);
+  assert.equal(pts.length, 100);
+  assert.equal(pts[0].t, 60);
+  assert.equal(pts[99].t, 1000 * 60);
+  assert.ok(pts.every((p, i) => i === 0 || p.t > pts[i - 1].t), "still in order");
+  assert.equal(toSeries(many.slice(0, 50), 60, (k) => k.close, 100).length, 50, "a short series is left alone");
 });

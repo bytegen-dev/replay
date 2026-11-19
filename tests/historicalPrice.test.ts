@@ -117,6 +117,8 @@ test("a recent time: the minute candle that ended at that minute, from the pool"
   assert.equal(r.when.instantUtc, "2026-09-15T13:40:00Z");
   assert.equal(r.price.asOfUtc, "2026-09-15T13:40:00Z");
   assert.deepEqual(calls.filter((c) => c.startsWith("gt:")), ["gt:minute"], "stopped at the first good answer");
+  assert.deepEqual(r.series, [{ t: T - 60, usd: 1.0 }, { t: T, usd: 1.25 }, { t: T + 60, usd: 9 }], "chart points at each candle's end; the one at the moment is the price");
+  assert.equal(r.series.find((s) => s.t === T)?.usd, r.price.usd);
   assert.equal(r.answer.startsWith("PEPE was $1.25 at 15 Sep 2026, 13:40 UTC."), true, r.answer);
   assert.equal(r.source.url, "https://www.geckoterminal.com/eth/pools/0xpool");
   assert.deepEqual(r.warnings, []);
@@ -371,4 +373,20 @@ test("sentences for each kind of moment", () => {
   assert.match(describeHistorical({ ...base, usd: 1, current: 1.0001, when: { isNow: false, precision: "minute", dateUtc: "2026-09-15", description: "x" } }), /about the same as now/);
   assert.match(describeHistorical({ ...base, usd: 1, current: 250, when: { isNow: false, precision: "minute", dateUtc: "2026-09-15", description: "x" } }), /24,900% higher/);
   assert.match(describeHistorical({ ...base, staleSec: 7200, asOfSec: sec("2026-09-15T11:40:00Z"), when: { isNow: false, precision: "minute", dateUtc: "2026-09-15", description: "x" } }), /Nothing traded for a while; that is the last price, set 2 hours earlier/);
+});
+
+test("the chart series: stocks that split are charted at what they traded at each day, and thin data gives none", async () => {
+  const splits = [{ date: "2014-06-09", ratio: 7 }];
+  const history = {
+    meta: aapl({ splits }).meta,
+    days: days([["2014-06-04", 90.8], ["2014-06-05", 91.3], ["2014-06-06", 92.0], ["2014-06-09", 93.5], ["2014-06-10", 94.2]]),
+    staleSince: null,
+  };
+  const r = await historicalPrice(request("equity", "AAPL", when("06/06/2014")), NOW, fake({ equityHistory: async () => history }).p);
+  assert.ok(Math.abs(r.price.usd - 92.0 * 7) < 1e-9, "the 6 June close, before the split, in the shares of the time");
+  const byDay = new Map(r.series.map((s) => [new Date(s.t * 1000).toISOString().slice(0, 10), s.usd]));
+  assert.ok(Math.abs((byDay.get("2014-06-07") ?? 0) - 92.0 * 7) < 1e-9, "points are placed at the end of their day");
+  assert.ok(Math.abs((byDay.get("2014-06-10") ?? 0) - 93.5) < 1e-9, "after the split a close is already in the new shares");
+  const thin = await historicalPrice(request("equity", "AAPL", when("15/09/2026")), NOW, fake({ equityHistory: async () => ({ ...aapl(), days: days([["2026-09-15", 258]]) }) }).p);
+  assert.deepEqual(thin.series, [], "one point is not a chart");
 });

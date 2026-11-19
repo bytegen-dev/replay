@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import { GrowthChart } from "@/components/GrowthChart";
 import { SharedExport } from "@/components/SharedExport";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -87,6 +88,8 @@ export function SharedResult({ data }: { data: SharePayload }) {
           </div>
         ))}
       </div>
+
+      <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} />
 
       {summary.skippedMonths > 0 && (
         <p className="flex items-start gap-2 text-sm">

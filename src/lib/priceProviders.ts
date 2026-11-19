@@ -21,7 +21,9 @@ const median = (xs: number[]) => {
 export type GtTimeframe = "minute" | "hour" | "day";
 export const GT_RESOLUTION: Record<GtTimeframe, number> = { minute: 60, hour: 3600, day: 86400 };
 /** How many candles to ask for: enough to see back past the longest acceptable gap for that resolution. */
-const GT_COUNT: Record<GtTimeframe, number> = { minute: 30, hour: 12, day: 10 };
+const GT_COUNT: Record<GtTimeframe, number> = { minute: 120, hour: 48, day: 60 };
+/** How far past the moment to ask, so a chart can show what happened next. The price itself only ever uses candles up to the moment. */
+const GT_AFTER: Record<GtTimeframe, number> = { minute: 30 * 60, hour: 12 * 3600, day: 10 * 86400 };
 const GT = "https://api.geckoterminal.com/api/v2";
 
 /** GeckoTerminal's `[time, open, high, low, close, volume]` rows -> candles. Candles exist only for periods with trades. */
@@ -41,7 +43,8 @@ export function parseGtOhlcv(body: unknown): Candle[] {
 /** Candles from a pool ending just after `instantSec`. Throws HttpError (401 means the free API no longer reaches that far back). */
 export async function gtCandles(pool: GtPool, timeframe: GtTimeframe, instantSec: number): Promise<Candle[]> {
   const res = GT_RESOLUTION[timeframe];
-  const body = await getJson<unknown>(`${GT}/networks/${pool.network}/pools/${pool.pool}/ohlcv/${timeframe}?aggregate=1&before_timestamp=${instantSec + res}&limit=${GT_COUNT[timeframe]}&currency=usd`);
+  const before = Math.max(Math.min(Math.floor(Date.now() / 1000), instantSec + GT_AFTER[timeframe]), instantSec + res);
+  const body = await getJson<unknown>(`${GT}/networks/${pool.network}/pools/${pool.pool}/ohlcv/${timeframe}?aggregate=1&before_timestamp=${before}&limit=${GT_COUNT[timeframe]}&currency=usd`);
   return parseGtOhlcv(body);
 }
 
@@ -70,8 +73,9 @@ export function parseCgPoints(body: unknown): { candles: Candle[]; stepSec: numb
  */
 export async function cgSnapshots(coinId: string, instantSec: number, nowSec: number): Promise<{ candles: Candle[]; stepSec: number }> {
   const cfg = coingeckoConfig();
-  const from = instantSec - 6 * 3600;
-  const to = Math.max(Math.min(instantSec + 3600, nowSec), from + 3600);
+  // A window of a few days comes back hourly, which also makes a decent chart.
+  const from = instantSec - 2 * 86400;
+  const to = Math.max(Math.min(instantSec + 86400, nowSec), from + 3600);
   return parseCgPoints(await getJson<unknown>(`${cfg.base}/coins/${encodeURIComponent(coinId)}/market_chart/range?vs_currency=usd&from=${from}&to=${to}`, cfg.headers));
 }
 
@@ -80,7 +84,9 @@ export async function cgSnapshots(coinId: string, instantSec: number, nowSec: nu
 export type CardanoPeriod = "1min" | "1hour" | "1day";
 export const CARDANO_RESOLUTION: Record<CardanoPeriod, number> = { "1min": 60, "1hour": 3600, "1day": 86400 };
 /** How far before the moment to ask, so a quiet stretch is still covered. */
-const CARDANO_LOOKBACK: Record<CardanoPeriod, number> = { "1min": 30 * 60, "1hour": 6 * 3600, "1day": 5 * 86400 };
+const CARDANO_LOOKBACK: Record<CardanoPeriod, number> = { "1min": 2 * 3600, "1hour": 48 * 3600, "1day": 60 * 86400 };
+/** And how far past the moment, for the chart. */
+const CARDANO_AFTER: Record<CardanoPeriod, number> = { "1min": 30 * 60, "1hour": 12 * 3600, "1day": 10 * 86400 };
 const BITSTAMP = "https://www.bitstamp.net/api/v2/ohlc/adausd/";
 
 /** DexHunter's `{ data: [{ open, high, low, close, unix, volume }] }`, priced in ADA, -> candles. */
@@ -131,7 +137,7 @@ export function adaToUsd(candles: Candle[], rates: Map<number, number>, stepSec:
 export async function cardanoCandles(unit: string, period: CardanoPeriod, instantSec: number): Promise<Candle[]> {
   const step = CARDANO_RESOLUTION[period];
   const from = instantSec - CARDANO_LOOKBACK[period];
-  const to = instantSec + step;
+  const to = Math.max(Math.min(Math.floor(Date.now() / 1000), instantSec + CARDANO_AFTER[period]), instantSec + step);
   const ada = parseAdaCandles(await postCharts({ tokenIn: "", tokenOut: unit, period, from, to }));
   if (!ada.length) return [];
   const start = Math.floor(from / step) * step - 6 * step;
@@ -178,6 +184,6 @@ export function parseYahooBars(body: unknown): Candle[] {
 /** Intraday bars for a stock ending just after the moment. */
 export async function yahooBars(symbol: string, interval: YahooInterval, instantSec: number): Promise<Candle[]> {
   const from = instantSec - 5 * 86400;
-  const to = instantSec + 3600;
+  const to = instantSec + 86400;
   return parseYahooBars(await yahoo<unknown>(`/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${from}&period2=${to}&interval=${interval}&includePrePost=false`));
 }

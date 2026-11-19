@@ -181,6 +181,11 @@ export function openApiSpec(origin: string): Record<string, unknown> {
               },
             },
             current: { type: ["object", "null"], description: "The price now and the percent change since." },
+            series: {
+              type: "array",
+              items: { type: "object", properties: { t: { type: "integer", description: "Seconds since the epoch (UTC): when this price was set." }, usd: { type: "number" } } },
+              description: "Prices around the moment, oldest first, for drawing a chart. The point at `when.instantUtc` is the price returned. Empty when there are too few to draw.",
+            },
             source: { type: "object" },
             warnings: { type: "array", items: { type: "string" } },
           },

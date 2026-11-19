@@ -90,6 +90,29 @@ export function pickCandle(candles: Candle[], instantSec: number, resolutionSec:
   return null;
 }
 
+export interface SeriesPoint {
+  /** Seconds since the epoch (UTC): when this price was set. */
+  t: number;
+  usd: number;
+}
+
+/**
+ * Candles as chart points. Each point sits at the END of its candle, where its close was set, so the point for the
+ * last finished candle lands exactly on the moment that was asked about. At most `max` points: a longer series is
+ * thinned evenly, keeping the first and the last.
+ */
+export function toSeries(candles: Candle[], resolutionSec: number, price: (c: Candle) => number, max = 160): SeriesPoint[] {
+  const byTime = new Map<number, number>();
+  for (const c of candles) {
+    const usd = price(c);
+    if (Number.isFinite(c.t) && Number.isFinite(usd) && usd > 0) byTime.set(c.t + resolutionSec, usd);
+  }
+  const all = [...byTime].map(([t, usd]) => ({ t, usd })).sort((a, b) => a.t - b.t);
+  if (all.length <= max) return all;
+  const step = (all.length - 1) / (max - 1);
+  return Array.from({ length: max }, (_, i) => all[Math.round(i * step)]);
+}
+
 /** "45 seconds", "12 minutes", "3 hours 10 minutes", "2 days". */
 export function formatAge(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
@@ -106,10 +129,11 @@ export function formatAge(seconds: number): string {
 /** 0.00003219 -> "$0.00003219"; 1234.5 -> "$1,234.50"; 0.5 -> "$0.5000". Keeps enough digits for tiny prices. */
 export function formatUsdPrice(x: number): string {
   if (!Number.isFinite(x)) return "n/a";
+  if (x === 0) return "$0";
   if (x >= 1000) return `$${x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (x >= 1) return `$${x.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
   if (x >= 0.01) return `$${x.toFixed(4)}`;
   // Tiny: four significant digits after the leading zeros.
   const zeros = Math.floor(-Math.log10(x));
-  return `$${x.toFixed(Math.min(zeros + 4, 12)).replace(/0+$/, "")}`;
+  return `$${x.toFixed(Math.min(zeros + 4, 12)).replace(/0+$/, "").replace(/\.$/, "")}`;
 }

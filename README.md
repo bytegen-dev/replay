@@ -91,6 +91,13 @@ The **Stocks** switch checks ordinary US-listed stocks and ETFs, with decades of
 - **Resilience:** Yahoo's endpoint is unofficial and rate-limits shared server addresses. Each ticker's full history is fetched once and kept for six hours in memory and in the Neon database (a `stock_history` table, created on first use). If Yahoo refuses and an older copy exists, that copy answers and the result carries a warning saying so. If it blocks your host outright, set `YAHOO_BASE_URL` to a proxy.
 - **Ready-made checks:** under Calculate, one-click buttons run questions like "$500 a month into the S&P 500 since 1998".
 
+## Charts
+
+Charts are drawn as plain SVG (no charting library), in the black-and-white theme, and they resize to the screen. Hover, touch or use the arrow keys to read exact values, and Escape clears the readout.
+
+- **Backtest results** and **shared pages** get a chart under the summary: *Growth* (what the holding was worth on each purchase date against the total you had put in, so it dips and climbs with the market) and *Price vs your cost* (the price against your running average cost per unit, which shows why buying a fixed dollar amount lowers your average). Months with no price were never bought, so they add no point. Manual price edits redraw it.
+- **Price lookup** shows the prices around the moment you asked about, with that moment marked: the lookup returns them as `series` (about 2 hours of minutes, 2 days of hours, or 2 months of days, depending on the resolution used). Stocks that have split are charted at what they traded at each day.
+
 ## Public API
 
 A versioned JSON API for other apps and AI agents, under `/api/v1`. The machine-readable description is at `/api/v1/openapi.json`.

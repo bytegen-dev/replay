@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
 import { MonthPicker } from "@/components/MonthPicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
+import { GrowthChart } from "@/components/GrowthChart";
 import { StockPicker } from "@/components/StockPicker";
 import { TokenDetails } from "@/components/TokenDetails";
 import { TokenSearchInput } from "@/components/TokenSearch";
@@ -677,6 +678,8 @@ export function DcaApp() {
               </Card>
             ))}
           </div>
+
+          <GrowthChart buys={computed.buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} />
 
           {computed.summary.skippedMonths > 0 && (
             <p className="flex items-start gap-2 text-sm">
