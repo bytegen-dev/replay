@@ -9,11 +9,16 @@ const LINKS = [
   { href: "/price", label: "Price lookup" },
 ];
 
+const EXTERNAL = [
+  { href: "https://github.com/bytegen-dev/dripcast#readme", label: "Docs" },
+  { href: "https://github.com/bytegen-dev/dripcast", label: "Source" },
+];
+
 /** The two tools, side by side in the header. The current one is underlined. */
 export function SiteNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Tools" className="flex shrink-0 items-center gap-4 text-xs sm:gap-5 sm:text-sm">
+    <nav aria-label="Tools" className="flex shrink-0 items-center gap-4 text-sm sm:gap-6">
       {LINKS.map((l) => {
         const active = l.href === "/" ? pathname === "/" : pathname.startsWith(l.href);
         return (
@@ -27,9 +32,11 @@ export function SiteNav() {
           </Link>
         );
       })}
-      <a href="https://github.com/bytegen-dev/dripcast" target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline-offset-8 hover:text-foreground hover:underline">
-        Source
-      </a>
+      {EXTERNAL.map((l) => (
+        <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline-offset-8 hover:text-foreground hover:underline">
+          {l.label}
+        </a>
+      ))}
     </nav>
   );
 }

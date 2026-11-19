@@ -1,5 +1,6 @@
 "use client";
 
+import { ChainLogo } from "@/components/ChainLogo";
 import { Info, Loader2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -216,7 +217,8 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
                     <span className="flex items-center gap-2 text-sm">
                       <span className="truncate font-bold">{h.name}</span>
                       <span className={cn("shrink-0 text-xs", i === active ? "text-primary-foreground" : "text-muted-foreground")}>{h.symbol}</span>
-                      <Badge variant="outline" className={cn("shrink-0 rounded-none px-1.5 py-0 text-[0.65rem] font-normal", i === active && "border-primary-foreground text-primary-foreground")}>
+                      <Badge variant="outline" className={cn("shrink-0 gap-1 rounded-none px-1.5 py-0 text-[0.65rem] font-normal", i === active && "border-primary-foreground text-primary-foreground")}>
+                        <ChainLogo chain={h.chain} mono className="size-3 shrink-0" />
                         {CHAIN_LABELS[h.chain]}
                       </Badge>
                     </span>

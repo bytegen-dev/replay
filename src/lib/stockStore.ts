@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { connectDb } from "./db.ts";
 import type { StockDay, StockMeta } from "./stocks.ts";
 
 /**
@@ -15,8 +15,7 @@ export interface StoredHistory {
 }
 
 function connect() {
-  const url = process.env.DATABASE_URL;
-  return url ? neon(url) : null;
+  return connectDb();
 }
 type Sql = NonNullable<ReturnType<typeof connect>>;
 

@@ -1,0 +1,23 @@
+# A local stand-in for Neon, for development only: Postgres plus the proxy that lets the @neondatabase/serverless driver talk to it.
+# Start it with `docker compose up -d`, then set DATABASE_URL=postgres://postgres:postgres@localhost:5432/dca in .env.local.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dca
+    ports:
+      - "5432:5432"
+    volumes:
+      - dca-db:/var/lib/postgresql/data
+  neon-proxy:
+    image: ghcr.io/timowilhelm/local-neon-http-proxy:main
+    environment:
+      PG_CONNECTION_STRING: postgres://postgres:postgres@db:5432/dca
+    ports:
+      - "4444:4444"
+    depends_on:
+      - db
+volumes:
+  dca-db:

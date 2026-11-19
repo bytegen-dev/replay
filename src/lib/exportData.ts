@@ -56,8 +56,8 @@ export function parsePayload(x: unknown): ExportPayload | string {
 }
 
 /**
- * File name for the spreadsheet: the token and the months it covers, e.g. dca-nmkr-2024-12-to-2026-10.xlsx.
- * One month gives dca-nmkr-2025-10.xlsx. Anything unsafe in the token label is flattened to a dash.
+ * File name for the spreadsheet: the token and the months it covers, e.g. dca-pepe-2024-12-to-2026-10.xlsx.
+ * One month gives dca-pepe-2025-10.xlsx. Anything unsafe in the token label is flattened to a dash.
  */
 export function xlsxFileName(p: { tokenLabel: string; rows: { month: string }[] }): string {
   const slug = p.tokenLabel.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "result";

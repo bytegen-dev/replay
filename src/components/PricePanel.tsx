@@ -1,5 +1,6 @@
 "use client";
 
+import { ChainLogo } from "@/components/ChainLogo";
 import { AlertTriangle, Check, Copy, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EquitySearchInput } from "@/components/EquitySearch";
@@ -18,10 +19,10 @@ import { PREFIX_FOR, parseWhen } from "@/lib/when.ts";
 
 const MARKETS: { value: Market; label: string }[] = [
   { value: "ethereum", label: "Ethereum (ETH)" },
+  { value: "solana", label: "Solana (SOL)" },
   { value: "base", label: "Base (BASE)" },
   { value: "bsc", label: "BNB Chain (BSC)" },
   { value: "arbitrum", label: "Arbitrum (ARB)" },
-  { value: "solana", label: "Solana (SOL)" },
   { value: "cardano", label: "Cardano (ADA)" },
   { value: "equity", label: "Stock (STOCK)" },
 ];
@@ -152,7 +153,8 @@ export function PricePanel() {
   const line = [asset.trim(), PREFIX_FOR[market], time.trim(), date.trim(), tz.trim()].filter(Boolean).join(" ");
   const command = `/historical-price ${line}`;
   const apiUrl = () => `${window.location.origin}/api/v1/historical-price?format=text&q=${encodeURIComponent(line)}`;
-  const selectContent = "rounded-none border border-border bg-popover ring-0";
+  // Inside the open list only the ticked item keeps its colour; the others go grey. The value shown on the closed select is coloured.
+  const selectContent = "rounded-none border border-border bg-popover ring-0 [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:grayscale [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:opacity-70";
 
   // What the result shows beside the price: the candle when there is one, and the split figure for a stock that has split.
   const details: { k: string; v: string }[] = result
@@ -190,7 +192,10 @@ export function PricePanel() {
                   <SelectContent className={selectContent}>
                     {MARKETS.map((m) => (
                       <SelectItem key={m.value} value={m.value} className="rounded-none">
-                        {m.label}
+                        <span className="flex items-center gap-2">
+                          <ChainLogo chain={m.value} />
+                          {m.label}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>

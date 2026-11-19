@@ -1,5 +1,6 @@
 "use client";
 
+import { ChainLogo, CoinLogo } from "@/components/ChainLogo";
 import { AlertTriangle, Calculator, Check, Copy, FileSpreadsheet, Loader2, Settings, Share2, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
@@ -34,7 +35,7 @@ function shiftMonth(m: string, delta: number): string {
 }
 
 function tokenSymbol(t: { symbol: string | null; name: string | null }): string {
-  // CoinGecko sometimes returns symbols like "$nmkr".
+  // CoinGecko sometimes returns symbols like "$pepe".
   const s = t.symbol?.replace(/^\$/, "").toUpperCase();
   return s || t.name || "tokens";
 }
@@ -336,7 +337,8 @@ export function DcaApp() {
   const shareStale = share !== null && share.edits !== JSON.stringify(overrides);
 
   const isEquity = data?.chain === "equity" && !isMajorSymbol(data.address);
-  const selectContent = "rounded-none border border-border bg-popover ring-0";
+  // Inside the open list only the ticked item keeps its colour; the others go grey. The value shown on the closed select is coloured.
+  const selectContent = "rounded-none border border-border bg-popover ring-0 [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:grayscale [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:opacity-70";
 
   const statTiles: { key: string; value: string; highlight?: boolean }[] = computed
     ? [
@@ -440,7 +442,10 @@ export function DcaApp() {
                       <SelectContent className={selectContent}>
                         {MAJORS.map((m) => (
                           <SelectItem key={m.symbol} value={m.symbol} className="rounded-none">
-                            {m.name} ({m.ticker})
+                            <span className="flex items-center gap-2">
+                              <CoinLogo symbol={m.symbol} />
+                              {m.name} ({m.ticker})
+                            </span>
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -518,7 +523,10 @@ export function DcaApp() {
                     <SelectContent className={selectContent}>
                       {CHAINS.map((c) => (
                         <SelectItem key={c} value={c} className="rounded-none">
-                          {CHAIN_LABELS[c]}
+                          <span className="flex items-center gap-2">
+                            <ChainLogo chain={c} />
+                            {CHAIN_LABELS[c]}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -662,7 +670,8 @@ export function DcaApp() {
           <section className="border border-border bg-card p-4 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold tracking-tight">{data.token.name ?? "Unknown token"}</h2>
-              <Badge variant="outline" className="rounded-none font-normal">
+              <Badge variant="outline" className="gap-1.5 rounded-none font-normal">
+                {isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-3.5 shrink-0" /> : <ChainLogo chain={data.chain} className="size-3.5 shrink-0" />}
                 {MARKET_LABELS[data.chain]}
               </Badge>
               <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">

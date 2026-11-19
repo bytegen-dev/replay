@@ -120,7 +120,6 @@ How to read the result:
 - $100 a month into Apple since January 2013, price only.
 - $250 a month into the Nasdaq-100 since January 2005, dividends reinvested.
 - $200 a month into Berkshire Hathaway (class B) since January 2000.
-- $200 a month into NMKR on Cardano since December 2024 (a thin token: expect caveats).
 
 `GET /api/v1/examples` also returns `priceExamples`: ready-made price lookups, each as a chat command and as the exact call.
 

@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { connectDb } from "./db.ts";
 
 /**
  * A fixed-window request counter. With DATABASE_URL it lives in the same Neon database as everything else, so the
@@ -17,8 +17,7 @@ export interface RateResult {
 const memory = new Map<string, { window: number; n: number }>();
 
 function connect() {
-  const url = process.env.DATABASE_URL;
-  return url ? neon(url) : null;
+  return connectDb();
 }
 type Sql = NonNullable<ReturnType<typeof connect>>;
 

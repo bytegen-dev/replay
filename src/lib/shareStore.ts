@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { connectDb } from "./db.ts";
 import { hashSecret, newShareId, type SharePayload } from "./share.ts";
 
 /** Saves per client per hour. Keeps a script from filling the database. */
@@ -11,7 +11,7 @@ export class ShareUnavailable extends Error {}
 function connect() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new ShareUnavailable("Sharing is not set up. Add DATABASE_URL (a Neon Postgres connection string) to the environment.");
-  return neon(url);
+  return connectDb(url)!;
 }
 
 let ready: Promise<void> | null = null;

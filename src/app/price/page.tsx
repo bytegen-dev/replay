@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
 import { PricePanel } from "@/components/PricePanel";
 import { SiteFooter } from "@/components/SiteFooter";
-import { SiteNav } from "@/components/SiteNav";
+import { SiteHeader } from "@/components/SiteHeader";
 
 export const metadata: Metadata = {
   title: "Price lookup",
@@ -13,18 +11,7 @@ export const metadata: Metadata = {
 export default function PricePage() {
   return (
     <div className="flex min-h-dvh w-full flex-1 flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-4 py-4 sm:gap-4 sm:px-6 sm:py-5">
-          <Link href="/" className="flex min-w-0 flex-1 items-center gap-3">
-            <Image src="/dca-logo.png" alt="" width={40} height={40} className="size-10 shrink-0 object-contain" />
-            <div className="min-w-0">
-              <p className="text-xs text-muted-foreground sm:text-sm">Price lookup</p>
-              <span className="text-xl font-bold tracking-tight sm:text-3xl">DCA</span>
-            </div>
-          </Link>
-          <SiteNav />
-        </div>
-      </header>
+      <SiteHeader />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-10">
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">

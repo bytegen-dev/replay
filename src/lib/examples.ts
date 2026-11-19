@@ -73,17 +73,6 @@ export const EXAMPLES: Example[] = [
     reinvest: false,
     note: "Price only. Berkshire pays no dividend.",
   },
-  {
-    id: "nmkr-2024",
-    label: "NMKR since Dec 2024",
-    question: "$200 a month into NMKR on Cardano since December 2024: what is it worth today?",
-    market: "cardano",
-    address: "5dac8536653edc12f6f5e1045d8164b9f59998d3bdc300fc92843489",
-    amount: 200,
-    startMonth: "2024-12",
-    basis: "month-end",
-    note: "A small Cardano token. Prices before Nov 2025 come from DexHunter, which trades thinly.",
-  },
 ];
 
 /** The month before the one containing `now` (YYYY-MM). */
@@ -121,5 +110,4 @@ export const PRICE_EXAMPLES: PriceExample[] = [
   { id: "pepe-week", label: "PEPE 7 days ago", market: "ethereum", address: "0x6982508145454Ce325dDbE47a25d4ec3d2311933", date: "7 days ago" },
   { id: "weth-base", label: "WETH on Base, 3 days ago 09:00", market: "base", address: "0x4200000000000000000000000000000000000006", date: "3 days ago", time: "09:00" },
   { id: "apple-month", label: "Apple, 1 month ago", market: "equity", address: "AAPL", date: "1 month ago" },
-  { id: "nmkr-2025", label: "NMKR, 15 Mar 2025 13:40", market: "cardano", address: "5dac8536653edc12f6f5e1045d8164b9f59998d3bdc300fc92843489", date: "15/03/2025", time: "13:40" },
 ];
