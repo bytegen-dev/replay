@@ -278,7 +278,7 @@ export function PricePanel() {
                 ["token", "Crypto"],
               ] as const
             ).map(([v, label]) => (
-              <ToggleGroupItem key={v} value={v} className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "token" && "cut-tr")}>
+              <ToggleGroupItem key={v} value={v} className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "token" && "cut-tab-last")}>
                 {label}
               </ToggleGroupItem>
             ))}
@@ -397,7 +397,7 @@ export function PricePanel() {
           </p>
         </div>
 
-        <Button type="submit" disabled={loading} className="form-cta cut-bl h-12 w-full gap-2 rounded-none border-2 border-primary px-8 text-base sm:w-auto sm:min-w-56 sm:self-end font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
+        <Button type="submit" disabled={loading} className="form-cta cut-both h-12 w-full gap-2 rounded-none border-2 border-primary px-8 text-base sm:w-auto sm:min-w-56 sm:self-end font-bold tracking-wide transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border">
           {loading ? <MarkLoader className="size-5" /> : null}
           {loading ? "Looking up" : "Get price"}
         </Button>

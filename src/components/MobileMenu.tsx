@@ -32,8 +32,8 @@ const bar = (y: number, transform: string, opacity = 1) => ({ transformBox: "fil
 function MorphIcon({ open }: { open: boolean }) {
   return (
     <svg viewBox="0 0 24 24" className="size-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden focusable={false}>
-      {/* Short, long, short bars, tilted 45 degrees when closed; upright and crossed when open. */}
-      <g style={{ transformOrigin: "12px 12px", transform: open ? "rotate(180deg)" : "rotate(-45deg)", transition: SPIN }}>
+      {/* Short, long, short bars, slanted like the card corners (top left to bottom right) when closed; upright and crossed when open. */}
+      <g style={{ transformOrigin: "12px 12px", transform: open ? "rotate(180deg)" : "rotate(45deg)", transition: SPIN }}>
         <line x1="7" x2="17" y1="7" y2="7" style={bar(7, open ? "translateY(5px) rotate(45deg) scaleX(1.5)" : "none")} />
         <line x1="4" x2="20" y1="12" y2="12" style={bar(12, open ? "scaleX(0.2)" : "none", open ? 0 : 1)} />
         <line x1="7" x2="17" y1="17" y2="17" style={bar(17, open ? "translateY(-5px) rotate(-45deg) scaleX(1.5)" : "none")} />

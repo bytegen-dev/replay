@@ -346,7 +346,7 @@ export function DcaApp() {
                     <ToggleGroupItem
                       key={v}
                       value={v}
-                      className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "fx" && "cut-tr")}
+                      className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "fx" && "cut-tab-last")}
                     >
                       {label}
                     </ToggleGroupItem>
@@ -862,7 +862,7 @@ export function DcaApp() {
                     type="submit"
                     disabled={loading}
                     variant="default"
-                    className="form-cta cut-bl h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border sm:w-auto sm:min-w-56"
+                    className="form-cta cut-both h-12 w-full shrink-0 gap-2 rounded-none border-2 border-primary px-8 text-base font-bold transition-transform hover:-translate-y-px active:translate-y-0 disabled:border-border sm:w-auto sm:min-w-56"
                   >
                     {loading ? <MarkLoader className="size-5" /> : <History className="size-5" aria-hidden />}
                     {loading ? "Checking prices" : "See what it's worth"}
