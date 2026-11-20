@@ -201,50 +201,33 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* What is coming: learn from the past, rehearse, then trade. Shown as coming soon, never as something you can do today. */}
-        <section className={`${section} py-10 sm:py-16`}>
-          <div className="mb-8 flex max-w-2xl flex-col gap-2 sm:mb-10" data-reveal-on-scroll style={later()}>
-            <h2 className={h2}>Coming next: from looking back to acting.</h2>
-            <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Replay starts with the past. These three are being built on top of it. Join the waitlist to hear when each one opens." />
-          </div>
-          <ul className="grid gap-x-4 gap-y-9 sm:grid-cols-3 sm:gap-x-6">
-            {[
-              { Icon: Bot, t: "Data to train your AI agents", d: "The same clean price history Replay uses, prepared so your agents can learn from it and be tested against it." },
-              { Icon: FlaskConical, t: "Paper trading", d: "Try your strategies with practice money first, and see how they hold up before you spend any real money." },
-              { Icon: Wallet, t: "Live trading", d: "Deposit stablecoins (USDC or USDG) and trade any asset or market in the world, yourself or through an agent you give access to." },
-            ].map(({ Icon, t, d }, i) => (
-              <li key={t} className="cut-card pulse-hover shadow-hard flex flex-col gap-4 border border-border bg-card p-5 sm:p-6" data-reveal-on-scroll style={later(i * 120)}>
-                <div className="flex items-center justify-between">
-                  <Icon className="size-8 text-primary" strokeWidth={1.5} aria-hidden />
-                  <span className="border border-primary/50 px-2 py-0.5 text-xs font-bold text-primary">Coming soon</span>
-                </div>
-                <h3 className="text-lg font-bold">{t}</h3>
-                <SpotlightText className="text-sm leading-relaxed text-muted-foreground" text={d} />
-              </li>
-            ))}
-          </ul>
-        </section>
-
-        {/* Free now; the waitlist is how to hear about accounts. */}
-        <section className={`${section} py-10 sm:py-16`}>
+        {/* What is coming, and the waitlist that goes with it, in one card. Shown as coming soon, never as something you can do today. */}
+        <section id="trade" className={`${section} scroll-mt-20 py-10 sm:py-16`}>
           {/* A line runs through this card from edge to edge, behind it; hovering sends a pulse along it, round the card and out the far side. */}
-          <LineCard className="grid gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-12" data-reveal-on-scroll style={later()}>
-            <div className="flex flex-col gap-3">
-              <h2 className={h2}>Free to try. More when Replay opens up.</h2>
-              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Everything on this page works without an account. Join the waitlist and we will email you when there is more." />
-              <WaitlistButton />
+          <LineCard className="flex flex-col gap-8 border border-border bg-card p-5 sm:p-8" data-reveal-on-scroll style={later()}>
+            <div className="flex max-w-2xl flex-col gap-3">
+              <h2 className={h2}>Trade on what the past taught you.</h2>
+              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Replay is free to try today, with no account. These three are coming next, built on the same data. Join the waitlist and we will email you when each one opens." />
             </div>
-            <div className="flex flex-col justify-center gap-5 border border-border bg-secondary p-5 sm:p-6">
-              <div className="flex flex-col gap-3">
-                <h3 className="text-sm font-bold text-primary">Coming soon</h3>
-                <ul className="flex flex-col gap-2 text-sm">
-                  <li>Accounts with {user} checks a day</li>
-                  <li>Saved checks and exports</li>
-                  <li>Paper trading</li>
-                  <li>Live trading</li>
-                  <li>Trained data for AI agents</li>
-                </ul>
-              </div>
+            <ul className="grid gap-4 sm:grid-cols-3">
+              {[
+                { Icon: Bot, t: "Data to train your AI agents", d: "The same clean price history Replay uses, prepared so your agents can learn from it and be tested against it." },
+                { Icon: FlaskConical, t: "Paper trading", d: "Try your strategies with practice money first, and see how they hold up before you spend any real money." },
+                { Icon: Wallet, t: "Live trading", d: "Deposit stablecoins (USDC or USDG) and trade any asset or market in the world, yourself or through an agent you give access to." },
+              ].map(({ Icon, t, d }) => (
+                <li key={t} className="flex flex-col gap-3 border border-border bg-secondary p-5">
+                  <div className="flex items-center justify-between">
+                    <Icon className="size-7 text-primary" strokeWidth={1.5} aria-hidden />
+                    <span className="border border-primary/50 px-2 py-0.5 text-xs font-bold text-primary">Coming soon</span>
+                  </div>
+                  <h3 className="text-lg font-bold">{t}</h3>
+                  <SpotlightText className="text-sm leading-relaxed text-muted-foreground" text={d} />
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <WaitlistButton />
+              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with {user} checks a day, saved checks and exports.</p>
             </div>
           </LineCard>
         </section>
