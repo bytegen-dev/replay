@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { GOLD_ENDS, GOLD_STARTS, goldPrice } from "@/lib/gold.ts";
 import { encodeRange, shiftYm } from "@/lib/urlState.ts";
 
 /** How far back the footer timeline goes. */
-const START_YEAR = 1998;
+const START_YEAR = 2004;
 const START = Date.UTC(START_YEAR, 0, 1);
 /** Where the playhead rests until someone picks a date: halfway along the timeline. */
 const REST = 0.5;
@@ -49,6 +50,12 @@ export function FooterScrub() {
   const years = now === null ? [] : Array.from({ length: new Date(now).getUTCFullYear() - START_YEAR + 1 }, (_, i) => START_YEAR + i);
   // Fill and playhead snap while you drag, then glide back to the pinned month (or halfway) when you let go.
   const glide = active ? "none" : "clip-path 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)";
+
+  // Gold's price for the month under the playhead ("Now" is the latest month with a price).
+  const shownMonth = now === null ? null : p > 0.985 ? GOLD_ENDS : new Date(START + p * (now - START)).toISOString().slice(0, 7);
+  const gold = shownMonth ? goldPrice(shownMonth) : null;
+  const goldWhen = shownMonth ? new Date(`${shownMonth}-01T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }) : "";
+  const goldSince = new Date(`${GOLD_STARTS}-01T00:00:00Z`).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
   const lastMonth = now === null ? null : shiftYm(new Date(now).toISOString().slice(0, 7), -1);
   const pickedMonth = pinned !== null && now !== null && lastMonth ? new Date(START + pinned * (now - START)).toISOString().slice(0, 7) : null;
@@ -112,26 +119,35 @@ export function FooterScrub() {
       </div>
     </div>
 
-      {/* The useful part: what you picked on the timeline, and one click to run it. */}
-      <div className="mt-4 flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-        {start && range ? (
+      {/* Gold's price in the month under the playhead, so the wordmark is also a quick look at what gold cost then. */}
+      <div className="mt-3 flex min-h-8 flex-wrap items-baseline gap-x-3 gap-y-1" aria-live="off">
+        <span className="text-xs text-muted-foreground sm:text-sm">Gold, {goldWhen || "now"}</span>
+        {gold !== null ? (
           <>
-            <span className="text-muted-foreground">
-              Start from <b className="text-foreground">{pickedLabel}</b>
-            </span>
-            {choices.map((c) => (
-              <Link key={c.label} href={`/hindsight?${c.q}&range=${range}&run=1`} className="h-8 border border-border px-3 leading-8 transition-colors hover:border-primary hover:text-primary">
-                {c.label}
-              </Link>
-            ))}
-            <button type="button" onClick={() => setPinned(null)} className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
-              Clear
-            </button>
+            <span className="font-heading text-xl font-bold text-primary tabular-nums sm:text-2xl">{gold.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })}</span>
+            <span className="text-xs text-muted-foreground sm:text-sm">an ounce</span>
           </>
         ) : (
-          <span className="text-muted-foreground">Click a date on the timeline, then pick what you would have bought, to see what it is worth today.</span>
+          <span className="text-xs text-muted-foreground sm:text-sm">no price here, our gold history starts in {goldSince}</span>
         )}
       </div>
+
+      {/* Once a month is pinned on the timeline: what you picked, and one click to run it. */}
+      {start && range && (
+        <div className="mt-4 flex min-h-9 flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+          <span className="text-muted-foreground">
+            Start from <b className="text-foreground">{pickedLabel}</b>
+          </span>
+          {choices.map((c) => (
+            <Link key={c.label} href={`/hindsight?${c.q}&range=${range}&run=1`} className="h-8 border border-border px-3 leading-8 transition-colors hover:border-primary hover:text-primary">
+              {c.label}
+            </Link>
+          ))}
+          <button type="button" onClick={() => setPinned(null)} className="text-muted-foreground underline underline-offset-4 hover:text-foreground">
+            Clear
+          </button>
+        </div>
+      )}
     </div>
   );
 }
