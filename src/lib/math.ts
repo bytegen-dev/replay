@@ -1,5 +1,5 @@
 import { isBuyMonth, type Plan } from "./plan.ts";
-import type { MonthRow } from "./types.ts";
+import type { MonthRow, Note } from "./types.ts";
 
 export type Overrides = Record<string, number>;
 
@@ -61,16 +61,23 @@ export function buildBuys(
   plan?: Plan,
 ): BuyRow[] {
   const start = rows[0]?.month ?? "";
+  // A single buy happens in the first month of the range that has a price: if the start month has none (a token that
+  // launched later, a gap in the data), it moves forward to the first month that does. Never backwards, before the range.
+  const onceMonth = plan === "once" ? (rows.find((r) => effectivePrice(r, overrides).price !== null)?.month ?? start) : null;
   return rows.map((row) => {
     const { price, manual } = effectivePrice(row, overrides);
+    const buyHere = plan === "once" ? row.month === onceMonth : isBuyMonth(plan, start, row.month);
     // Not a buying month: nothing is bought, but the holding is still valued at this month's price.
-    if (plan && plan !== "monthly" && !isBuyMonth(plan, start, row.month)) {
+    if (plan && plan !== "monthly" && !buyHere) {
       return { ...row, price, source: manual ? "manual" : row.source, amount: 0, tokens: 0, valueToday: priceToday === null ? null : 0, manual, buy: false };
     }
     if (price === null) {
       return { ...row, amount: 0, tokens: null, valueToday: null, manual: false };
     }
     // `amount` is what the user buys each month in their own currency; this month's dollars are amount / rate (rate 1 for USD).
+    const shifted = plan === "once" && row.month !== start && row.month === onceMonth;
+    const noteList: Note[] = manual ? [{ code: "manual", text: "Price entered manually" }] : [...row.notes];
+    if (shifted) noteList.push({ code: "shifted", text: `Bought here: there was no price for ${start} or the months before this one` });
     const usd = row.fx && row.fx > 0 ? amount / row.fx : amount;
     const tokens = tokensBought(usd, price, decimals);
     return {
@@ -78,7 +85,7 @@ export function buildBuys(
       price,
       source: manual ? "manual" : row.source,
       priceDate: manual ? null : row.priceDate,
-      notes: manual ? [{ code: "manual", text: "Price entered manually" }] : row.notes,
+      notes: noteList,
       amount: usd,
       tokens,
       valueToday: priceToday === null ? null : tokens * priceToday,

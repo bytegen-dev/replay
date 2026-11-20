@@ -47,3 +47,28 @@ test("the plan reads naturally in a sentence", () => {
   assert.equal(describePlan("quarterly", "$500", 39, 40, 1), "$500 every 3 months for 39 of 40 buys");
   assert.equal(describePlan("once", "$5,000", 1, 1, 0), "$5,000 once");
 });
+
+test("a single buy moves forward to the first month with a price, and says so", () => {
+  const gap = [row("2020-01", null), row("2020-02", null), row("2020-03", 40), row("2020-04", 80)];
+  const buys = buildBuys(gap, 1000, 80, {}, 6, "once");
+  const s = summarize(buys, 80);
+  assert.equal(s.pricedMonths, 1);
+  assert.equal(s.skippedMonths, 0, "the unpriced start months are not counted as missed buys");
+  assert.equal(s.invested, 1000);
+  assert.equal(s.tokens, 25); // 1000 / 40, bought in March
+  assert.equal(buys[2].buy, undefined);
+  assert.ok(buys[2].notes.some((n) => n.code === "shifted"));
+  assert.equal(buys[0].buy, false);
+  assert.equal(buys[1].buy, false);
+  // never backwards: with a priced start month it stays put and carries no note
+  const normal = buildBuys(rows, 1000, 25, {}, 6, "once");
+  assert.equal(normal[0].notes.length, 0);
+  assert.equal(summarize(normal, 25).tokens, 100);
+});
+
+test("with no priced month at all, a single buy is skipped, not guessed", () => {
+  const none = [row("2020-01", null), row("2020-02", null)];
+  const s = summarize(buildBuys(none, 1000, null, {}, 6, "once"), null);
+  assert.equal(s.invested, 0);
+  assert.equal(s.skippedMonths, 1);
+});

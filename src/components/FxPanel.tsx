@@ -3,6 +3,8 @@
 import { AlertTriangle, ArrowRightLeft, ArrowUpDown, History } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { DotsToggle, useDotsPref } from "@/components/DotsToggle";
+import { VideoButton } from "@/components/VideoButton";
+import type { GrowthPoint } from "@/lib/charts.ts";
 import { MarkLoader } from "@/components/MarkLoader";
 import { AmountInput } from "@/components/AmountInput";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
@@ -49,7 +51,7 @@ function CurrencySelect({ id, value, onChange, label }: { id: string; value: str
 }
 
 /** The Currencies tab: spend a fixed amount of one currency on another every month, and see what it came to. */
-export function FxPanel() {
+export function FxPanel({ onHasResult }: { onHasResult?: (has: boolean) => void }) {
   // Dollars spent on euros to start with; the swap button flips them.
   const [from, setFrom] = useState("USD");
   const [to, setTo] = useState("EUR");
@@ -99,8 +101,10 @@ export function FxPanel() {
       const j = await res.json().catch(() => null);
       if (!res.ok) throw new Error(j?.fields ? Object.values(j.fields as Record<string, string>).join(" ") : (j?.error ?? `Request failed (${res.status})`));
       setData(j as FxResponse);
+      onHasResult?.(true);
     } catch (err) {
       setData(null);
+      onHasResult?.(false);
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setLoading(false);
@@ -120,6 +124,19 @@ export function FxPanel() {
   }
 
   const r = data?.result;
+  // The replay video draws money put in against what it was worth, in the currency being spent, one point per buy.
+  const videoPoints: GrowthPoint[] = [];
+  if (data && r) {
+    let spent = 0;
+    let held = 0;
+    for (const row of r.rows) {
+      if (row.rate === null || row.bought === null) continue;
+      spent += data.amount;
+      held += row.bought;
+      videoPoints.push({ t: Date.parse(`${row.date}T00:00:00Z`), date: row.date, invested: spent, value: held * row.rate, price: row.rate, avgCost: spent / held });
+    }
+  }
+  const videoTitle = data ? `${data.from.code} to ${data.to.code}, ${data.from.symbol}${data.amount.toLocaleString("en-US")} a month` : "";
   const up = !!r && r.rateToday !== null && r.averageRate !== null && r.rateToday >= r.averageRate;
   const points = r ? r.rows.filter((row) => row.rate !== null).map((row) => ({ x: Date.parse(`${row.date}T00:00:00Z`), y: row.rate! })) : [];
   const summary = !(parseAmount(amount) > 0) ? "Enter how much you spend each month." : `${CURRENCIES.find((c) => c.code === from)?.symbol}${parseAmount(amount).toLocaleString("en-US")} a month into ${to}, ${formatMonth(startMonth)} to ${formatMonth(endMonth)}.`;
@@ -252,7 +269,10 @@ export function FxPanel() {
                 <h3 className="text-base font-bold">
                   {data.from.code} per {data.to.code} over time
                 </h3>
-                <DotsToggle on={dots} onChange={setDots} />
+                <div className="flex flex-wrap items-center gap-2">
+                  <DotsToggle on={dots} onChange={setDots} />
+                  <VideoButton points={videoPoints} view="growth" title={videoTitle} symbol={data.from.symbol} />
+                </div>
               </div>
               <LineChart
                 series={[

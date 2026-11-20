@@ -13,6 +13,8 @@ export interface ReplayVideoOptions {
   view: ReplayView;
   /** The big line at the top left, e.g. "Bitcoin, $500 a month". */
   title: string;
+  /** The currency symbol for money (default "$"). */
+  symbol?: string;
   /** Called with 0 to 1 as the recording goes. */
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
@@ -45,7 +47,7 @@ const css = (name: string, fallback: string) => {
   return v || fallback;
 };
 
-const usd = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: n >= 100 ? 0 : 2 });
+const money = (n: number, symbol: string) => `${n < 0 ? "-" : ""}${symbol}${Math.abs(n).toLocaleString("en-US", { maximumFractionDigits: Math.abs(n) >= 100 ? 0 : 2 })}`;
 
 /** Whole points up to `progress`, plus a tip that slides from the last whole point toward the next. */
 function pointsAt(points: GrowthPoint[], progress: number): GrowthPoint[] {
@@ -71,10 +73,15 @@ interface Palette {
   border: string;
   body: string;
   head: string;
+  /** The Replay mark (white outline on a dark video, dark outline on a light one), or null if it could not be loaded. */
+  mark: HTMLImageElement | null;
 }
 
 function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Palette, progress: number) {
   const { points, view } = o;
+  const sym = o.symbol ?? "$";
+  const usd = (n: number) => money(n, sym);
+  const short = (n: number) => moneyShort(n).replace("$", sym);
   const total = points.length;
   const shown = pointsAt(points, progress);
   const tip = shown[shown.length - 1];
@@ -103,6 +110,9 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
     ctx.fillText(`   ${up ? "+" : ""}${gain.toFixed(1)}%`, 64 + w, 152);
   }
 
+  // The logo, top right.
+  if (c.mark) ctx.drawImage(c.mark, W - 64 - 52, 36, 52, 52);
+
   // The chart box.
   const L = 64;
   const R = W - 150;
@@ -129,7 +139,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
     ctx.lineTo(R, y);
     ctx.stroke();
     ctx.fillStyle = c.muted;
-    ctx.fillText(moneyShort(tv), R + 14, y + 6);
+    ctx.fillText(short(tv), R + 14, y + 6);
   }
   for (const tk of timeTicks(xMin, xMax, 7)) {
     const x = sx(tk.t);
@@ -179,7 +189,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
   ctx.beginPath();
   ctx.arc(tx, ty, 6.5, 0, Math.PI * 2);
   ctx.fill();
-  const tag = moneyShort(a(tip));
+  const tag = short(a(tip));
   ctx.font = `700 18px ${c.body}`;
   const tw = ctx.measureText(tag).width + 16;
   ctx.fillStyle = color;
@@ -190,16 +200,20 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
   // Footer: the mark and name, and a progress bar.
   ctx.fillStyle = c.card;
   ctx.fillRect(0, H - 44, W, 44);
-  ctx.fillStyle = c.primary;
-  ctx.beginPath();
-  ctx.moveTo(64, H - 33);
-  ctx.lineTo(64, H - 11);
-  ctx.lineTo(82, H - 22);
-  ctx.closePath();
-  ctx.fill();
+  if (c.mark) {
+    ctx.drawImage(c.mark, 64, H - 38, 30, 30);
+  } else {
+    ctx.fillStyle = c.primary;
+    ctx.beginPath();
+    ctx.moveTo(64, H - 33);
+    ctx.lineTo(64, H - 11);
+    ctx.lineTo(82, H - 22);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.fillStyle = c.fg;
   ctx.font = `600 20px ${c.head}`;
-  ctx.fillText("Replay", 94, H - 15);
+  ctx.fillText("Replay", 104, H - 15);
   const frac = Math.min(1, (progress - 2) / Math.max(1, total - 2));
   ctx.fillStyle = c.border;
   ctx.fillRect(W - 364, H - 25, 300, 4);
@@ -219,8 +233,30 @@ function withAlpha(color: string, alpha: number): string {
   return color;
 }
 
+/** True when a CSS colour such as "#f2f7f7" is light, so the dark-outlined mark is used on it. */
+function isLight(color: string): boolean {
+  const m = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  return 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 140;
+}
+
+/** Loads the logo mark as an image to draw on the canvas. Null if it can't be loaded, so the video still records without it. */
+function loadMark(light: boolean): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = light ? "/replay-mark-dark.svg" : "/replay-mark.svg";
+  });
+}
+
 /** Plays the replay onto a canvas and records it. Resolves with the video file; rejects if cancelled. */
 export function recordReplay(o: ReplayVideoOptions): Promise<{ blob: Blob; ext: string }> {
+  return loadMark(isLight(css("--background", "#03090b"))).then((mark) => record(o, mark));
+}
+
+function record(o: ReplayVideoOptions, mark: HTMLImageElement | null): Promise<{ blob: Blob; ext: string }> {
   const format = pickVideoFormat();
   if (!format) return Promise.reject(new Error("This browser can't record video. Try Chrome, Edge or Firefox."));
   if (o.points.length < 3) return Promise.reject(new Error("There aren't enough months to make a video."));
@@ -241,6 +277,7 @@ export function recordReplay(o: ReplayVideoOptions): Promise<{ blob: Blob; ext: 
     border: css("--border", "#25414a"),
     body: `"JetBrains Mono", ui-monospace, monospace`,
     head: `"Chakra Petch", ui-sans-serif, sans-serif`,
+    mark,
   };
 
   const total = o.points.length;

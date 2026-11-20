@@ -30,6 +30,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -157,6 +158,13 @@ export function DcaApp() {
   const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN);
   // Prices come from the data source and are read-only unless the person switches editing on (for what-if prices, or to fill a gap).
   const [editPrices, setEditPrices] = useState(false);
+  // Switching tab clears the results, so a switch with results nobody has exported or shared asks first. These track that.
+  const [exported, setExported] = useState(false);
+  const [fxHasResult, setFxHasResult] = useState(false);
+  // What the user is typing in a price cell. Kept apart from `overrides` so half-typed
+  // text such as "0." survives; only a valid price (> 0) becomes an override.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [pendingMode, setPendingMode] = useState<"token" | "equity" | "fx" | null>(null);
   // The currency the monthly amount is in. Each buy is converted to dollars at that day's rate.
   const [currency, setCurrency] = useState("USD");
   // Defaults depend on the current date, so set them after mount (not during prerender).
@@ -312,6 +320,30 @@ export function DcaApp() {
           : `${usd0(amountNum)} ${PLANS.find((p) => p.value === plan)?.phrase} into ${assetName}, ${formatMonth(startMonth)} to ${formatMonth(endMonth)}: ${countBuys(plan, startMonth, endMonth)} ${countBuys(plan, startMonth, endMonth) === 1 ? "buy" : "buys"}, ${usd0(amountNum * countBuys(plan, startMonth, endMonth))} in all.`;
 
   // The Stocks / Crypto / Currencies switch (and the Majors / Other tokens filter under Crypto). Shared by the form and the Currencies tab.
+  /** Moves to another tab and clears the results, which belong to the tab they were made on. */
+  function switchMode(next: "token" | "equity" | "fx") {
+    const end = endMonth || shiftMonth(currentMonth(), -1);
+    const longHistory = next === "equity" || cryptoKind === "major";
+    // Stocks have decades of history, tokens at most six years: move the start so the range stays valid.
+    if (next !== "fx") {
+      if (longHistory && (!startMonth || startMonth > shiftMonth(end, -59))) setStartMonth(shiftMonth(end, -119));
+      if (!longHistory && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
+    }
+    setMode(next);
+    setData(null);
+    setOverrides({});
+    setDrafts({});
+    setShare(null);
+    setShareError(null);
+    setExportError(null);
+    setExported(false);
+    setFxHasResult(false);
+    setExampleNote(null);
+    setMonthFilter(NO_FILTER);
+    setApiError(null);
+    setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
+  }
+
   // The Stocks / Crypto / Currencies tabs sit in the card header. Majors / Other tokens (under Crypto) stays with the form.
   const modeTabs = (
                 <ToggleGroup
@@ -322,16 +354,13 @@ export function DcaApp() {
                   onValueChange={(v) => {
                     if (!v) return;
                     const next = v as "token" | "equity" | "fx";
-                    const end = endMonth || shiftMonth(currentMonth(), -1);
-                    const longHistory = next === "equity" || cryptoKind === "major";
-                    // Stocks have decades of history, tokens at most six years: move the start so the range stays valid.
-                    if (next !== "fx") {
-                      if (longHistory && (!startMonth || startMonth > shiftMonth(end, -59))) setStartMonth(shiftMonth(end, -119));
-                      if (!longHistory && startMonth && startMonth < shiftMonth(end, -71)) setStartMonth(shiftMonth(end, -11));
+                    if (next === mode) return;
+                    // Results that have been neither exported nor shared would be lost: ask first.
+                    if ((data !== null && !exported && !share) || (mode === "fx" && fxHasResult)) {
+                      setPendingMode(next);
+                      return;
                     }
-                    setMode(next);
-                    setApiError(null);
-                    setErrors((e) => ({ ...e, address: undefined, startMonth: undefined, endMonth: undefined }));
+                    switchMode(next);
                   }}
                   className="form-control-h w-full sm:w-96"
                   aria-label="What to check"
@@ -456,6 +485,7 @@ export function DcaApp() {
         throw new Error(j.error ?? `Request failed (${res.status})`);
       }
       setData({ ...(j as DcaResponse), amount: input.amount, ...(sellAtEnd ? { sold: true } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}) });
+      setExported(false);
       // Under a plan that buys only some months, start with the list showing just those; one click shows every month.
       setMonthFilter({ ...NO_FILTER, onlyBought: plan !== DEFAULT_PLAN });
       setOverrides({});
@@ -494,9 +524,6 @@ export function DcaApp() {
   // The word used beside the final valuation.
   const when = val?.sold ? "at sale" : "today";
 
-  // What the user is typing in a price cell. Kept apart from `overrides` so half-typed
-  // text such as "0." survives; only a valid price (> 0) becomes an override.
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
   function editPrice(month: string, raw: string) {
     setDrafts((d) => ({ ...d, [month]: raw }));
     setOverride(month, raw);
@@ -541,6 +568,7 @@ export function DcaApp() {
     };
     try {
       await downloadFile("/api/export/xlsx", payload, xlsxFileName(payload));
+      setExported(true);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed");
     } finally {
@@ -639,7 +667,7 @@ export function DcaApp() {
             <ParametersFormSkeleton />
           ) : mode === "fx" ? (
             <div className="flex flex-col gap-6">
-              <FxPanel />
+              <FxPanel onHasResult={setFxHasResult} />
             </div>
           ) : (
           <form onSubmit={submit} noValidate className="stagger-in flex flex-col gap-4 [--stagger-base:140ms]">
@@ -1019,103 +1047,13 @@ export function DcaApp() {
             </p>
           )}
 
-          <div className="flex flex-col gap-3 md:hidden">
-            {shownBuys.map((b) => {
-              const original = data.rows.find((r) => r.month === b.month)?.price ?? null;
-                  const readOnlyPrice = !editPrices && !b.manual;
-              return (
-                <article key={b.month} className="border border-border bg-card p-4">
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Month</p>
-                      <p className="text-lg font-bold tabular-nums">{b.month}</p>
-                    </div>
-                    {b.source !== "none" && <SourceBadge source={b.source} sources={data.sources} className="shrink-0" />}
-                  </div>
-                  <dl className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Price date</dt>
-                      <dd className="tabular-nums">{b.priceDate ?? (b.manual ? "manual" : NA)}</dd>
-                    </div>
-                    <div className="text-right">
-                      <dt className="text-xs text-muted-foreground">Value {when}</dt>
-                      <dd className="tabular-nums">{fmtUsd(b.valueToday)}</dd>
-                    </div>
-                    <div className="col-span-2">
-                      <dt className="mb-1.5 text-xs text-muted-foreground">Price (USD)</dt>
-                      <dd>
-                        <div className="flex items-center gap-2">
-                          {readOnlyPrice ? (
-<span className="flex h-11 flex-1 items-center justify-end text-base tabular-nums sm:h-10 sm:text-sm">{original === null ? "No price" : fmtPrice(original)}</span>
-) : (
-<Input
-                            aria-label={`Price for ${b.month}`}
-                            inputMode="decimal"
-                            className="h-11 flex-1 text-right text-base tabular-nums sm:h-10 sm:text-sm"
-                            placeholder={original === null ? "n/a - enter" : ""}
-                            value={
-                              drafts[b.month] ??
-                              (overrides[b.month] !== undefined
-                                ? String(overrides[b.month])
-                                : original === null
-                                  ? ""
-                                  : fmtPrice(original).replace(/,/g, ""))
-                            }
-                            onChange={(e) => editPrice(b.month, e.target.value)}
-                            onBlur={() => endEdit(b.month)}
-                          />
-)}
-                          {b.manual && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              className="size-11 shrink-0 rounded-none sm:size-9"
-                              title="Reset to fetched price"
-                              aria-label={`Reset ${b.month}`}
-                              onClick={() => {
-                                setOverride(b.month, "");
-                                endEdit(b.month);
-                              }}
-                            >
-                              <X />
-                            </Button>
-                          )}
-                        </div>
-                      </dd>
-                    </div>
-                    <div>
-                      <dt className="text-xs text-muted-foreground">Amount (USD)</dt>
-                      <dd className="tabular-nums">{b.tokens === null ? NA : fmtNum(b.amount, 2)}</dd>
-                    </div>
-                    <div className="text-right">
-                      <dt className="text-xs text-muted-foreground">{isEquity ? "Shares" : "Tokens"}</dt>
-                      <dd className="tabular-nums">{fmtNum(b.tokens, computed.decimals)}</dd>
-                    </div>
-                  </dl>
-                  {b.buy === false && <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">Not a buying month</p>}
-                  {b.notes.length > 0 && (
-                    <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
-                      {b.notes.map((n) => (
-                        <li key={n.code + n.text} className="flex items-start gap-1.5">
-                          {WARN_CODES.has(n.code) && <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-label="warning" />}
-                          <span>{n.text}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </article>
-              );
-            })}
-          </div>
-
-          <div className="hidden overflow-x-auto border border-border bg-background/80 backdrop-blur-xl md:block">
+          <div className="overflow-x-auto border border-border bg-background/80 backdrop-blur-xl">
             <p className="sr-only">Monthly buy breakdown table</p>
-            <Table className="min-w-[900px]" containerClassName="max-h-[34rem] overflow-y-auto">
+            <Table className="min-w-[900px]" containerClassName="max-h-[34rem] overflow-auto">
               <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow className="hover:bg-transparent">
                   {(["Month", "Price date", "Price (USD)", "Amount (USD)", isEquity ? "Shares bought" : "Tokens bought", `Value ${when} (USD)`, "Source", "Note"] as const).map((h, i) => (
-                    <TableHead key={h} className={cn("sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]", i >= 2 && i <= 5 && "text-right")}>{h}</TableHead>
+                    <TableHead key={h} className={cn("sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]", i === 0 && "left-0 z-20 shadow-[inset_0_-1px_0_var(--border),inset_-1px_0_0_var(--border)]", i >= 2 && i <= 5 && "text-right")}>{h}</TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
@@ -1125,7 +1063,8 @@ export function DcaApp() {
                   const readOnlyPrice = !editPrices && !b.manual;
                   return (
                     <TableRow key={b.month} className="align-top odd:bg-muted/40 hover:bg-muted/60">
-                      <TableCell>{b.month}</TableCell>
+                      {/* The month stays in view while the other columns scroll sideways on a phone. */}
+                      <TableCell className="sticky left-0 z-[5] bg-card font-bold shadow-[inset_-1px_0_0_var(--border)]">{b.month}</TableCell>
                       <TableCell>{b.priceDate ?? (b.manual ? "manual" : NA)}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
@@ -1244,6 +1183,32 @@ export function DcaApp() {
           </p>
         </div>
       )}
+
+      {/* Asked when a tab is switched while the results haven't been exported or shared. */}
+      <Dialog open={pendingMode !== null} onOpenChange={(o) => !o && setPendingMode(null)}>
+        <DialogContent>
+          <div className="flex flex-col gap-1 pr-6">
+            <DialogTitle>Clear these results?</DialogTitle>
+            <DialogDescription>Switching tab clears the results on screen. They can&apos;t be brought back unless you export them or save a share link first.</DialogDescription>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" className="h-10 rounded-none" onClick={() => setPendingMode(null)}>
+              Keep my results
+            </Button>
+            <Button
+              type="button"
+              className="h-10 rounded-none font-bold"
+              onClick={() => {
+                const next = pendingMode;
+                setPendingMode(null);
+                if (next) switchMode(next);
+              }}
+            >
+              Switch and clear
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

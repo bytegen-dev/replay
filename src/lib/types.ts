@@ -39,7 +39,8 @@ export type NoteCode =
   | "out-of-range"
   | "future"
   | "market-closed"
-  | "manual";
+  | "manual"
+  | "shifted";
 
 export interface Note {
   code: NoteCode;

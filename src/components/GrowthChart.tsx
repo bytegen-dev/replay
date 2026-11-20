@@ -1,8 +1,8 @@
 "use client";
 
-import { Download, Pause, Play, RotateCcw } from "lucide-react";
+import { Pause, Play, RotateCcw } from "lucide-react";
 import { DotsToggle, useDotsPref } from "@/components/DotsToggle";
-import { MarkLoader } from "@/components/MarkLoader";
+import { VideoButton } from "@/components/VideoButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DOWN, LineChart, UP, type ChartSeries } from "@/components/LineChart";
 import { growthSeries, moneyShort } from "@/lib/charts.ts";
@@ -10,7 +10,6 @@ import { fmtPrice, fmtUsd } from "@/lib/format.ts";
 import type { BuyRow } from "@/lib/math.ts";
 import { formatUsdPrice } from "@/lib/priceAt.ts";
 import { cn } from "@/lib/utils";
-import { pickVideoFormat, recordReplay } from "@/lib/replayVideo.ts";
 
 type View = "growth" | "price";
 /** Timeframe buttons, in years. "All" is always there; the others only when the data spans more than that. */
@@ -30,14 +29,6 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const [dots, setDots] = useDotsPref();
-  // Recording the replay as a video: how far along it is (null when idle), and any problem.
-  const [recording, setRecording] = useState<number | null>(null);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  const [canRecord, setCanRecord] = useState(false);
-  useEffect(() => {
-    const id = setTimeout(() => setCanRecord(pickVideoFormat() !== null), 0);
-    return () => clearTimeout(id);
-  }, []);
   const allPoints = useMemo(() => growthSeries(buys, priceToday, priceTodayDate), [buys, priceToday, priceTodayDate]);
   const spanYears = allPoints.length > 1 ? (allPoints[allPoints.length - 1].t - allPoints[0].t) / YEAR_MS : 0;
   const frames = FRAMES.filter((y) => spanYears > y + 0.1);
@@ -97,27 +88,6 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
     setPlaying(false);
     setStep(null);
   };
-  async function downloadVideo() {
-    setVideoError(null);
-    setPlaying(false);
-    setRecording(0);
-    try {
-      const { blob, ext } = await recordReplay({ points, view, title, onProgress: setRecording });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "replay"}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    } catch (e) {
-      setVideoError(e instanceof Error ? e.message : "Couldn't make the video.");
-    } finally {
-      setRecording(null);
-    }
-  }
-
   // The readout names the last whole month reached, not the sliding tip.
   const lastPoint = progress >= total ? points[total - 1] : points[Math.max(shownCount - 1, 0)];
   const upGrowth = !lastPoint || lastPoint.value >= lastPoint.invested;
@@ -228,28 +198,12 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
             </button>
           ))}
         </div>
-        {canRecord && (
-          <button
-            type="button"
-            onClick={() => void downloadVideo()}
-            disabled={recording !== null}
-            className="flex h-7 items-center gap-1.5 border border-border px-2.5 text-xs font-bold text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:opacity-70"
-            title="Record the replay as a video and download it. Keep this tab open while it records."
-          >
-            {recording !== null ? <MarkLoader className="size-3.5" /> : <Download className="size-3.5" aria-hidden />}
-            {recording !== null ? `Recording ${Math.round(recording * 100)}%` : "Download video"}
-          </button>
-        )}
+        <VideoButton points={points} view={view} title={title} onStart={() => setPlaying(false)} />
         {step !== null && (
           <button type="button" onClick={stopReplay} className="flex items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" aria-label="Show the whole history again">
             <RotateCcw className="size-3.5" aria-hidden />
             Show all
           </button>
-        )}
-        {videoError && (
-          <p role="alert" className="w-full text-sm font-bold">
-            {videoError}
-          </p>
         )}
         {/* Where the replay is: the month, what went in, and what it was worth then. */}
         <p aria-live="off" className="w-full text-sm tabular-nums text-muted-foreground">

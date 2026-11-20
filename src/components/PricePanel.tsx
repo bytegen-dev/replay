@@ -268,6 +268,9 @@ export function PricePanel() {
               setAsset("");
               setAssetName("");
               setFieldErrors({});
+              // A lookup belongs to the tab it was made on.
+              setResult(null);
+              setError(null);
             }}
             className="form-control-h w-full sm:w-72"
             aria-label="What to look up"

@@ -219,7 +219,7 @@ async function runDcaUsd(req: DcaRequest, now: number, opts: { tiingoKey?: strin
     else warnings.push("No live price available; value today cannot be computed.");
   }
 
-  const buyRows = rows.filter((r) => isBuyMonth(req.plan, req.startMonth, r.month));
+  const buyRows = req.plan === "once" ? [rows.find((r) => r.price !== null) ?? rows[0]] : rows.filter((r) => isBuyMonth(req.plan, req.startMonth, r.month));
   const missing = buyRows.filter((r) => r.price === null).length;
   if (missing) warnings.push(`${missing} of ${buyRows.length} ${req.plan && req.plan !== "monthly" ? "buys" : "months"} have no price and ${missing === 1 ? "is" : "are"} excluded from totals.`);
 
