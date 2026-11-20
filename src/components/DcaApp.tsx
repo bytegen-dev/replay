@@ -4,7 +4,7 @@ import { SourceBadge } from "@/components/SourceBadge";
 import Link from "next/link";
 import { ChainLogo, CoinLogo } from "@/components/ChainLogo";
 import { StockLogo } from "@/components/StockLogo";
-import { AlertTriangle, Check, Copy, FileSpreadsheet, History, Settings, Share2, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Copy, FileSpreadsheet, History, Settings, Share2, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
@@ -46,8 +46,8 @@ import { xlsxFileName, type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
 import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel, isMonth, monthsBetween } from "@/lib/months.ts";
-import { CHAINS, CHAIN_LABELS, MARKET_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
-import { MAJORS, isMajorSymbol } from "@/lib/majors.ts";
+import { CHAINS, CHAIN_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
+import { MAJORS, isMajorSymbol, marketLabel } from "@/lib/majors.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
 
 /** What the Hindsight form opens with. */
@@ -170,6 +170,8 @@ export function DcaApp() {
   const [topUp, setTopUp] = useState(false);
   const [topUpMax, setTopUpMax] = useState("");
   const [maxLoss, setMaxLoss] = useState("");
+  // The funding, top-up and max-loss settings are details: shown when asked for (or when a link already changed them).
+  const [levMore, setLevMore] = useState(false);
   const levNum = Number(lev);
   const leveraged = Number.isFinite(levNum) && levNum > 1;
   // Prices come from the data source and are read-only unless the person switches editing on (for what-if prices, or to fill a gap).
@@ -244,6 +246,7 @@ export function DcaApp() {
         const fa = q.get("fund");
         if (fa !== null && Number.isFinite(Number(fa)) && Number(fa) >= 0 && Number(fa) <= 500) setFundingApr(fa);
         if (q.get("topup") === "1") setTopUp(true);
+        if (fa !== null || q.get("topup") === "1" || q.get("topmax") || q.get("maxloss")) setLevMore(true);
         const tm = cleanAmount(q.get("topmax"));
         if (tm) setTopUpMax(tm);
         const ml = cleanAmount(q.get("maxloss"));
@@ -619,7 +622,7 @@ export function DcaApp() {
     setExportError(null);
     const payload: ExportPayload = {
       tokenLabel: data.token.symbol?.toUpperCase() ?? data.token.name ?? "",
-      chain: MARKET_LABELS[data.chain],
+      chain: marketLabel(data.chain, data.address),
       address: data.address,
       basis: formatBasisLabel(data.basis, data.basisDay),
       amount: data.amount,
@@ -650,7 +653,7 @@ export function DcaApp() {
     const payload = {
       tokenLabel: data.token.symbol?.toUpperCase() ?? data.token.name ?? "",
       tokenName: data.token.name ?? "",
-      chain: MARKET_LABELS[data.chain],
+      chain: marketLabel(data.chain, data.address),
       address: data.address,
       basis: formatBasisLabel(data.basis, data.basisDay),
       amount: data.amount,
@@ -950,22 +953,34 @@ export function DcaApp() {
 
                 {/* Leverage, futures style: each buy opens its own position. 1x is plain buying. */}
                 <div className="flex flex-col gap-3">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-                    <label htmlFor="leverage" className="mr-1 text-sm text-muted-foreground">
-                      Leverage
-                    </label>
-                    {[1, 2, 3, 5, 10, 20].map((n) => (
-                      <button key={n} type="button" aria-pressed={levNum === n} onClick={() => setLev(String(n))} className={cn("h-8 border px-3 text-xs sm:text-sm", levNum === n ? "border-primary text-foreground" : "border-border text-muted-foreground hover:border-primary hover:text-foreground")}>
-                        {n}x
-                      </button>
-                    ))}
-                    <span className="flex items-center gap-1">
-                      <input id="leverage" inputMode="decimal" value={lev} onChange={(e) => setLev(e.target.value.replace(/[^\d.]/g, "").slice(0, 5))} aria-invalid={!!errors.leverage} className="h-8 w-16 border border-input bg-transparent px-2 text-center text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                      <span className="text-sm text-muted-foreground">x</span>
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {leveraged ? `liquidated if the price falls about ${liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy` : "1x is plain buying"}
-                    </span>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <label htmlFor="leverage" className="text-sm text-muted-foreground">
+                        Leverage
+                      </label>
+                      <span className="text-lg font-bold tabular-nums" aria-hidden>
+                        {leveraged ? `${Math.min(levNum, MAX_LEVERAGE)}x` : "Off"}
+                      </span>
+                    </div>
+                    <input
+                      id="leverage"
+                      type="range"
+                      min={1}
+                      max={MAX_LEVERAGE}
+                      step={1}
+                      value={Math.min(MAX_LEVERAGE, Math.max(1, Number.isFinite(levNum) ? levNum : 1))}
+                      onChange={(e) => setLev(e.target.value)}
+                      aria-valuetext={leveraged ? `${levNum} times` : "off"}
+                      className="h-2 w-full cursor-pointer accent-primary"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground tabular-nums" aria-hidden>
+                      {["1x", "25x", "50x", "75x", "100x"].map((t) => (
+                        <span key={t}>{t}</span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {leveraged ? `Liquidated if the price falls about ${liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy.` : "Move the slider to borrow more than you put in."}
+                    </p>
                   </div>
                   {(errors.leverage || (Number.isFinite(levNum) && levNum > MAX_LEVERAGE)) && (
                     <p role="alert" className="text-sm font-bold">
@@ -973,24 +988,34 @@ export function DcaApp() {
                     </p>
                   )}
                   {leveraged && (
+                    <div className="flex flex-col gap-3">
+                      <button type="button" aria-expanded={levMore} aria-controls="leverage-more" onClick={() => setLevMore((o) => !o)} className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                        <ChevronDown className={cn("size-4 transition-transform", levMore && "rotate-180")} aria-hidden />
+                        {levMore ? "Hide details" : "More settings: funding, margin top-ups, max loss"}
+                      </button>
+                      {levMore && (
+                        <div id="leverage-more">
                     <div className="grid gap-4 border border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                        Funding (% a year)
-                        <input inputMode="decimal" value={fundingApr} onChange={(e) => setFundingApr(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))} className="form-control-h border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                        <span className="text-xs">{DEFAULT_FUNDING_APR}% is the usual exchange rate</span>
-                      </label>
-                      <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                        <label className="flex cursor-pointer items-center gap-2 transition-colors hover:text-foreground">
-                          <input type="checkbox" checked={topUp} onChange={(e) => setTopUp(e.target.checked)} className="size-4 shrink-0 cursor-pointer accent-primary" />
-                          Add margin to avoid liquidation
-                        </label>
-                        {topUp && <AmountInput aria-label="Most margin to add per buy, in dollars" placeholder="Up to $ per buy (optional)" value={topUpMax} onValueChange={setTopUpMax} className="form-control-h text-sm" />}
-                      </div>
-                      <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                        Max loss per buy ($, optional)
-                        <AmountInput placeholder="No limit" value={maxLoss} onValueChange={setMaxLoss} className="form-control-h text-sm" />
-                      </label>
-                      <p className="text-xs leading-relaxed text-muted-foreground">Each buy opens its own position, as on a futures exchange. Fees are 0.045% each way. It uses daily closes, so real trading can be harsher.</p>
+                            <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                              Funding (% a year)
+                              <input inputMode="decimal" value={fundingApr} onChange={(e) => setFundingApr(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))} className="form-control-h border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                              <span className="text-xs">{DEFAULT_FUNDING_APR}% is the usual exchange rate</span>
+                            </label>
+                            <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                              <label className="flex cursor-pointer items-center gap-2 transition-colors hover:text-foreground">
+                                <input type="checkbox" checked={topUp} onChange={(e) => setTopUp(e.target.checked)} className="size-4 shrink-0 cursor-pointer accent-primary" />
+                                Add margin to avoid liquidation
+                              </label>
+                              {topUp && <AmountInput aria-label="Most margin to add per buy, in dollars" placeholder="Up to $ per buy (optional)" value={topUpMax} onValueChange={setTopUpMax} className="form-control-h text-sm" />}
+                            </div>
+                            <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                              Max loss per buy ($, optional)
+                              <AmountInput placeholder="No limit" value={maxLoss} onValueChange={setMaxLoss} className="form-control-h text-sm" />
+                            </label>
+                            <p className="text-xs leading-relaxed text-muted-foreground">Each buy opens its own position, as on a futures exchange. Fees are 0.045% each way. It uses daily closes, so real trading can be harsher.</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1064,7 +1089,7 @@ export function DcaApp() {
               <h2 className="text-xl font-bold tracking-tight">{data.token.name ?? "Unknown token"}</h2>
               <Badge variant="outline" className="gap-1.5 rounded-none font-normal">
                 {isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-3.5 shrink-0" /> : <ChainLogo chain={data.chain} className="size-3.5 shrink-0" />}
-                {MARKET_LABELS[data.chain]}
+                {marketLabel(data.chain, data.address)}
               </Badge>
               <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
                 {basisBadgeLabel(data.basis, data.basisDay)}

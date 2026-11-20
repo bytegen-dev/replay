@@ -484,7 +484,7 @@ export function PricePanel() {
 
           {/* The same asset as regular buys: opens Hindsight with it already chosen. */}
           <p className="text-sm text-muted-foreground">
-            What if you had bought this every month?{" "}
+            What would a buy back then be worth today?{" "}
             <Link href={market === "equity" ? `/?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
               Open it in Hindsight
             </Link>

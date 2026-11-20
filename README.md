@@ -2,7 +2,7 @@
 
 Replay looks back at money. It has two pages and a public API:
 
-- **Hindsight** (`/`): "What if you had bought once, at the start, or every month?" Pick a US stock or ETF (decades of history), a crypto coin or token, or a currency pair, choose how often you buy, and it shows what the buys would have bought and what they are worth now.
+- **Hindsight** (`/`): see what a buy from the past would be worth today. Pick a US stock or ETF (decades of history), a crypto coin or token, or a currency pair, buy once or on a schedule (with or without leverage), and it shows what the buys would have bought and what they are worth now.
 - **Wayback** (`/wayback`): the price of a token or stock at any past date and time, typed the way people say it.
 - A **public API** and an **AI agent skill** for both.
 
@@ -40,7 +40,7 @@ If an install reports `No matching version found for next@16.4.6`, that is stale
 The form has three tabs in its header, **Stocks**, **Crypto** and **Currencies**. Pick an asset, an amount (typed with commas as you go, in any of 50 currencies), a start and end month, and press **See what it's worth**.
 
 - **How often you buy.** Beside the amount: **once, at the start** (what the form opens on), every month, every 3 months, every 6 months, or every year. Buying months are counted from the start month. A single buy that finds no price in the start month (a token that launched later, a gap in the data) moves *forward* to the first month with a price and says so in its Note; it never goes backwards. Other plans skip a buying month that has no price.
-- **Leverage.** A 1x to 50x row models the same buys as perpetual-futures longs: each buy is its own position of `amount x leverage`, with funding on its value (default 10.95% a year), a 0.045% fee each way, liquidation when the margin left falls to 1% of the position, optional margin top-ups (with a cap) and an optional max loss per buy. It uses daily closes, so real trading is harsher. The result adds a card with the totals, the liquidations and every position; export and sharing are off while it shows. The engine is `src/lib/leverage.ts`; the API takes `leverage`, `funding`, `topup`, `topupMax` and `maxLoss`.
+- **Leverage.** A 1x to 100x row models the same buys as perpetual-futures longs: each buy is its own position of `amount x leverage`, with funding on its value (default 10.95% a year), a 0.045% fee each way, liquidation when the margin left falls to the maintenance level (1% of the position, 0.5 / leverage above 50x), optional margin top-ups (with a cap) and an optional max loss per buy. It uses daily closes, so real trading is harsher. The result adds a card with the totals, the liquidations and every position; export and sharing are off while it shows. The engine is `src/lib/leverage.ts`; the API takes `leverage`, `funding`, `topup`, `topupMax` and `maxLoss`.
 - **Sell at end month.** A checkbox under End month values the holding at the end month's price instead of today's. Results, exports and shared pages then say "at sale" instead of "today".
 - **Buy on.** Month-end, the 1st, or a custom day. Each buy uses that day's price, or the nearest day within 3 days.
 - **First price.** An asset can't be bought before it has a price. The start month can't be set before that date (shown under the field), and a start before it moves up automatically.

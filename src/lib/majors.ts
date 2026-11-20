@@ -1,3 +1,4 @@
+import { MARKET_LABELS, type Market } from "./types.ts";
 /**
  * The big coins, priced from Yahoo's USD pairs. Unlike a token's pools these have years of daily history (Bitcoin from 2014),
  * so they run through the same pipeline as stocks. `symbol` is the Yahoo ticker.
@@ -18,4 +19,7 @@ export const MAJORS: { symbol: string; firstPrice: string; ticker: string; name:
 
 /** The major a Yahoo ticker stands for, if it is one. */
 export const majorFor = (symbol: string) => MAJORS.find((m) => m.symbol === symbol.trim().toUpperCase());
+/** What to call a result's market: "Crypto" for a major coin (which runs through the stock pipeline), "Stock", or the chain's name. */
+export const marketLabel = (chain: Market, address: string): string =>
+  chain === "equity" ? (majorFor(address) ? "Crypto" : MARKET_LABELS.equity) : MARKET_LABELS[chain];
 export const isMajorSymbol = (symbol: string) => majorFor(symbol) !== undefined;

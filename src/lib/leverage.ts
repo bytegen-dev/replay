@@ -12,7 +12,7 @@
  */
 
 export interface LeverageSettings {
-  /** 1 to 50. 1 means no leverage. */
+  /** 1 to 100. 1 means no leverage. */
   leverage: number;
   /** Funding charged on the position's value, as a yearly rate in percent. Default 10.95. */
   fundingApr?: number;
@@ -86,10 +86,14 @@ export interface LeverageResult {
 
 /** The trading fee on each side (opening and closing): 0.045%, a typical exchange taker fee. */
 export const FEE_RATE = 0.00045;
-/** The margin that must remain, as a share of the position's value, before it is liquidated. Exchanges use roughly 0.5 to 2.5%. */
-export const MAINTENANCE_RATE = 0.01;
+/**
+ * The margin that must remain, as a share of the position's value, before it is liquidated. Exchanges set it from the leverage
+ * they allow (roughly half the starting margin at their maximum), so higher leverage has a lower level: 1% up to 50x, then
+ * 0.5 / leverage (0.5% at 100x). It is always below the starting margin, so a fresh position is never liquidated at once.
+ */
+export const maintenanceRate = (leverage: number): number => Math.min(0.01, 0.5 / leverage);
 export const DEFAULT_FUNDING_APR = 10.95;
-export const MAX_LEVERAGE = 50;
+export const MAX_LEVERAGE = 100;
 
 const DAY_MS = 86_400_000;
 const dayMs = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
@@ -97,7 +101,7 @@ const dayMs = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 /** The price at which a fresh position would be liquidated: where the margin left falls to the maintenance level. */
 export function liquidationPrice(openPrice: number, leverage: number): number {
   const marginShare = 1 / leverage - FEE_RATE; // margin less the opening fee, as a share of the position
-  return (openPrice * (1 - marginShare)) / (1 - MAINTENANCE_RATE);
+  return (openPrice * (1 - marginShare)) / (1 - maintenanceRate(leverage));
 }
 
 /** How far the price must fall from the buy for a fresh position to be liquidated, in percent. */
@@ -133,7 +137,7 @@ function simulateOne(buy: LeverageBuy, daily: DailyClose[], endDate: string, s: 
     lastPrice = day.price;
     lastDate = day.date;
     equity = margin + size * (day.price - buy.price) - entryFee - funding;
-    const maintenance = MAINTENANCE_RATE * size * day.price;
+    const maintenance = maintenanceRate(L) * size * day.price;
 
     // Close to liquidation: put margin back in, enough to return to the starting leverage, if there is room for it.
     if (s.topUp && equity <= 2 * maintenance) {

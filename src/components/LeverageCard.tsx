@@ -98,7 +98,7 @@ export function LeverageCard({ result, plainGainPct, sold }: { result: LeverageR
       </div>
 
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Each buy opened its own position with {settings.leverage}x leverage. Funding was charged at {settings.fundingApr}% a year on the position&apos;s value, there was a 0.045% fee on the way in and out, and a position is liquidated when its margin falls to 1% of its value.
+        Each buy opened its own position with {settings.leverage}x leverage. Funding was charged at {settings.fundingApr}% a year on the position&apos;s value, there was a 0.045% fee on the way in and out, and a position is liquidated when its margin falls to a small maintenance level (1% of its value, less at very high leverage).
         {settings.topUp ? ` Margin was added near liquidation${settings.topUpMax !== undefined ? `, up to ${fmtUsd(settings.topUpMax)} per position` : ""}.` : ""}
         {settings.maxLoss !== undefined ? ` A position closed when it had lost ${fmtUsd(settings.maxLoss)}.` : ""} It uses daily closing prices, so it can&apos;t see a price spike inside a day that would have liquidated a position sooner: real trading can be harsher than this. A past result says nothing about the future, and leverage can lose more than the money you put in on a venue that doesn&apos;t isolate margin.
       </p>

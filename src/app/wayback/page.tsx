@@ -20,7 +20,7 @@ export default function PricePage() {
         <h1 className="font-heading text-2xl font-medium tracking-tight sm:text-3xl"><RollText text="Wayback Machine" introDelay={60} /></h1>
         <SpotlightText className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="What was a token or stock worth at a past date and time? Type the date the way you would say it." />
         <p className="mt-2 text-sm text-muted-foreground">
-          Want to see what regular buys would be worth? Try <Link href="/" className="underline underline-offset-4 hover:text-foreground">Hindsight</Link>.
+          Want to know what a buy from then would be worth today? Try <Link href="/" className="underline underline-offset-4 hover:text-foreground">Hindsight</Link>.
         </p>
         <PricePanel />
       </main>

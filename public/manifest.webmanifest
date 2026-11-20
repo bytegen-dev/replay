@@ -1,7 +1,7 @@
 {
   "name": "Replay",
   "short_name": "Replay",
-  "description": "What a fixed monthly buy of a stock or token would be worth today.",
+  "description": "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

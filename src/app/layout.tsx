@@ -15,7 +15,7 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: { default: "Replay", template: "%s | Replay" },
-  description: "What a fixed monthly buy of a stock or token would be worth today.",
+  description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
   applicationName: "Replay",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -36,13 +36,13 @@ export const metadata: Metadata = {
     locale: "en_US",
     siteName: "Replay",
     title: "Replay",
-    description: "See what a fixed monthly purchase of any stock or token would be worth today.",
+    description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
     images: [{ url: "/og-image.png", width: 512, height: 512, alt: "Replay" }],
   },
   twitter: {
     card: "summary",
     title: "Replay",
-    description: "See what a fixed monthly purchase of any stock or token would be worth today.",
+    description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
     images: ["/og-image.png"],
   },
   formatDetection: { telephone: false },

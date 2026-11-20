@@ -31,6 +31,7 @@ test("the liquidation price and the distance to it match the maths", () => {
   close(liquidationDropPct(10), 9.045, 0.01);
   assert.ok(liquidationDropPct(2) > 45 && liquidationDropPct(2) < 52, "2x survives a fall of about half");
   assert.ok(liquidationDropPct(50) < 2.1, "50x is liquidated by a fall of about 2%");
+  assert.ok(liquidationDropPct(100) > 0.3 && liquidationDropPct(100) < 0.6, "100x is liquidated by a fall of about half a percent, not at once");
 });
 
 test("topping up keeps the position alive, and its cap limits how much is added", () => {
@@ -75,7 +76,7 @@ test("totals add up across several buys", () => {
   assert.equal(r.summary.gainPct, (r.summary.gain / 200) * 100);
 });
 
-test("leverage is held between 1 and 50", () => {
-  assert.equal(simulateLeverage({ buys: [buy(100, 100)], daily: [], endDate: "2024-01-02", settings: { leverage: 500 } }).settings.leverage, 50);
+test("leverage is held between 1 and 100", () => {
+  assert.equal(simulateLeverage({ buys: [buy(100, 100)], daily: [], endDate: "2024-01-02", settings: { leverage: 500 } }).settings.leverage, 100);
   assert.equal(simulateLeverage({ buys: [buy(100, 100)], daily: [], endDate: "2024-01-02", settings: { leverage: 0 } }).settings.leverage, 1);
 });
