@@ -567,6 +567,19 @@
     box-sizing: border-box;
   }
 
+  /* A row of joined boxes (currency, amount, schedule): the buttons take the input's height, so their edges always meet. */
+  .joined-row {
+    display: flex;
+    align-items: stretch;
+  }
+  .joined-row > button.form-control-h,
+  .joined-row > [data-slot="select-trigger"].form-control-h {
+    height: auto;
+    min-height: 2.5rem;
+    max-height: none;
+    align-self: stretch;
+  }
+
   input.form-control-h {
     padding-block: 0;
     font-size: 0.875rem;

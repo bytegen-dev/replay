@@ -780,6 +780,76 @@ export function DcaApp() {
       </AlertDescription>
     </Alert>
     ) : null;
+  const buyOnEl = (
+    <div className="flex flex-col gap-2">
+      <Field id="basis" label="Buy on" error={errors.basis ?? errors.basisDay}>
+        {/* One segmented control. "Day" carries its own day-of-month picker inside the segment. */}
+        <div role="radiogroup" aria-label="Which day of each month you buy" className="form-control-h grid w-full grid-cols-3 border border-border">
+          {(
+            [
+              ["month-end", "Month-end"],
+              ["first-of-month", "1st"],
+            ] as const
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              role="radio"
+              aria-checked={basis === v}
+              onClick={() => {
+                setBasis(v);
+                setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
+              }}
+              className={cn("border-r border-border text-sm transition-colors", basis === v ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}
+            >
+              {label}
+            </button>
+          ))}
+          <div className={cn("flex min-w-0 items-stretch text-sm transition-colors", basis === "day-of-month" ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={basis === "day-of-month"}
+              onClick={() => {
+                setBasis("day-of-month");
+                setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
+              }}
+              className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2"
+            >
+              <Settings className="size-3.5 shrink-0" aria-hidden />
+              Custom
+            </button>
+            {basis === "day-of-month" && (
+              <Select
+                value={String(basisDay)}
+                onValueChange={(v) => {
+                  setBasisDay(Number(v));
+                  setErrors((e) => ({ ...e, basisDay: undefined }));
+                }}
+              >
+                <SelectTrigger
+                  id="basisDay"
+                  aria-label="Day of the month (1 to 31)"
+                  style={{ width: "3.75rem", flex: "0 0 3.75rem", height: "100%" }}
+                  className="gap-1 rounded-none border-0 border-l border-primary-foreground/30 bg-transparent px-2 text-sm font-bold shadow-none focus-visible:ring-0 [&_svg]:text-primary-foreground"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className={selectContent}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                    <SelectItem key={d} value={String(d)} className="rounded-none">
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        </div>
+        {basis === "day-of-month" && basisDay > 28 && <p className="text-xs text-muted-foreground">Shorter months use their last day.</p>}
+      </Field>
+    </div>
+  );
   const chartEl =
     data && computed ? (
       <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} leverage={data.leverage ? { times: data.leverage.settings.leverage, side: data.leverage.settings.side, series: data.leverage.series } : undefined} title={`${tokenSymbol(data.token)}, ${data.currency ? data.currency.symbol : "$"}${data.amount.toLocaleString("en-US")} a month`} />
@@ -842,13 +912,15 @@ export function DcaApp() {
                   </Field>
                 )}
               </div>
-              {isMajor || leveraged ? null : mode === "equity" ? (
+              {isMajor ? null : mode === "equity" ? (
                 <Field id="reinvest" label="Dividends" className="min-[480px]:col-span-2">
                   <ToggleGroup
                     type="single"
                     variant="outline"
                     spacing={0}
-                    value={reinvest ? "reinvest" : "ignore"}
+                    disabled={leveraged}
+                    title={leveraged ? "Dividends don't apply in this case" : undefined}
+                    value={reinvest && !leveraged ? "reinvest" : "ignore"}
                     onValueChange={(v) => v && setReinvest(v === "reinvest")}
                     className="form-control-h w-full"
                     aria-label="Dividends"
@@ -890,7 +962,7 @@ export function DcaApp() {
               )}
               <Field id="amount" className="min-[480px]:col-span-2" label={plan === "monthly" ? "Monthly amount" : plan === "once" ? "Amount" : "Amount each buy"} error={errors.amount ?? errors.currency}>
                 {/* The currency sits in front of the number. Anything other than USD is converted at each month's own rate. */}
-                <div className="flex">
+                <div className="joined-row">
                   <CurrencyPicker id="currency" ariaLabel="Currency" variant="compact" value={currency} onChange={setCurrency} className="h-auto! max-h-none! min-h-0! w-[6.5rem]! shrink-0 self-stretch border-r-0" />
                   <AmountInput
                     id="amount"
@@ -918,9 +990,9 @@ export function DcaApp() {
                 </div>
               </Field>
               {leveraged && (
-                <div className="min-[480px]:col-span-2 lg:col-span-4">
+                <div className="grid gap-4 min-[480px]:col-span-2 lg:col-span-4 lg:grid-cols-2">
                 
-                <div className="flex flex-col gap-4 lg:max-w-2xl">
+                <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-3.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">Leverage</span>
@@ -1023,6 +1095,7 @@ export function DcaApp() {
                   )}
                 </div>
 
+                {buyOnEl}
                 </div>
               )}
               {/* Start and end always sit side by side, at every width. */}
@@ -1040,74 +1113,7 @@ export function DcaApp() {
                   </label>
                 </Field>
               </div>
-              <div className="flex flex-col gap-2 min-[480px]:col-span-2">
-                <Field id="basis" label="Buy on" error={errors.basis ?? errors.basisDay}>
-                  {/* One segmented control. "Day" carries its own day-of-month picker inside the segment. */}
-                  <div role="radiogroup" aria-label="Which day of each month you buy" className="form-control-h grid w-full grid-cols-3 border border-border">
-                    {(
-                      [
-                        ["month-end", "Month-end"],
-                        ["first-of-month", "1st"],
-                      ] as const
-                    ).map(([v, label]) => (
-                      <button
-                        key={v}
-                        type="button"
-                        role="radio"
-                        aria-checked={basis === v}
-                        onClick={() => {
-                          setBasis(v);
-                          setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
-                        }}
-                        className={cn("border-r border-border text-sm transition-colors", basis === v ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                    <div className={cn("flex min-w-0 items-stretch text-sm transition-colors", basis === "day-of-month" ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}>
-                      <button
-                        type="button"
-                        role="radio"
-                        aria-checked={basis === "day-of-month"}
-                        onClick={() => {
-                          setBasis("day-of-month");
-                          setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
-                        }}
-                        className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2"
-                      >
-                        <Settings className="size-3.5 shrink-0" aria-hidden />
-                        Custom
-                      </button>
-                      {basis === "day-of-month" && (
-                        <Select
-                          value={String(basisDay)}
-                          onValueChange={(v) => {
-                            setBasisDay(Number(v));
-                            setErrors((e) => ({ ...e, basisDay: undefined }));
-                          }}
-                        >
-                          <SelectTrigger
-                            id="basisDay"
-                            aria-label="Day of the month (1 to 31)"
-                            style={{ width: "3.75rem", flex: "0 0 3.75rem", height: "100%" }}
-                            className="gap-1 rounded-none border-0 border-l border-primary-foreground/30 bg-transparent px-2 text-sm font-bold shadow-none focus-visible:ring-0 [&_svg]:text-primary-foreground"
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent className={selectContent}>
-                            {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                              <SelectItem key={d} value={String(d)} className="rounded-none">
-                                {d}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </div>
-                  {basis === "day-of-month" && basisDay > 28 && <p className="text-xs text-muted-foreground">Shorter months use their last day.</p>}
-                </Field>
-              </div>
+              {!leveraged && <div className="min-[480px]:col-span-2">{buyOnEl}</div>}
               <div className="flex flex-col gap-6 min-[480px]:col-span-2 lg:col-span-4">
                 {/* Quick range: small chips on one line, not a labelled row of big buttons. */}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
