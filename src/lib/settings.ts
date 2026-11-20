@@ -44,23 +44,13 @@ export function applySettings(s: Settings, systemPrefersLight: boolean, root: HT
   else delete root.dataset.motion;
   if (s.highContrast) root.dataset.contrast = "high";
   else delete root.dataset.contrast;
-  setTabIcon(root.dataset.theme === "light");
-}
-
-/** The tab's icon: the mark drawn for a light page when the theme is light, the one for a dark page otherwise. */
-export const TAB_ICON = { dark: "/replay-logo.png", light: "/replay-logo-light.png" } as const;
-export function setTabIcon(light: boolean): void {
-  if (typeof document === "undefined") return;
-  const link = document.getElementById("app-icon") as HTMLLinkElement | null;
-  const href = light ? TAB_ICON.light : TAB_ICON.dark;
-  if (link && !link.href.endsWith(href)) link.href = href;
 }
 
 /**
  * Runs in <head> before the page paints, so the right theme is there from the first frame (no flash of dark on a light
  * device). It does the same thing as applySettings, written out as plain JavaScript.
  */
-export const HEAD_SCRIPT = `(function(){var r=document.documentElement;try{var s=JSON.parse(localStorage.getItem("${STORAGE_KEY}")||"{}");var t=s.theme==="light"||s.theme==="dark"?s.theme:"system";var l=t==="light"||(t==="system"&&window.matchMedia("(prefers-color-scheme: light)").matches);r.dataset.theme=l?"light":"dark";var i=document.getElementById("app-icon");if(i)i.href=l?"/replay-logo-light.png":"/replay-logo.png";if(s.reduceMotion===true)r.dataset.motion="reduce";if(s.highContrast===true)r.dataset.contrast="high"}catch(e){r.dataset.theme="dark"}})();`;
+export const HEAD_SCRIPT = `(function(){var r=document.documentElement;try{var s=JSON.parse(localStorage.getItem("${STORAGE_KEY}")||"{}");var t=s.theme==="light"||s.theme==="dark"?s.theme:"system";var l=t==="light"||(t==="system"&&window.matchMedia("(prefers-color-scheme: light)").matches);r.dataset.theme=l?"light":"dark";if(s.reduceMotion===true)r.dataset.motion="reduce";if(s.highContrast===true)r.dataset.contrast="high"}catch(e){r.dataset.theme="dark"}})();`;
 
 /** True when animation should be skipped: the viewer's own toggle, or the system setting. */
 export function motionReduced(): boolean {

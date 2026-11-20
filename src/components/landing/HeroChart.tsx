@@ -52,7 +52,7 @@ export function HeroChart({ checks }: { checks: DemoCheck[] }) {
         <p className="text-xs text-muted-foreground">Last updated {monthYear(check.asOf)}</p>
         <div role="group" aria-label="Pick an example" className="flex shrink-0 gap-1.5">
           {checks.map((c, i) => (
-            <button key={c.id} type="button" aria-label={c.label} aria-pressed={i === index % checks.length} onClick={() => setIndex(i)} className={cn("h-2 transition-all duration-300", i === index % checks.length ? "w-6 bg-primary" : "w-2 bg-border hover:bg-muted-foreground")} />
+            <button key={c.id} type="button" aria-label={c.label} aria-pressed={i === index % checks.length} onClick={() => setIndex(i)} className={cn("h-2 transition-all duration-300", i === index % checks.length ? (up ? "w-6 bg-primary" : "w-6 bg-destructive") : up ? "w-2 bg-border hover:bg-muted-foreground" : "w-2 bg-destructive/25 hover:bg-destructive/60")} />
           ))}
         </div>
       </div>
