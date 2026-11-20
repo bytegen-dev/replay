@@ -1201,9 +1201,37 @@ html[data-motion="reduce"] [data-slot="button"] {
 @layer utilities {
   /* Rubber-band scrolling (iOS, trackpads) pulls the page past its ends and shows what is behind it. These extend the header
      and footer backgrounds into that area, so the bounce looks like more of the same bar and not a mismatched strip.
-     A box-shadow is used because, unlike a real element, it adds no scrollable space. */
-  .overscroll-top {
-    box-shadow: 0 -50vh 0 50vh color-mix(in srgb, var(--background) 80%, transparent);
+     (The footer uses a box-shadow because, unlike a real element, it adds no scrollable space.) */
+  /* The header's frosted bar is drawn on a layer behind its content, not on the header itself, and the stretch above it for the
+     bounce is a second plain layer, not a giant box-shadow. Putting the blur and a huge shadow on the element that also holds the
+     logo and buttons made iOS blur the header's own content when the site runs as an installed app. */
+  .header-bar {
+    isolation: isolate;
+  }
+  .header-bar::before,
+  .header-bar::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--background) 80%, transparent);
+  }
+  .header-bar::before {
+    inset: 0;
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+  .header-bar::after {
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: 50vh;
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .header-bar::before,
+    .header-bar::after {
+      background: var(--background);
+    }
   }
   .overscroll-bottom {
     box-shadow: 0 50vh 0 50vh var(--background);

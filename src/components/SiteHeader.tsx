@@ -12,7 +12,7 @@ import { SubscribeDialog } from "@/components/SubscribeDialog";
  */
 export function SiteHeader() {
   return (
-    <header className="overscroll-top sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-md supports-[not(backdrop-filter:blur(1px))]:bg-background">
+    <header className="header-bar sticky top-0 z-50 border-b border-border">
       <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-[max(1rem,env(safe-area-inset-left))] py-3 pr-[max(1rem,env(safe-area-inset-right))] pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-6 sm:px-6 sm:py-4">
         <Link href="/" className="group/logo flex flex-1 items-center gap-3 sm:flex-none" aria-label="Replay home">
           <BrandMark size={40} priority className="size-9 shrink-0 object-contain transition-transform duration-300 ease-out group-hover/logo:-rotate-6 group-hover/logo:scale-110 sm:size-11" />
