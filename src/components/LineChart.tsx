@@ -37,6 +37,8 @@ interface Props {
   /** Keeps the axes where they are while the data grows, so a replay draws into a fixed frame. */
   fixedRange?: { xMin: number; xMax: number; yMin: number; yMax: number };
   height?: number;
+  /** Tighter margins left and right, for a chart set edge to edge in its card. */
+  compact?: boolean;
   /** What the chart shows, for screen readers. */
   ariaLabel: string;
 }
@@ -44,7 +46,9 @@ interface Props {
 export const UP = "var(--primary)";
 export const DOWN = "var(--destructive)";
 
-const M = { top: 18, right: 66, bottom: 28, left: 10 };
+const MARGINS = { top: 18, right: 66, bottom: 28, left: 10 };
+/** For a chart that runs to the edges of its card: less room on each side. */
+const COMPACT_MARGINS = { top: 18, right: 62, bottom: 28, left: 4 };
 const CHAR = 6.7; // width of one 11px mono character, for sizing the pills
 const PILL_H = 18;
 
@@ -62,7 +66,8 @@ function Pill({ x, y, text, fill, ink, anchor = "start" }: { x: number; y: numbe
   );
 }
 
-export function LineChart({ series, yFormat, zeroBaseline = true, marker, withClock = false, fixedRange, height = 280, ariaLabel }: Props) {
+export function LineChart({ series, yFormat, zeroBaseline = true, marker, withClock = false, fixedRange, height = 280, compact = false, ariaLabel }: Props) {
+  const M = compact ? COMPACT_MARGINS : MARGINS;
   const box = useRef<HTMLDivElement>(null);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const [width, setWidth] = useState(320);
@@ -94,7 +99,7 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
     // Labels are about 55px wide, so only as many as fit with a gap between them: three or four on a phone.
     const room = Math.floor((width - M.left - M.right) / 80);
     return { xMin, xMax, scale, xTicks: thinTicks(timeTicks(xMin, xMax, 6), room) };
-  }, [series, marker, zeroBaseline, width, fixedRange]);
+  }, [series, marker, zeroBaseline, width, fixedRange, M.left, M.right]);
 
   if (!model) return null;
   const { xMin, xMax, scale, xTicks } = model;

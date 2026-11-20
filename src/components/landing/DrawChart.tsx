@@ -10,7 +10,7 @@ import { motionReduced } from "@/lib/settings.ts";
  * A saved result's growth chart that draws itself: the line runs left to right while the axes stay put. It draws again
  * whenever `runKey` changes (a different check picked), and shows complete straight away for people who prefer reduced motion.
  */
-export function DrawChart({ points, runKey, height = 280, ariaLabel, durationMs = 1700, firstDelayMs = 0 }: { points: DemoPoint[]; runKey: string; height?: number; ariaLabel: string; durationMs?: number; firstDelayMs?: number }) {
+export function DrawChart({ points, runKey, height = 280, ariaLabel, durationMs = 1700, firstDelayMs = 0, compact = false }: { points: DemoPoint[]; runKey: string; height?: number; ariaLabel: string; durationMs?: number; firstDelayMs?: number; compact?: boolean }) {
   // The progress belongs to the check it was made for, so picking another starts at zero with no frame of the old line.
   const [drawn, setDrawn] = useState<{ key: string; p: number }>({ key: "", p: 0 });
   const progress = drawn.key === runKey ? drawn.p : 0;
@@ -64,5 +64,5 @@ export function DrawChart({ points, runKey, height = 280, ariaLabel, durationMs 
     { key: "value", label: "Worth at the time", area: true, color: up ? UP : DOWN, points: shown.map((p) => ({ x: p.t, y: p.value })) },
     { key: "invested", label: "Total invested", dashed: true, points: shown.map((p) => ({ x: p.t, y: p.invested })) },
   ];
-  return <LineChart series={series} fixedRange={progress < 1 ? range : undefined} yFormat={moneyShort} height={height} ariaLabel={ariaLabel} />;
+  return <LineChart series={series} fixedRange={progress < 1 ? range : undefined} yFormat={moneyShort} height={height} compact={compact} ariaLabel={ariaLabel} />;
 }
