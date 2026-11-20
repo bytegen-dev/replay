@@ -193,7 +193,8 @@ export function DcaApp() {
   // Defaults depend on the current date, so set them after mount (not during prerender).
   const [startMonth, setStartMonth] = useState("");
   const [endMonth, setEndMonth] = useState("");
-  const [basis, setBasis] = useState<Basis>("month-end");
+  // A custom day (the 15th) is the default; month-start and month-end are one tap away.
+  const [basis, setBasis] = useState<Basis>("day-of-month");
   const [basisDay, setBasisDay] = useState(15);
   const [formReady, setFormReady] = useState(false);
   // A link with run=1 (the footer timeline makes them) fills the form and runs it once the form is ready.
@@ -273,6 +274,8 @@ export function DcaApp() {
       if (cur && isCurrency(cur)) setCurrency(cur);
       const b = q.get("basis");
       if (b === "first-of-month" || b === "day-of-month" || b === "month-end") setBasis(b);
+      // A link from before the default changed carries no `basis` and meant month-end.
+      else if (q.size > 0) setBasis("month-end");
       const day = Number(q.get("day"));
       if (Number.isInteger(day) && day >= 1 && day <= 31) setBasisDay(day);
       const r = decodeRange(q, last);
@@ -326,7 +329,7 @@ export function DcaApp() {
       amt: cleanAmount(amount) ?? undefined,
       cur: currency !== "USD" && currency,
       ...encodeRange(startMonth, endMonth, last),
-      basis: basis !== "month-end" && basis,
+      basis,
       day: basis === "day-of-month" && String(basisDay),
       sell: sellAtEnd && "1",
       plan: plan !== START_PLAN && plan,
@@ -789,11 +792,11 @@ export function DcaApp() {
     <div className="flex flex-col gap-2">
       <Field id="basis" label="Buy on" error={errors.basis ?? errors.basisDay}>
         {/* One segmented control. "Day" carries its own day-of-month picker inside the segment. */}
-        <div role="radiogroup" aria-label="Which day of each month you buy" className="form-control-h grid w-full grid-cols-3 border border-border">
+        <div role="radiogroup" aria-label="Which day of each month you buy" className="form-control-h grid w-full grid-cols-[1.45fr_1fr_1fr] border border-border">
           {(
             [
+              ["first-of-month", "Month-start"],
               ["month-end", "Month-end"],
-              ["first-of-month", "1st"],
             ] as const
           ).map(([v, label]) => (
             <button
@@ -805,12 +808,12 @@ export function DcaApp() {
                 setBasis(v);
                 setErrors((e) => ({ ...e, basis: undefined, basisDay: undefined }));
               }}
-              className={cn("border-r border-border text-sm transition-colors", basis === v ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}
+              className={cn("border-border text-sm transition-colors", v !== "month-end" && "border-r", basis === v ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}
             >
               {label}
             </button>
           ))}
-          <div className={cn("flex min-w-0 items-stretch text-sm transition-colors", basis === "day-of-month" ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}>
+          <div className={cn("order-first flex min-w-0 items-stretch border-r border-border text-sm transition-colors", basis === "day-of-month" ? "bg-primary text-primary-foreground" : "hover:bg-secondary")}>
             <button
               type="button"
               role="radio"
@@ -821,8 +824,8 @@ export function DcaApp() {
               }}
               className="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2"
             >
-              <Settings className="size-3.5 shrink-0" aria-hidden />
-              Custom
+              {basis !== "day-of-month" && <Settings className="size-3.5 shrink-0" aria-hidden />}
+              {basis === "day-of-month" ? "Custom" : `Custom (${basisDay})`}
             </button>
             {basis === "day-of-month" && (
               <Select
@@ -1007,7 +1010,7 @@ export function DcaApp() {
                     </div>
                     {leveraged && (
                       <>
-                        <div role="group" aria-label="Direction" className="flex w-fit border border-input">
+                        <div role="group" aria-label="Direction" className="-mt-1.5 flex w-fit border border-input">
                           {(["long", "short"] as const).map((d) => (
                             <button key={d} type="button" aria-pressed={side === d} onClick={() => setSide(d)} className={cn("h-9 px-4 text-sm font-bold transition-colors", side === d ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary")}>
                               {d === "long" ? "Long" : "Short"}

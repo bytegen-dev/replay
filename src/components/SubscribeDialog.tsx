@@ -61,9 +61,12 @@ export function SubscribeDialog() {
               <Label htmlFor="subscribe-email" className="text-sm text-muted-foreground">
                 Email
               </Label>
-              <div className="flex gap-2">
-                <Input id="subscribe-email" type="email" inputMode="email" autoComplete="email" className="form-control-h min-w-0 flex-1 text-sm" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!error} />
-                <Button type="submit" disabled={state === "sending"} className="form-control-h shrink-0 gap-2 rounded-none border-2 border-primary px-4 text-sm font-bold">
+              <div className="flex">
+                {/* The email box and the button meet with no gap: the box has its bottom-left corner cut, the button its top-right. */}
+                <div className="cut-bl h-10 min-w-0 flex-1">
+                  <Input id="subscribe-email" type="email" inputMode="email" autoComplete="email" className="h-full w-full rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0" placeholder="name@example.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!error} />
+                </div>
+                <Button type="submit" disabled={state === "sending"} className="cut-tr cut-primary h-10 shrink-0 gap-2 rounded-none border-0 px-4 text-sm font-bold text-primary-foreground">
                   {state === "sending" && <MarkLoader className="size-4" />}
                   {state === "sending" ? "Subscribing" : "Subscribe"}
                 </Button>

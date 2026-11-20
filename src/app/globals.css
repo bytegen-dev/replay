@@ -560,6 +560,64 @@
     clip-path: polygon(0 0, calc(100% - var(--cut-in)) 0, 100% var(--cut-in), 100% 100%, var(--cut-in) 100%, 0 calc(100% - var(--cut-in)));
   }
 
+  /* Two pieces that sit edge to edge: an input with its bottom-left corner cut, and a button with its top-right corner cut (.cut-bl,
+     .cut-tr). Each is drawn like the cards: an edge layer and a fill layer behind transparent content, so the diagonals stay one
+     pixel thick and no seam shows on the straight edges. --edge and --fill are the two layer colours. */
+  .cut-bl,
+  .cut-tr {
+    --c: 10px;
+    --cin: calc(var(--c) - 0.59px);
+    --edge: var(--input);
+    --fill: var(--card);
+    position: relative;
+    isolation: isolate;
+    background: transparent !important;
+    border-color: transparent !important;
+  }
+  .cut-bl::before,
+  .cut-bl::after,
+  .cut-tr::before,
+  .cut-tr::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+  }
+  .cut-bl::before,
+  .cut-tr::before {
+    inset: -1px;
+    background: var(--edge);
+    clip-path: var(--poly-out);
+  }
+  .cut-bl::after,
+  .cut-tr::after {
+    inset: 0;
+    background: var(--fill);
+    clip-path: var(--poly-in);
+  }
+  .cut-bl {
+    --poly-out: polygon(0 0, 100% 0, 100% 100%, var(--c) 100%, 0 calc(100% - var(--c)));
+    --poly-in: polygon(0 0, 100% 0, 100% 100%, var(--cin) 100%, 0 calc(100% - var(--cin)));
+  }
+  .cut-bl:focus-within {
+    --edge: var(--ring);
+  }
+  .cut-bl:has([aria-invalid="true"]) {
+    --edge: var(--destructive);
+  }
+  /* A filled, primary-coloured piece (the button). */
+  .cut-tr.cut-primary {
+    --edge: var(--primary);
+    --fill: var(--primary);
+  }
+  .cut-tr.cut-primary:not(:disabled):hover {
+    --fill: color-mix(in srgb, var(--primary) 80%, var(--card));
+  }
+  .cut-tr {
+    --poly-out: polygon(0 0, calc(100% - var(--c)) 0, 100% var(--c), 100% 100%, 0 100%);
+    --poly-in: polygon(0 0, calc(100% - var(--cin)) 0, 100% var(--cin), 100% 100%, 0 100%);
+  }
+
   .form-control-h {
     height: 2.5rem;
     min-height: 2.5rem;
