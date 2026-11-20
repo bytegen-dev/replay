@@ -550,8 +550,9 @@ export function DcaApp() {
     setEndMonth(req.endMonth);
     setBasis(ex.basis);
     setPlan(ex.plan ?? "monthly");
-    setLev("1");
-    setSide("long");
+    // A leveraged example opens with its leverage and side set; a plain one clears them.
+    setLev(String(ex.leverage?.leverage ?? 1));
+    setSide(ex.leverage?.side ?? "long");
     setSellAtEnd(false);
     setCurrency("USD");
     setErrors({});

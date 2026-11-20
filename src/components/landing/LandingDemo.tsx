@@ -54,7 +54,20 @@ export function LandingDemo({ checks }: { checks: DemoCheck[] }) {
             ))}
           </div>
           <p className="border-l-2 border-primary pl-4 text-base leading-relaxed sm:text-lg">
-            {check.buying} into <b>{check.name}</b> {check.timing} put in <b>{usd(check.invested)}</b>. Today that is worth <b>{usd(check.value)}</b>, {check.gainPct >= 0 ? "a gain" : "a loss"} of <b>{Math.abs(check.gainPct).toFixed(1)}%</b>.
+            {check.buying} into <b>{check.name}</b>
+            {check.leverage && (
+              <>
+                {" "}
+                at <b>{check.leverage.times}x {check.leverage.side}</b>
+              </>
+            )}{" "}
+            {check.timing} put in <b>{usd(check.invested)}</b>. Today that is worth <b>{usd(check.value)}</b>, {check.gainPct >= 0 ? "a gain" : "a loss"} of <b>{Math.abs(check.gainPct).toFixed(1)}%</b>
+            {check.leverage && check.leverage.liquidated > 0 && (
+              <>
+                , with <b>{check.leverage.liquidated}</b> of {check.leverage.positions} {check.leverage.positions === 1 ? "position" : "positions"} closed out when the price moved against {check.leverage.positions === 1 ? "it" : "them"}
+              </>
+            )}
+            .
           </p>
           <DrawChart points={check.points} runKey={check.id} height={280} ariaLabel={`${check.question} ${usd(check.invested)} put in, worth ${usd(check.value)} today.`} />
         </div>

@@ -1,4 +1,5 @@
 import { todayUtc } from "./months.ts";
+import type { Side } from "./leverage.ts";
 import type { Plan } from "./plan.ts";
 import type { Basis, DcaRequest, Market } from "./types.ts";
 
@@ -30,6 +31,8 @@ export interface Example {
   plan?: Plan;
   /** A line of context shown with the result. */
   note?: string;
+  /** Buy with leverage (a perpetual-futures style long or short) instead of plainly. */
+  leverage?: { leverage: number; side?: Side };
 }
 
 export const EXAMPLES: Example[] = [
@@ -161,6 +164,59 @@ export const EXAMPLES: Example[] = [
     basis: "month-end",
     note: "Chicago wheat futures, priced in US dollars per bushel, buying $200 every month.",
   },
+  {
+    id: "sp500-3x",
+    group: "stocks",
+    label: "S&P 500, 3x long, $500 a month since 2017",
+    question: "$500 a month into the S&P 500 at 3x leverage (long) since January 2017: what is it worth today?",
+    market: "equity",
+    address: "SPY",
+    amount: 500,
+    startMonth: "2017-01",
+    basis: "month-end",
+    leverage: { leverage: 3 },
+    note: "The same monthly buys of SPY as 3x long positions, with funding and fees. Dividends don't apply to leveraged runs.",
+  },
+  {
+    id: "bitcoin-5x",
+    group: "crypto",
+    label: "Bitcoin, 5x long, $200 a month since 2020",
+    question: "$200 a month into Bitcoin at 5x leverage (long) since January 2020: what is it worth today?",
+    market: "equity",
+    address: "BTC-USD",
+    amount: 200,
+    startMonth: "2020-01",
+    basis: "month-end",
+    leverage: { leverage: 5 },
+    note: "The same monthly buys of Bitcoin as 5x long positions, with funding and fees. A position is closed if the price falls far enough to wipe out its margin.",
+  },
+  {
+    id: "ethereum-3x-short",
+    group: "crypto",
+    label: "Ethereum, 3x short, $1,000 once in 2021",
+    question: "$1,000 shorting Ethereum at 3x leverage in a single position in November 2021: what is it worth today?",
+    market: "equity",
+    address: "ETH-USD",
+    amount: 1000,
+    startMonth: "2021-11",
+    basis: "month-end",
+    plan: "once",
+    leverage: { leverage: 3, side: "short" },
+    note: "One 3x short position opened at the end of November 2021, near Ethereum's peak. A short gains when the price falls and is closed if it rises far enough.",
+  },
+  {
+    id: "gold-5x",
+    group: "commodities",
+    label: "Gold, 5x long, $300 a month since 2020",
+    question: "$300 a month into gold at 5x leverage (long) since January 2020: what is it worth today?",
+    market: "equity",
+    address: "GC=F",
+    amount: 300,
+    startMonth: "2020-01",
+    basis: "month-end",
+    leverage: { leverage: 5 },
+    note: "The same monthly buys of gold futures as 5x long positions, with funding and fees.",
+  },
 ];
 
 /**
@@ -266,6 +322,7 @@ export function exampleRequest(ex: Example, now: number = Date.now()): DcaReques
     basis: ex.basis,
     ...(ex.reinvest ? { reinvest: true } : {}),
     ...(ex.plan && ex.plan !== "monthly" ? { plan: ex.plan } : {}),
+    ...(ex.leverage ? { leverage: { leverage: ex.leverage.leverage, ...(ex.leverage.side ? { side: ex.leverage.side } : {}) } } : {}),
   };
 }
 

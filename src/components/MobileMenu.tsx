@@ -115,8 +115,10 @@ export function MobileMenu() {
                   style={enter(i)}
                   className={cn("group relative flex items-center gap-4 border px-4 py-4 transition-colors", active ? "border-primary bg-primary/10" : "border-border hover:border-primary/60 hover:bg-secondary/60")}
                 >
-                  <Icon className={cn("size-6 shrink-0 transition-transform group-hover:scale-110 group-active:scale-95", active ? "text-primary" : "text-muted-foreground group-hover:text-primary")} aria-hidden />
-                  <span className="min-w-0">
+                  {/* The page you are on wears the dotted texture (a plain rectangle, so no cut corners). */}
+                  {active && <span aria-hidden className="tex-layer" style={{ "--cut": "0px" } as React.CSSProperties} />}
+                  <Icon className={cn("relative z-10 size-6 shrink-0 transition-transform group-hover:scale-110 group-active:scale-95", active ? "text-primary" : "text-muted-foreground group-hover:text-primary")} aria-hidden />
+                  <span className="relative z-10 min-w-0">
                     <span className="font-heading block text-xl leading-tight font-bold">{label}</span>
                     <span className="block text-xs text-muted-foreground">{note}</span>
                   </span>

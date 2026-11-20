@@ -58,7 +58,7 @@ export function WaybackTools() {
             >
               {/* The dotted texture of the chosen card, clipped to the card's own cut corners. */}
               {on && <span aria-hidden className="tex-layer" />}
-              <span className={cn("relative z-10 flex size-9 shrink-0 items-center justify-center border transition-colors", on ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground group-hover:border-primary/60 group-hover:text-foreground")}>
+              <span className={cn("relative z-10 flex size-9 shrink-0 items-center justify-center border bg-card/30 backdrop-blur-md transition-colors", on ? "border-primary text-primary" : "border-border text-muted-foreground group-hover:border-primary/60 group-hover:text-foreground")}>
                 <t.Icon className="size-4.5" strokeWidth={1.8} aria-hidden />
               </span>
               <span className="relative z-10 flex min-w-0 flex-col gap-0.5">

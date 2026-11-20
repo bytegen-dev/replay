@@ -31,6 +31,8 @@ export interface DemoCheck {
   since: string;
   /** "since January 2020" for a monthly habit, "in November 2021" for a single buy. */
   timing: string;
+  /** Set for a leveraged example: how many times, long or short, and how many of its positions were closed out. */
+  leverage?: { times: number; side: "long" | "short"; liquidated: number; positions: number };
   invested: number;
   value: number;
   gainPct: number;
@@ -68,6 +70,11 @@ function build(list: Example[]): DemoCheck[] {
     const s = prepared.summary;
     const pts = growthSeries(prepared.buys, r.currentPrice, r.currentPriceDate);
     if (!pts.length || s.valueToday === null || s.gainPct === null) continue;
+    // A leveraged example shows the leveraged run (its margin in, what the positions are worth, its own path), not the plain buy.
+    const lev = ex.leverage && r.leverage ? r.leverage : null;
+    if (ex.leverage && !lev) continue;
+    const levPoints = lev ? lev.series.map((p) => ({ t: Date.parse(`${p.date}T00:00:00Z`), invested: p.invested, value: p.value })) : null;
+    if (lev && (levPoints?.length ?? 0) < 2) continue;
     const [y, m] = ex.startMonth.split("-").map(Number);
     out.push({
       id: ex.id,
@@ -78,11 +85,12 @@ function build(list: Example[]): DemoCheck[] {
       buying: ex.plan === "once" ? `${money(ex.amount)} once` : `${money(ex.amount)} a month`,
       since: `${MONTHS[m - 1]} ${y}`,
       timing: ex.plan === "once" ? `in ${MONTHS[m - 1]} ${y}` : `since ${MONTHS[m - 1]} ${y}`,
-      invested: s.invested,
-      value: s.valueToday,
-      gainPct: s.gainPct,
+      ...(lev ? { leverage: { times: lev.settings.leverage, side: lev.settings.side, liquidated: lev.summary.liquidated, positions: lev.summary.positions } } : {}),
+      invested: lev ? lev.summary.invested : s.invested,
+      value: lev ? lev.summary.value : s.valueToday,
+      gainPct: lev ? (lev.summary.gainPct ?? s.gainPct) : s.gainPct,
       asOf: snap.asOf,
-      points: pts.map((p) => ({ t: p.t, invested: p.invested, value: p.value })),
+      points: levPoints ?? pts.map((p) => ({ t: p.t, invested: p.invested, value: p.value })),
     });
   }
   return out;

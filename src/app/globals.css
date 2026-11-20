@@ -1638,7 +1638,7 @@ html[data-motion="reduce"] .tex-hover:hover::before {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
+  opacity: 0.45;
   background-image: radial-gradient(circle, color-mix(in srgb, var(--primary) 80%, transparent) 1.1px, transparent 1.7px);
   background-size: 12px 12px;
   -webkit-mask-image: linear-gradient(155deg, #000 0%, rgb(0 0 0 / 0.5) 60%, rgb(0 0 0 / 0.18) 100%);
