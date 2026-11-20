@@ -526,18 +526,15 @@
   transition-delay: calc(var(--d, 0) * 1ms);
 }
 /* ---- The full-width band behind the landing page's demo. ---------------------------------------------------------------------
-   The page's own backdrop is slanted lines, so the band uses something else: a grid of fine dots, like chart paper. Over it a mint
-   glow sits in the corner, and a soft band of light sweeps slowly across, lighting the dots it passes (the same dots, drawn
+   The page's own backdrop is slanted lines, so the band uses something else: a grid of fine dots, like chart paper. A soft band of light sweeps slowly across, lighting the dots it passes (the same dots, drawn
    brighter and shown through a moving mask, so they stay exactly on the grid). The edges of the dots fade out so the band has no
    visible box. */
 .band-surface {
-  background:
-    radial-gradient(60% 80% at 100% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 70%),
-    radial-gradient(50% 70% at 0% 100%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
-    color-mix(in srgb, var(--card) 62%, transparent);
+  background: color-mix(in srgb, var(--card) 62%, transparent);
 }
 .band-dots,
-.band-dots-lit {
+.band-dots-lit,
+.band-dots-spot {
   inset: 0;
   background-size: 24px 24px;
   background-position: 12px 12px;
@@ -561,6 +558,20 @@
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   animation: band-sweep 9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+/* While a mouse is over the band: a pool of light on the same dots, centred on --sx / --sy (set by BandDots). The sweep fades out
+   as this fades in. It keeps the dimmed patch behind the heading too. */
+.band-dots-lit,
+.band-dots-spot {
+  transition: opacity 0.6s ease;
+}
+.band-dots-spot {
+  opacity: 0;
+  background-image: radial-gradient(circle, var(--primary) 1.5px, transparent 2.1px);
+  -webkit-mask-image: radial-gradient(circle 260px at var(--sx, 50%) var(--sy, 50%), #000 0%, rgb(0 0 0 / 0.55) 42%, transparent 100%), radial-gradient(ellipse 80% 36% at 32% 15%, rgb(0 0 0 / 0.12) 40%, #000 100%);
+  mask-image: radial-gradient(circle 260px at var(--sx, 50%) var(--sy, 50%), #000 0%, rgb(0 0 0 / 0.55) 42%, transparent 100%), radial-gradient(ellipse 80% 36% at 32% 15%, rgb(0 0 0 / 0.12) 40%, #000 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
 }
 @keyframes band-sweep {
   from {

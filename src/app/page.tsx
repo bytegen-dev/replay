@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Bot, FlaskConical, Wallet } from "lucide-react";
 import Link from "next/link";
+import { BandDots } from "@/components/landing/BandDots";
 import { Faq } from "@/components/landing/Faq";
 import { HindsightVisual, LeverageVisual, ShareVisual, WaybackVisual } from "@/components/landing/FeatureVisuals";
 import { HeroChart } from "@/components/landing/HeroChart";
@@ -134,12 +135,11 @@ export default function LandingPage() {
           {hero.length > 0 && <HeroChart checks={hero} />}
         </section>
 
-        {/* The live demo, on a band that runs the full width of the screen: a dot grid with a sweep of light across it, a mint
-            glow in the corner and hairlines top and bottom, so it reads as a place of its own. */}
+        {/* The live demo, on a band that runs the full width of the screen: a dot grid with a sweep of light across it
+            and hairlines top and bottom, so it reads as a place of its own. */}
         <section id="demo" className="relative isolate scroll-mt-20 overflow-hidden border-y border-border py-14 sm:py-24">
           <div aria-hidden className="band-surface pointer-events-none absolute inset-0 -z-10" />
-          <div aria-hidden className="band-dots pointer-events-none absolute -z-10" />
-          <div aria-hidden className="band-dots-lit pointer-events-none absolute -z-10" />
+          <BandDots className="pointer-events-none absolute -z-10" />
           <div className={section}>
             <div className="mb-6 flex max-w-2xl flex-col gap-2 sm:mb-8" data-reveal-on-scroll style={later()}>
               <h2 className={h2}>What if you had bought it back then?</h2>
