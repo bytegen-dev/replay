@@ -506,16 +506,24 @@
      1px edge are drawn on two layers behind the content, not with clip-path on the element itself, so dropdowns can still
      hang out past a card's edge. --edge and --fill are the two layer colours. */
   .cut-card,
-  .cut-btn {
+  .cut-btn,
+  .cut-dialog {
     --edge: var(--border);
     --fill: var(--card);
     --cut-in: calc(var(--cut) - 0.59px); /* the inner layer's cut, so the edge stays 1px thick along the diagonals */
-    position: relative;
     isolation: isolate;
     background: transparent !important;
     border-color: transparent !important;
   }
+  .cut-card,
+  .cut-btn {
+    position: relative;
+  }
   .cut-card {
+    --cut: 18px;
+  }
+  /* A dialog is already fixed in place, so it keeps its own position; the corners are cut the same way as a card's. */
+  .cut-dialog {
     --cut: 18px;
   }
   .cut-btn {
@@ -528,6 +536,8 @@
   }
   .cut-card::before,
   .cut-card::after,
+  .cut-dialog::before,
+  .cut-dialog::after,
   .cut-btn::before,
   .cut-btn::after {
     content: "";
@@ -536,12 +546,14 @@
     pointer-events: none;
   }
   .cut-card::before,
+  .cut-dialog::before,
   .cut-btn::before {
     inset: -1px;
     background: var(--edge);
     clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
   }
   .cut-card::after,
+  .cut-dialog::after,
   .cut-btn::after {
     inset: 0;
     background: var(--fill);

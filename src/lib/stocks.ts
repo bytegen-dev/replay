@@ -364,7 +364,7 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     currentPriceDate: meta.priceDate ?? last.date,
     reinvest: reinvest && !viaBackup,
     // Daily closes, only for a leveraged run (it needs every day to check for liquidation).
-    ...(req.leverage ? { daily: days.filter((d) => d.date >= req.startMonth + "-01").map((d) => ({ date: d.date, price: d.close })) } : {}),
+    ...(req.leverage ? { daily: days.filter((d) => d.date >= req.startMonth + "-01").map((d) => ({ date: d.date, price: reinvest ? d.adjClose : d.close })) } : {}),
     rows,
     sources: viaBackup
       ? [{ label: "Nasdaq historical prices (daily)", url: `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(symbol.toLowerCase())}/historical` }]

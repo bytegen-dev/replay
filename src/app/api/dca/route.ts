@@ -3,6 +3,7 @@ import { DcaError, runDca } from "@/lib/dca.ts";
 import type { LeverageSettings } from "@/lib/leverage.ts";
 import type { DcaRequest } from "@/lib/types.ts";
 import { isPlan } from "@/lib/plan.ts";
+import { ownerTiingoKey } from "@/lib/access.ts";
 import { isTiingoKey } from "@/lib/tiingo.ts";
 import { cardanoUnit, normalizeAddress, validateRequest } from "@/lib/validate.ts";
 
@@ -55,7 +56,9 @@ export async function POST(request: Request) {
   try {
     // A key the user pasted into Settings, sent only to look up their own stock prices. Never logged or stored.
     const key = request.headers.get("x-tiingo-key")?.trim();
-    return NextResponse.json(await runDca(req, Date.now(), isTiingoKey(key) ? { tiingoKey: key } : {}));
+    // Otherwise the site's own key, for a browser that entered the access code. The key stays on the server.
+    const tiingoKey = isTiingoKey(key) ? key : ownerTiingoKey(request);
+    return NextResponse.json(await runDca(req, Date.now(), tiingoKey ? { tiingoKey } : {}));
   } catch (e) {
     if (e instanceof DcaError) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error("dca route failed", e);

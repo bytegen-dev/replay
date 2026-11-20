@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Chakra_Petch, JetBrains_Mono } from "next/font/google";
+import { AccessPanel } from "@/components/AccessPanel";
 import { BackgroundMotion } from "@/components/BackgroundMotion";
 import { PwaRegister } from "@/components/PwaRegister";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
@@ -69,6 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="relative z-10 flex min-h-dvh w-full flex-1 flex-col">{children}</div>
           <PwaRegister />
           <UpdatePrompt />
+          <AccessPanel />
           <BackgroundMotion />
         </SettingsProvider>
       </body>
