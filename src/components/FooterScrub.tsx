@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { encodeRange, shiftYm } from "@/lib/urlState.ts";
 
 /** How far back the footer timeline goes. */
-const START = Date.UTC(2013, 0, 1);
+const START_YEAR = 1998;
+const START = Date.UTC(START_YEAR, 0, 1);
 /** Where the playhead rests until someone picks a date: halfway along the timeline. */
 const REST = 0.5;
 
@@ -45,7 +46,7 @@ export function FooterScrub() {
   }
 
   const label = p > 0.985 || now === null ? "Now" : new Date(START + p * (now - START)).toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-  const years = now === null ? [] : Array.from({ length: new Date(now).getUTCFullYear() - 2013 + 1 }, (_, i) => 2013 + i);
+  const years = now === null ? [] : Array.from({ length: new Date(now).getUTCFullYear() - START_YEAR + 1 }, (_, i) => START_YEAR + i);
   // Fill and playhead snap while you drag, then glide back to the pinned month (or halfway) when you let go.
   const glide = active ? "none" : "clip-path 0.6s cubic-bezier(0.2, 0.8, 0.2, 1), left 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)";
 
@@ -79,7 +80,7 @@ export function FooterScrub() {
                 className={`absolute top-0 flex flex-col gap-1 ${edge === "start" ? "items-start" : edge === "end" ? "items-end" : "-translate-x-1/2 items-center"}`}
                 style={edge === "end" ? { right: 0 } : { left: `${x}%` }}
               >
-                <span className={i % 2 === 0 || edge === "end" ? "" : "hidden sm:inline"}>{y}</span>
+                <span className={i % 4 === 0 || edge === "end" ? "" : "invisible"}>{y}</span>
                 <span className="h-1.5 w-px bg-border" />
               </span>
             );
@@ -88,12 +89,12 @@ export function FooterScrub() {
 
       <div className="relative">
         {/* The word: outlined, with a filled copy revealed up to the playhead. */}
-        <svg viewBox="0 0 1000 250" className="block w-full" focusable={false}>
-          <text x="-16" y="215" textLength="1032" lengthAdjust="spacing" fontSize="270" fontWeight="700" className="font-heading" fill="none" stroke="var(--primary)" strokeWidth="3" strokeOpacity="0.55">
+        <svg viewBox="-2 0 1004 250" className="block w-full" focusable={false}>
+          <text x="-14" y="215" textLength="1012" lengthAdjust="spacing" fontSize="270" fontWeight="700" className="font-heading" fill="none" stroke="var(--primary)" strokeWidth="3" strokeOpacity="0.55">
             REPLAY
           </text>
           <g style={{ clipPath: `inset(0 ${((1 - p) * 100).toFixed(2)}% 0 0)`, transition: glide }}>
-            <text x="-16" y="215" textLength="1032" lengthAdjust="spacing" fontSize="270" fontWeight="700" className="font-heading" fill="var(--primary)">
+            <text x="-14" y="215" textLength="1012" lengthAdjust="spacing" fontSize="270" fontWeight="700" className="font-heading" fill="var(--primary)">
               REPLAY
             </text>
           </g>
