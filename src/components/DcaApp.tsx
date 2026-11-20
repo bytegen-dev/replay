@@ -319,7 +319,7 @@ export function DcaApp() {
     writeQuery({
       tab: mode === "equity" ? "stocks" : "crypto",
       ...(mode === "equity"
-        ? { s: ticker.trim().toUpperCase(), drip: reinvest && "1" }
+        ? { s: ticker.trim().toUpperCase(), drip: reinvest && !leveraged && "1" }
         : cryptoKind === "major"
           ? { coin: major }
           : { kind: "token", chain, a: address.trim() }),
@@ -488,7 +488,7 @@ export function DcaApp() {
     const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, ...(side === "short" ? { side: "short" as const } : {}), fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(topUp && parseAmount(topUpBudget) > 0 ? { topUpBudget: parseAmount(topUpBudget) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
-        ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
+        ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor && !leveraged ? { reinvest: true } : {}) }
         : { address, chain, ...common };
     const errs = validateRequest(input);
     setErrors(errs);
@@ -842,7 +842,7 @@ export function DcaApp() {
                   </Field>
                 )}
               </div>
-              {isMajor ? null : mode === "equity" ? (
+              {isMajor || leveraged ? null : mode === "equity" ? (
                 <Field id="reinvest" label="Dividends" className="min-[480px]:col-span-2">
                   <ToggleGroup
                     type="single"
