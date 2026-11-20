@@ -504,6 +504,14 @@
   77% { filter: none; }
   100% { filter: none; }
 }
+/* One letter of the headline's rolling word drawn twice as wide: scaled sideways from its left edge, with room made for the extra half
+   (about one more letter) so the letters after it do not overlap. */
+.stretch-letter {
+  display: inline-block;
+  transform: scaleX(2);
+  transform-origin: 0 50%;
+  margin-right: 0.57em;
+}
 .type-caret-idle {
   opacity: 0;
   animation: none;

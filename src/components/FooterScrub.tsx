@@ -14,7 +14,7 @@ const REST = 0.5;
 /**
  * The footer wordmark as a video-style scrubber. At rest the playhead sits halfway along the timeline. Move a
  * pointer (or drag a finger) across it and the fill follows, with the date under the playhead, so you can travel back through
- * the years. Vertical scrolling still works on touch. Click or tap to pin a month, and links below start a Hindsight check from it:
+ * the years. Vertical scrolling still works on touch. Click or tap to pin a month, and links below start a Wayback check from it:
  * pick a date, pick what you would have bought. The wordmark itself is decorative and hidden from screen readers.
  */
 export function FooterScrub() {
@@ -62,7 +62,7 @@ export function FooterScrub() {
   const start = pickedMonth && lastMonth && pickedMonth > lastMonth ? lastMonth : pickedMonth;
   const range = start && lastMonth ? encodeRange(start, lastMonth, lastMonth).range : null;
   const pickedLabel = start ? new Date(`${start}-01T00:00:00Z`).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" }) : null;
-  // Each link opens the Hindsight form already filled with that asset, running from the picked month to last month.
+  // Each link opens Wayback already filled with that asset, running from the picked month to last month.
   const choices = [
     { label: "S&P 500", q: "tab=stocks&s=SPY" },
     { label: "Apple", q: "tab=stocks&s=AAPL" },
@@ -139,7 +139,7 @@ export function FooterScrub() {
             Start from <b className="text-foreground">{pickedLabel}</b>
           </span>
           {choices.map((c) => (
-            <Link key={c.label} href={`/hindsight?${c.q}&range=${range}&run=1`} className="h-8 border border-border px-3 leading-8 transition-colors hover:border-primary hover:text-primary">
+            <Link key={c.label} href={`/wayback?${c.q}&range=${range}&run=1`} className="h-8 border border-border px-3 leading-8 transition-colors hover:border-primary hover:text-primary">
               {c.label}
             </Link>
           ))}

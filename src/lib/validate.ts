@@ -1,3 +1,4 @@
+import { commodityFor } from "./commodities.ts";
 import { MAX_LEVERAGE } from "./leverage.ts";
 import { isPlan, PLANS } from "./plan.ts";
 import { isCurrency } from "./fxCurrencies.ts";
@@ -9,8 +10,9 @@ export const MAX_MONTHS = 72;
 export const MAX_MONTHS_EQUITY = 480;
 export const maxMonthsFor = (market: Market) => (market === "equity" ? MAX_MONTHS_EQUITY : MAX_MONTHS);
 
-/** A listed ticker: letters and digits, with . or - for share classes (BRK-B, BF.B). No indexes or futures. */
-const TICKER_RE = /^[A-Za-z0-9][A-Za-z0-9.-]{0,14}$/;
+/** A listed ticker: letters and digits, with . or - for share classes (BRK-B, BF.B), or one of our commodity symbols such as GC=F. No indexes. */
+const TICKER_RE = /^(?:[A-Za-z0-9][A-Za-z0-9.-]{0,14}|[A-Za-z0-9]{1,4}=[Ff])$/;
+const FUTURES_RE = /=f$/i;
 
 const EVM_RE = /^0x[0-9a-fA-F]{40}$/;
 // A policy ID is 56 hex characters. The full asset ID ("unit") appends the token name in hex (up to 32 bytes).
@@ -55,7 +57,8 @@ export function validateAddress(address: string, chain: Market): string | null {
   const a = address.trim();
   if (chain === "equity") {
     if (!a) return "Ticker is required";
-    return TICKER_RE.test(a) ? null : "Enter a ticker like AAPL or BRK-B";
+    if (FUTURES_RE.test(a) && !commodityFor(a)) return "That commodity is not available. Search for it by name, for example gold or oil.";
+    return TICKER_RE.test(a) ? null : "Enter a ticker like AAPL or BRK-B, or a commodity like GC=F (gold)";
   }
   if (!a) return chain === "cardano" ? "Policy ID is required" : "Contract address is required";
   const detected = detectKind(a);

@@ -110,9 +110,9 @@ export default function LandingPage() {
         <section className={`${section} grid items-center gap-10 py-10 sm:py-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:py-24`}>
           <div className="flex flex-col gap-6">
             <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-6xl">
-              <WordRise text="A time machine for" /> <br className="sm:hidden" />
-              {/* On a phone "your money" gets a line of its own. */}
-              <WordRise text="your" from={4} /> <RotatingWord index={5} />
+              <WordRise text="A time machine" /> <br />
+              {/* The headline breaks the same way on every screen: "A time machine" over "for your money." */}
+              <WordRise text="for your" from={3} /> <RotatingWord index={5} />
             </h1>
             <p className="enter-up max-w-xl font-heading text-xl leading-snug text-primary sm:text-2xl" style={{ "--base": "650ms", "--i": 0 } as React.CSSProperties}>
               You can&rsquo;t change the past. You can learn from it.

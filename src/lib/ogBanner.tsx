@@ -18,6 +18,16 @@ export type OgCard =
 const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const monthYear = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "numeric", timeZone: "UTC" });
 
+/** The Replay mark as in the site header (mint triangle inside a white outline), drawn as plain shapes: public/replay-mark.svg with its transform worked out. */
+function Mark({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="350 352 1300 1300">
+      <polygon points="733,726 733,1488 1393,1107" fill={C.mint} stroke={C.mint} strokeWidth="165" strokeLinejoin="round" />
+      <path d="M516 489 L516 1355 A71 71 0 0 0 622.5 1416.49 L1372.48 983.49 A71 71 0 0 0 1372.48 860.51 L622.5 427.51 A71 71 0 0 0 516 489 Z" fill="none" stroke="#ffffff" strokeWidth="96" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** The card's outline: a rectangle with the top-right and bottom-left corners cut. */
 function Frame({ w, h, cut = 30 }: { w: number; h: number; cut?: number }) {
   const pts = `0,0 ${w - cut},0 ${w},${cut} ${w},${h} ${cut},${h} 0,${h - cut}`;
@@ -61,9 +71,7 @@ export function OgBanner({ headline, sub, body, card, footer, cta = "Join the wa
 
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: 540, position: "relative" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <svg width="30" height="34" viewBox="0 0 40 46">
-            <polygon points="2,2 38,23 2,44" fill={C.mint} />
-          </svg>
+          <Mark size={44} />
           <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1 }}>Replay</div>
         </div>
 

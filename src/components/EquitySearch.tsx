@@ -124,7 +124,7 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
           setActive(0);
         }}
         onKeyDown={onKeyDown}
-        placeholder="Ticker or company, e.g. AAPL or apple"
+        placeholder="Ticker, company or commodity, e.g. AAPL or gold"
         spellCheck={false}
         autoComplete="off"
         autoCapitalize="characters"
@@ -133,14 +133,14 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
 
       {listOpen && (cur || loading || showPopular) && (
         <div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-50 mt-1 border border-border bg-popover shadow-lg">
-          {showPopular && <p className="px-3 pt-2 pb-1 text-xs text-muted-foreground">Popular. Or type a ticker or company name.</p>}
-          {loading && <p className="p-4 text-sm text-muted-foreground">Searching stocks</p>}
+          {showPopular && <p className="px-3 pt-2 pb-1 text-xs text-muted-foreground">Popular. Or type a ticker, company or commodity name.</p>}
+          {loading && <p className="p-4 text-sm text-muted-foreground">Searching</p>}
           {cur && "error" in cur && (
             <p role="alert" className="p-4 text-sm">
               {cur.error}
             </p>
           )}
-          {cur && "hits" in cur && hits.length === 0 && <p className="p-4 text-sm text-muted-foreground">No stock or ETF found for &ldquo;{q}&rdquo;. You can still try the ticker as typed.</p>}
+          {cur && "hits" in cur && hits.length === 0 && <p className="p-4 text-sm text-muted-foreground">No stock, ETF or commodity found for &ldquo;{q}&rdquo;. You can still try the ticker as typed.</p>}
           {hits.length > 0 && (
             <ul ref={listRef} id={listId} role="listbox" aria-label={showPopular ? "Popular stocks" : "Matching stocks"} className="max-h-72 overflow-y-auto py-1">
               {hits.map((h, i) => (
@@ -158,9 +158,9 @@ export function EquitySearchInput({ id, value, onChange, onPick, invalid }: Prop
                   <span className="w-16 shrink-0 text-sm font-bold">{h.symbol}</span>
                   <span className="min-w-0 flex-1 truncate text-sm">{h.name}</span>
                   <span className={cn("shrink-0 text-xs", i === active ? "text-primary-foreground" : "text-muted-foreground")}>{h.exchange}</span>
-                  {h.type === "ETF" && (
+                  {(h.type === "ETF" || h.type === "COMMODITY") && (
                     <Badge variant="outline" className={cn("shrink-0 rounded-none px-1.5 py-0 text-[0.65rem] font-normal", i === active && "border-primary-foreground text-primary-foreground")}>
-                      ETF
+                      {h.type === "ETF" ? "ETF" : "Commodity"}
                     </Badge>
                   )}
                 </li>

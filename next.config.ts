@@ -18,13 +18,14 @@ const nextConfig: NextConfig = {
   env: { NEXT_PUBLIC_BUILD_ID: buildId() },
   cacheComponents: true,
   partialPrefetching: true,
-  // The price page used to live at /price, and Hindsight used to be the home page; old links and bookmarks keep working.
-  // A home-page address that carries a tool's settings (?tab=..., ?s=..., ?amt=...) is a Hindsight link, so it moves there.
+  // The price page used to live at /price, and what became Wayback used to be called Hindsight (and before that, the home page); old
+  // links and bookmarks keep working. A home-page address that carries a tool's settings (?tab=..., ?s=..., ?amt=...) moves to Wayback.
   async redirects() {
     const toolKeys = ["tab", "s", "coin", "kind", "chain", "a", "amt", "range", "from", "to", "plan", "lev", "run", "basis"];
     return [
-      { source: "/price", destination: "/wayback", permanent: true },
-      ...toolKeys.map((key) => ({ source: "/", has: [{ type: "query" as const, key }], destination: "/hindsight", permanent: false })),
+      { source: "/price", destination: "/wayback?view=price", permanent: true },
+      { source: "/hindsight", destination: "/wayback", permanent: true },
+      ...toolKeys.map((key) => ({ source: "/", has: [{ type: "query" as const, key }], destination: "/wayback", permanent: false })),
     ];
   },
   async headers() {

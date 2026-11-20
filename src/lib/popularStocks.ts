@@ -16,4 +16,10 @@ export const POPULAR_STOCKS: StockHit[] = [
   { symbol: "QQQ", name: "Invesco QQQ Trust", exchange: "NASDAQ", type: "ETF" },
   { symbol: "VOO", name: "Vanguard S&P 500 ETF", exchange: "NYSE Arca", type: "ETF" },
   { symbol: "VTI", name: "Vanguard Total Stock Market ETF", exchange: "NYSE Arca", type: "ETF" },
+  { symbol: "GC=F", name: "Gold", exchange: "Futures", type: "COMMODITY" },
+  { symbol: "SI=F", name: "Silver", exchange: "Futures", type: "COMMODITY" },
+  { symbol: "CL=F", name: "Crude oil (WTI)", exchange: "Futures", type: "COMMODITY" },
+  { symbol: "NG=F", name: "Natural gas", exchange: "Futures", type: "COMMODITY" },
+  { symbol: "HG=F", name: "Copper", exchange: "Futures", type: "COMMODITY" },
+  { symbol: "ZW=F", name: "Wheat (Chicago)", exchange: "Futures", type: "COMMODITY" },
 ];

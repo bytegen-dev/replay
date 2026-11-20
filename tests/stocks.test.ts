@@ -121,8 +121,8 @@ test("search keeps stocks and ETFs only, cleans names, and drops odd symbols", (
 });
 
 test("ticker validation", () => {
-  for (const ok of ["AAPL", "aapl", "BRK-B", "BF.B", "A", "SPY"]) assert.equal(validateAddress(ok, "equity"), null, ok);
-  for (const bad of ["", "  ", "^GSPC", "AAPL;DROP", "TOO-LONG-TICKER-X", "A B", "AAPL=F"]) assert.ok(validateAddress(bad, "equity"), bad);
+  for (const ok of ["AAPL", "aapl", "BRK-B", "BF.B", "A", "SPY", "GC=F", "gc=f", "CL=F"]) assert.equal(validateAddress(ok, "equity"), null, ok);
+  for (const bad of ["", "  ", "^GSPC", "AAPL;DROP", "TOO-LONG-TICKER-X", "A B", "AAPL=F", "ES=F", "GC=X"]) assert.ok(validateAddress(bad, "equity"), bad);
   assert.equal(validateAddress("", "equity"), "Ticker is required");
   assert.equal(normalizeAddress(" aapl ", "equity"), "AAPL");
 });

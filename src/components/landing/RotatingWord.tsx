@@ -11,6 +11,8 @@ const FIRST_EXTRA = 1500;
 /** Milliseconds per letter: a word is rubbed out a little faster than the next is typed. */
 const ERASE_MS = 55;
 const TYPE_MS = 95;
+/** The letter of each word that is drawn twice as wide (its place in the word, from 0): the o in crypto, the a in fiat, the e in money, the c in finances. */
+const STRETCH: Record<string, number> = { money: 3, finances: 5, crypto: 5, fiat: 2 };
 /** A beat between the last letter going and the first of the next coming. */
 const PAUSE_MS = 180;
 
@@ -79,7 +81,18 @@ export function RotatingWord({ index }: { index: number }) {
   return (
     <span className="word-mask">
       <span className={flicker ? "word-rise word-flicker" : "word-rise"} style={{ "--w": index } as React.CSSProperties}>
-        {word.slice(0, shown)}
+        {word
+          .slice(0, shown)
+          .split("")
+          .map((ch, i) =>
+            i === STRETCH[word] ? (
+              <span key={i} className="stretch-letter">
+                {ch}
+              </span>
+            ) : (
+              ch
+            ),
+          )}
         <span aria-hidden className={busy ? "type-caret" : "type-caret type-caret-idle"} />
         .
       </span>

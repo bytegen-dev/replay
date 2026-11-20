@@ -1,3 +1,4 @@
+import { commodityFor, isFuturesSymbol } from "./commodities.ts";
 import { majorFor } from "./majors.ts";
 import { DcaError } from "./errors.ts";
 import { getJson, HttpError } from "./http.ts";
@@ -90,22 +91,29 @@ export function parseYahooChart(body: unknown): { meta: StockMeta; days: StockDa
   const closes = r.indicators?.quote?.[0]?.close ?? [];
   const adjs = r.indicators?.adjclose?.[0]?.adjclose ?? [];
 
+  // Yahoo quotes some commodities (corn, coffee, cattle...) in US cents, written "USX". Everything here is in dollars.
+  const cents = m.currency === "USX";
+  const unit = cents ? 0.01 : 1;
   const days = new Map<string, StockDay>();
   r.timestamp.forEach((ts, i) => {
     const close = num(closes[i]);
     if (typeof ts !== "number" || close === null || close <= 0) return;
     const adj = num(adjs[i]);
     const date = localDay(ts, offset);
-    days.set(date, { date, close, adjClose: adj !== null && adj > 0 ? adj : close });
+    days.set(date, { date, close: close * unit, adjClose: (adj !== null && adj > 0 ? adj : close) * unit });
   });
 
-  const price = num(m.regularMarketPrice);
+  const rawPrice = num(m.regularMarketPrice);
+  const price = rawPrice !== null ? rawPrice * unit : null;
   const priceTime = num(m.regularMarketTime);
+  const symbol = typeof m.symbol === "string" ? m.symbol : "";
+  // A commodity series has a contract month in Yahoo's name ("Gold Dec 26"), which is wrong for a long history, so it gets its own name.
+  const commodity = commodityFor(symbol);
   return {
     meta: {
-      symbol: typeof m.symbol === "string" ? m.symbol : "",
-      name: (typeof m.longName === "string" && m.longName) || (typeof m.shortName === "string" && m.shortName) || (typeof m.symbol === "string" ? m.symbol : ""),
-      currency: typeof m.currency === "string" ? m.currency : "",
+      symbol,
+      name: commodity?.name ?? ((typeof m.longName === "string" && m.longName) || (typeof m.shortName === "string" && m.shortName) || symbol),
+      currency: cents ? "USD" : typeof m.currency === "string" ? m.currency : "",
       exchange: typeof m.fullExchangeName === "string" ? m.fullExchangeName : typeof m.exchangeName === "string" ? m.exchangeName : null,
       price: price !== null && price > 0 ? price : null,
       priceDate: priceTime !== null ? localDay(priceTime, offset) : null,
@@ -124,7 +132,7 @@ export interface StockHit {
   symbol: string;
   name: string;
   exchange: string;
-  type: "EQUITY" | "ETF";
+  type: "EQUITY" | "ETF" | "COMMODITY";
 }
 
 const SYMBOL_RE = /^[A-Za-z0-9][A-Za-z0-9.-]{0,14}$/;
@@ -276,7 +284,8 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   const months = monthsBetween(req.startMonth, req.endMonth);
   const firstTarget = targetDate(months[0], req.basis, req.basisDay);
   const major = majorFor(symbol);
-  const reinvest = req.reinvest === true && !major;
+  const futures = isFuturesSymbol(symbol);
+  const reinvest = req.reinvest === true && !major && !futures;
 
   let loaded: Loaded;
   // After Yahoo: the user's own Tiingo key if they gave one, then Nasdaq. A key that fails is reported, not hidden.
@@ -339,7 +348,12 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   if (viaBackup) {
     warnings.push(`Yahoo Finance is not answering right now, so these prices come from Nasdaq's public data, which covers about the last ten years and is adjusted for splits only. ${reinvest ? "Dividend reinvestment is not available from this source, so dividends are ignored. " : ""}Try again later for the full history.`);
   }
-  if (!major && !viaBackup) warnings.push(
+  if (futures) {
+    const c = commodityFor(symbol);
+    warnings.push(
+      `${c ? `${c.name} is priced in US dollars ${c.unit}, from the futures contract nearest to expiry` : "Prices are for the futures contract nearest to expiry"}, not the spot price. The price can step when one contract is replaced by the next. Buying here means owning the price move, as if you could hold the commodity with no storage, fees or margin.`,
+    );
+  } else if (!major && !viaBackup) warnings.push(
     reinvest
       ? "Dividends are treated as reinvested: prices are adjusted for dividends and splits, so they sit below the actual historical prices."
       : "Prices are adjusted for stock splits only. Dividends are not included; turn on dividend reinvestment for total return.",

@@ -3,8 +3,8 @@
 Replay looks back at money. It has two pages and a public API:
 
 - **Landing page** (`/`): what Replay is, a live demo of both tools, the waitlist, and a FAQ.
-- **Hindsight** (`/hindsight`): see what a buy from the past would be worth today. Pick a US stock or ETF (decades of history), a crypto coin or token, or a currency pair, buy once or on a schedule (with or without leverage), and it shows what the buys would have bought and what they are worth now.
-- **Wayback** (`/wayback`): the price of a token or stock at any past date and time, typed the way people say it.
+- **Wayback** (`/wayback`), first tab, **What if I had bought** (it used to be called Hindsight, and `/hindsight` still redirects): see what a buy from the past would be worth today. Pick a US stock or ETF (decades of history), a crypto coin or token, or a currency pair, buy once or on a schedule (with or without leverage), and it shows what the buys would have bought and what they are worth now.
+- **Wayback**, second tab, **Price on a day** (`/wayback?view=price`): the price of a token or stock at any past date and time, typed the way people say it.
 - A **public API** and an **AI agent skill** for both.
 
 Next.js (App Router), TypeScript, Tailwind. Dark by default, with light and system themes, a reduced-motion switch and a high-contrast mode.
@@ -41,7 +41,7 @@ Other scripts: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`.
 
 If an install reports `No matching version found for next@16.4.6`, that is stale registry metadata in the package manager cache: rerun with `pnpm install --no-prefer-offline`.
 
-## Hindsight
+## Wayback: what if I had bought
 
 The form has three tabs in its header, **Stocks**, **Crypto** and **Currencies**. Pick an asset, an amount (typed with commas as you go, in any of 50 currencies), a start and end month, and press **See what it's worth**.
 
@@ -118,7 +118,7 @@ CoinGecko is the primary source for Cardano, but its free tier stops at 365 days
 
 CoinGecko always wins on days it has a price. Whatever is still empty stays n/a. With a policy ID alone, the app finds the full asset ID by searching GeckoTerminal; if you paste the full asset ID (policy plus token name in hex), it uses that directly.
 
-## Wayback
+## Wayback: price on a day
 
 `/wayback` on the site, and `/api/v1/historical-price` in the API, answer "what was this worth at that date and time?" (the old `/price` address redirects here). The page has **Stocks** and **Crypto** tabs, a calendar that can't go earlier than the asset's first price, an analog clock with AM/PM for the time, and a searchable timezone list.
 

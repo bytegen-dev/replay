@@ -256,7 +256,7 @@ export function PricePanel() {
   return (
     <div className="mt-6 flex flex-col gap-6 sm:mt-8 sm:gap-8">
       <form onSubmit={submit} noValidate className="cut-card stagger-in border border-border bg-card [--stagger-base:140ms]">
-        {/* The same Stocks / Crypto tabs as Hindsight, in a header, so the chain picker only appears when it is needed. */}
+        {/* The same Stocks / Crypto tabs as the buy form, in a header, so the chain picker only appears when it is needed. */}
         <div className="border-b border-border p-4 sm:px-6">
           <ToggleGroup
             type="single"
@@ -493,11 +493,11 @@ export function PricePanel() {
             </ul>
           )}
 
-          {/* The same asset as regular buys: opens Hindsight with it already chosen. */}
+          {/* The same asset as regular buys: opens the buy form with it already chosen. */}
           <p className="text-sm text-muted-foreground">
             What would a buy back then be worth today?{" "}
-            <Link href={market === "equity" ? `/hindsight?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/hindsight?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
-              Open it in Hindsight
+            <Link href={market === "equity" ? `/wayback?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/wayback?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
+              See what a buy then would be worth
             </Link>
           </p>
 

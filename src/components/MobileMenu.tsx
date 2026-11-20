@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, ArrowUpRight, BookOpen, History, LineChart } from "lucide-react";
+import { ArrowLeftRight, ArrowUpRight, BookOpen, History } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
@@ -12,8 +12,7 @@ import { AUTH_CHANGED_EVENT, openSignIn, useViewer } from "@/lib/viewerClient.ts
 
 const TOOLS = [
   { href: "/#trade", label: "Trade", note: "Paper and live trading, coming soon", Icon: ArrowLeftRight },
-  { href: "/hindsight", label: "Hindsight", note: "What a monthly buy would be worth today", Icon: History },
-  { href: "/wayback", label: "Wayback", note: "Any token or stock at a past moment", Icon: LineChart },
+  { href: "/wayback", label: "Wayback", note: "What a past buy would be worth, or the price on any day", Icon: History },
   { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },
 ];
 const LINKS = [

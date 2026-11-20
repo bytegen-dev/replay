@@ -52,7 +52,7 @@ import { CHAINS, CHAIN_LABELS, type Basis, type Chain, type DcaRequest, type Dca
 import { MAJORS, isMajorSymbol, marketLabel } from "@/lib/majors.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
 
-/** What the Hindsight form opens with. */
+/** What the buy form (the first tab of Wayback) opens with. */
 const START_PLAN: Plan = "once";
 
 function shiftMonth(m: string, delta: number): string {
