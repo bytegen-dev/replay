@@ -116,7 +116,7 @@ export function toApiResult(res: DcaResponse, req: DcaRequest, detail: "summary"
   if (res.leverage) {
     const lv = res.leverage;
     out.leverage = { settings: lv.settings, summary: lv.summary, ...(detail === "full" ? { positions: lv.positions } : {}) };
-    out.answer += ` With ${lv.settings.leverage}x leverage (futures style, ${lv.settings.fundingApr}% a year funding) the same buys would have put in ${fmtUsd(lv.summary.invested)} and ended at ${fmtUsd(lv.summary.value)} (${fmtPct(lv.summary.gainPct)}), with ${lv.summary.liquidated} of ${lv.summary.positions} positions liquidated.`;
+    out.answer += ` With ${lv.settings.leverage}x ${lv.settings.side === "short" ? "short" : "leverage"} (futures style, ${lv.settings.fundingApr}% a year funding) the same buys would have put in ${fmtUsd(lv.summary.invested)} and ended at ${fmtUsd(lv.summary.value)} (${fmtPct(lv.summary.gainPct)}), with ${lv.summary.liquidated} of ${lv.summary.positions} positions liquidated.`;
   }
   if (detail === "full") {
     out.months = buys.map((b) => ({

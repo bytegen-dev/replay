@@ -126,6 +126,7 @@ function cleanLeverage(x: unknown): LeverageResult | null {
   return {
     settings: {
       leverage: lev,
+      side: l.settings.side === "short" ? "short" : "long",
       fundingApr: apr,
       ...(l.settings.topUp === true ? { topUp: true } : {}),
       ...(opt(l.settings.topUpMax) !== undefined ? { topUpMax: opt(l.settings.topUpMax) } : {}),

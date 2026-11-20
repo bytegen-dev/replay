@@ -14,6 +14,7 @@ export function LeverageCard({ result, plainGainPct, sold, asset }: { result: Le
   const { settings, summary, positions } = result;
   const when = sold ? "at sale" : "today";
   const up = summary.gain >= 0;
+  const short = settings.side === "short";
   const tiles = [
     { k: "Money used", v: fmtUsd(summary.invested), note: summary.topUps > 0 ? `${fmtUsd(summary.topUps)} of it added later` : undefined },
     { k: `Worth ${when}`, v: fmtUsd(summary.value), hi: true },
@@ -27,7 +28,7 @@ export function LeverageCard({ result, plainGainPct, sold, asset }: { result: Le
     <section aria-label="Leveraged result" className="flex flex-col gap-5 border border-border bg-card p-4 sm:p-6">
       {asset}
       <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-xl font-bold tracking-tight">With {settings.leverage}x leverage</h2>
+        <h2 className="text-xl font-bold tracking-tight">With {settings.leverage}x {short ? "short" : "leverage"}</h2>
         <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
           Futures style
         </Badge>
@@ -35,7 +36,7 @@ export function LeverageCard({ result, plainGainPct, sold, asset }: { result: Le
 
       <div className={cn("border-l-2 pl-4", up ? "border-primary" : "border-destructive")}>
         <p className="text-base leading-relaxed sm:text-lg">
-          The same buys with {settings.leverage}x leverage put in <b>{fmtUsd(summary.invested)}</b> and were worth <b>{fmtUsd(summary.value)}</b> {when}, {up ? "a gain" : "a loss"} of <b>{fmtUsd(Math.abs(summary.gain))}</b> ({fmtPct(summary.gainPct)}).
+          The same buys with {settings.leverage}x {short ? "short selling" : "leverage"} put in <b>{fmtUsd(summary.invested)}</b> and were worth <b>{fmtUsd(summary.value)}</b> {when}, {up ? "a gain" : "a loss"} of <b>{fmtUsd(Math.abs(summary.gain))}</b> ({fmtPct(summary.gainPct)}).
           {summary.liquidated > 0 && (
             <>
               {" "}
@@ -65,7 +66,7 @@ export function LeverageCard({ result, plainGainPct, sold, asset }: { result: Le
         <Table className="min-w-[860px]" containerClassName="max-h-[28rem] overflow-auto">
           <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow className="hover:bg-transparent">
-              {["Month", "Opened at", "Liquidated below", "Status", "Margin added", "Funding", "Fees", `Worth ${when}`].map((h, i) => (
+              {["Month", "Opened at", short ? "Liquidated above" : "Liquidated below", "Status", "Margin added", "Funding", "Fees", `Worth ${when}`].map((h, i) => (
                 <TableHead key={h} className={cn("sticky top-0 z-10 bg-card text-sm whitespace-normal text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]", i === 0 && "left-0 z-20", i >= 4 && "text-right")}>
                   {h}
                 </TableHead>
@@ -100,7 +101,7 @@ export function LeverageCard({ result, plainGainPct, sold, asset }: { result: Le
       </div>
 
       <p className="text-sm leading-relaxed text-muted-foreground">
-        Each buy opened its own position with {settings.leverage}x leverage. Funding was charged at {settings.fundingApr}% a year on the position&apos;s value, there was a 0.045% fee on the way in and out, and a position is liquidated when its margin falls to a small maintenance level (1% of its value, less at very high leverage).
+        Each buy opened its own {short ? "short" : "long"} position with {settings.leverage}x leverage{short ? ", a bet that the price would fall" : ""}. Funding was {short ? "received" : "charged"} at {settings.fundingApr}% a year on the position&apos;s value, there was a 0.045% fee on the way in and out, and a position is liquidated when its margin falls to a small maintenance level (1% of its value, less at very high leverage).
         {settings.topUp ? ` Margin was added near liquidation${[settings.topUpMax !== undefined ? `up to ${fmtUsd(settings.topUpMax)} per position` : "", settings.topUpBudget !== undefined ? `${fmtUsd(settings.topUpBudget)} in all` : ""].filter(Boolean).map((t, i) => `${i === 0 ? ", " : ", "}${t}`).join("")}.` : ""}
         {settings.maxLoss !== undefined || settings.maxLossPct !== undefined ? ` A position closed when it had lost ${[settings.maxLossPct !== undefined ? `${settings.maxLossPct}% of its margin` : "", settings.maxLoss !== undefined ? fmtUsd(settings.maxLoss) : ""].filter(Boolean).join(" or ")}.` : ""} It uses daily closing prices, so it can&apos;t see a price spike inside a day that would have liquidated a position sooner: real trading can be harsher than this. A past result says nothing about the future, and leverage can lose more than the money you put in on a venue that doesn&apos;t isolate margin.
       </p>

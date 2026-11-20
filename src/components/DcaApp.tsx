@@ -166,6 +166,7 @@ export function DcaApp() {
   const [plan, setPlan] = useState<Plan>(START_PLAN);
   // Leverage, futures style. 1 means plain buying. The other settings only matter above 1x.
   const [lev, setLev] = useState("1");
+  const [side, setSide] = useState<"long" | "short">("long");
   const [fundingApr, setFundingApr] = useState(String(DEFAULT_FUNDING_APR));
   const [topUp, setTopUp] = useState(false);
   const [topUpMax, setTopUpMax] = useState("");
@@ -247,6 +248,7 @@ export function DcaApp() {
       const lv = Number(q.get("lev"));
       if (Number.isFinite(lv) && lv > 1 && lv <= MAX_LEVERAGE) {
         setLev(String(lv));
+        if (q.get("side") === "short") setSide("short");
         const fa = q.get("fund");
         if (fa !== null && Number.isFinite(Number(fa)) && Number(fa) >= 0 && Number(fa) <= 500) setFundingApr(fa);
         if (q.get("topup") === "1") setTopUp(true);
@@ -329,6 +331,7 @@ export function DcaApp() {
       sell: sellAtEnd && "1",
       plan: plan !== START_PLAN && plan,
       lev: leveraged && String(levNum),
+      side: leveraged && side === "short" && "short",
       fund: leveraged && fundingApr !== String(DEFAULT_FUNDING_APR) && fundingApr,
       topup: leveraged && topUp && "1",
       topmax: leveraged && topUp && cleanAmount(topUpMax),
@@ -336,7 +339,7 @@ export function DcaApp() {
       maxloss: leveraged && stopUnit === "$" && cleanAmount(maxLoss),
       maxlosspct: leveraged && stopUnit === "%" && cleanAmount(maxLoss),
     });
-  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, topUpBudget, maxLoss, stopUnit]);
+  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, topUpBudget, maxLoss, stopUnit, side]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -482,7 +485,7 @@ export function DcaApp() {
   /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(topUp && parseAmount(topUpBudget) > 0 ? { topUpBudget: parseAmount(topUpBudget) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, ...(side === "short" ? { side: "short" as const } : {}), fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(topUp && parseAmount(topUpBudget) > 0 ? { topUpBudget: parseAmount(topUpBudget) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
         ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
@@ -520,6 +523,7 @@ export function DcaApp() {
     setBasis(ex.basis);
     setPlan(ex.plan ?? "monthly");
     setLev("1");
+    setSide("long");
     setSellAtEnd(false);
     setCurrency("USD");
     setErrors({});
@@ -778,7 +782,7 @@ export function DcaApp() {
     ) : null;
   const chartEl =
     data && computed ? (
-      <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} leverage={data.leverage ? { times: data.leverage.settings.leverage, series: data.leverage.series } : undefined} title={`${tokenSymbol(data.token)}, ${data.currency ? data.currency.symbol : "$"}${data.amount.toLocaleString("en-US")} a month`} />
+      <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} leverage={data.leverage ? { times: data.leverage.settings.leverage, side: data.leverage.settings.side, series: data.leverage.series } : undefined} title={`${tokenSymbol(data.token)}, ${data.currency ? data.currency.symbol : "$"}${data.amount.toLocaleString("en-US")} a month`} />
     ) : null;
 
   return (
@@ -898,7 +902,7 @@ export function DcaApp() {
                   {/* How often it is bought, on the same row as the amount. Every month by default; the others buy only in some months, counted from the start month. */}
                   <Select value={leveraged ? "leverage" : plan} onValueChange={(v) => (v === "leverage" ? (setLev(String(DEFAULT_LEVERAGE)), setPlan("once")) : (setLev("1"), setPlan(v as Plan)))}>
                     <SelectTrigger id="plan" aria-label="How often you buy, or leverage" className="form-control-h w-[8.5rem]! shrink-0 rounded-none border-l-0 px-2 text-sm">
-                      <SelectValue>{leveraged ? "Leverage" : PLANS.find((p) => p.value === plan)?.short}</SelectValue>
+                      <SelectValue>{leveraged ? (side === "short" ? "Short" : "Leverage") : PLANS.find((p) => p.value === plan)?.short}</SelectValue>
                     </SelectTrigger>
                     <SelectContent className={selectContent}>
                       {PLANS.map((p) => (
@@ -926,6 +930,13 @@ export function DcaApp() {
                     </div>
                     {leveraged && (
                       <>
+                        <div role="group" aria-label="Direction" className="flex w-fit border border-input">
+                          {(["long", "short"] as const).map((d) => (
+                            <button key={d} type="button" aria-pressed={side === d} onClick={() => setSide(d)} className={cn("h-9 px-4 text-sm font-bold transition-colors", side === d ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary")}>
+                              {d === "long" ? "Long" : "Short"}
+                            </button>
+                          ))}
+                        </div>
                         <input
                           id="leverage"
                           type="range"
@@ -943,7 +954,9 @@ export function DcaApp() {
                             <span key={t}>{t}</span>
                           ))}
                         </div>
-                        <p className="text-xs text-muted-foreground">Liquidated if the price falls about {liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy.</p>
+                        <p className="text-xs text-muted-foreground">
+                          {side === "short" ? "Liquidated if the price rises" : "Liquidated if the price falls"} about {liquidationDropPct(Math.min(levNum, MAX_LEVERAGE), side).toFixed(1)}% {side === "short" ? "above" : "below"} a buy.
+                        </p>
                       </>
                     )}
                   </div>

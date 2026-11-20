@@ -23,7 +23,7 @@ GET /api/v1/dca?market=stock&asset=SPY&amount=500&from=1998-01&reinvest=true
 | `asset` | yes | Ticker for stocks (`AAPL`, `SPY`, `BRK-B`). Contract address, mint, or Cardano policy id for tokens |
 | `amount` | yes | Invested at each buy, in `currency` (dollars unless a currency is given) |
 | `currency` | no | ISO code the amount is in (`EUR`, `GBP`, `NGN` ...). Each buy is converted to dollars at that day's official rate. Default `USD` |
-| `leverage` | no | 1 to 100. Models the buys as perpetual futures longs (each buy its own position). Also `funding` (yearly %, default 10.95), `topup=true`, `topupMax`, `topupBudget` (total across buys), `maxLoss` (dollars per buy) or `maxLossPct` (percent of each buy), a stop loss. The result gains a `leverage` object and the `answer` says how many positions were liquidated |
+| `leverage` | no | 1 to 100. Models the buys as perpetual futures positions (each buy its own), `side=short` to bet on a fall (default long). Also `funding` (yearly %, default 10.95), `topup=true`, `topupMax`, `topupBudget` (total across buys), `maxLoss` (dollars per buy) or `maxLossPct` (percent of each buy), a stop loss. The result gains a `leverage` object and the `answer` says how many positions were liquidated |
 | `plan` | no | How often to buy, counted from `from`: `monthly` (default), `quarterly` (every 3 months), `semiannual` (every 6), `yearly`, or `once` (a single buy; if the start month has no price it moves forward to the first month with one) |
 | `from` | yes | First month, `YYYY-MM` |
 | `to` | no | Last month, `YYYY-MM`. Default is the last full month. Leave it out for "until today" |

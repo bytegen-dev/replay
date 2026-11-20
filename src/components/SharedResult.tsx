@@ -181,7 +181,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
               </div>
             }
           />
-          <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} leverage={{ times: data.leverage.settings.leverage, series: data.leverage.series }} />
+          <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} leverage={{ times: data.leverage.settings.leverage, side: data.leverage.settings.side, series: data.leverage.series }} />
         </>
       )}
       {data.leverage ? (

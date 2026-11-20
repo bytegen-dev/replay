@@ -50,6 +50,7 @@ A versioned JSON API under `/api/v1`. The machine-readable description is at `/a
 | `currency` | no | ISO code the amount is in (`EUR`, `NGN` ...). Default `USD` |
 | `plan` | no | `monthly` (default), `quarterly`, `semiannual`, `yearly` or `once` |
 | `leverage` | no | 1 to 100. Buys like a perpetual futures long: each buy opens its own position of `amount × leverage`. Adds a `leverage` object to the result |
+| `side` | no | With `leverage`: `long` (default) or `short`. A short gains when the price falls, is liquidated when it rises, and receives funding instead of paying it |
 | `funding` | no | With `leverage`: yearly funding in percent (default 10.95) |
 | `topup` | no | With `leverage`: `true` adds margin when a position nears liquidation |
 | `topupMax` | no | With `topup`: the most margin, in dollars, one position may be given |

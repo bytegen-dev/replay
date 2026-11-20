@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     lv && Number(lv.leverage) > 1
       ? {
           leverage: Number(lv.leverage),
+          ...(lv.side === "short" ? { side: "short" as const } : {}),
           ...(lv.fundingApr !== undefined ? { fundingApr: Number(lv.fundingApr) } : {}),
           ...(lv.topUp === true ? { topUp: true } : {}),
           ...(lv.topUpMax !== undefined ? { topUpMax: Number(lv.topUpMax) } : {}),

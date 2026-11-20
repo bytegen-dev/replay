@@ -11,9 +11,13 @@
  * trading is therefore a little harsher than this, never a little kinder. Pure maths: no network, no dates but the ones passed in.
  */
 
+export type Side = "long" | "short";
+
 export interface LeverageSettings {
   /** 1 to 100. 1 means no leverage. */
   leverage: number;
+  /** Long gains when the price rises (the default); short gains when it falls and is liquidated when it rises. */
+  side?: Side;
   /** Funding charged on the position's value, as a yearly rate in percent. Default 10.95. */
   fundingApr?: number;
   /** Add margin when a position gets close to liquidation, to keep it at its starting leverage. */
@@ -91,7 +95,7 @@ export interface LeverageSeriesPoint {
 }
 
 export interface LeverageResult {
-  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "topUpBudget" | "maxLoss" | "maxLossPct">;
+  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr" | "side">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "topUpBudget" | "maxLoss" | "maxLossPct">;
   positions: Position[];
   summary: LeverageSummary;
   /** About one point a week, for the chart. */
@@ -114,18 +118,18 @@ export const DEFAULT_LEVERAGE = 25;
 const DAY_MS = 86_400_000;
 const dayMs = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
 
-/** The price at which a fresh position would be liquidated: where the margin left falls to the maintenance level. */
-export function liquidationPrice(openPrice: number, leverage: number): number {
+/** The price at which a fresh position would be liquidated: where the margin left falls to the maintenance level. A long is liquidated below its price, a short above. */
+export function liquidationPrice(openPrice: number, leverage: number, side: Side = "long"): number {
   const marginShare = 1 / leverage - FEE_RATE; // margin less the opening fee, as a share of the position
-  return (openPrice * (1 - marginShare)) / (1 - maintenanceRate(leverage));
+  return side === "short" ? (openPrice * (1 + marginShare)) / (1 + maintenanceRate(leverage)) : (openPrice * (1 - marginShare)) / (1 - maintenanceRate(leverage));
 }
 
-/** How far the price must fall from the buy for a fresh position to be liquidated, in percent. */
-export function liquidationDropPct(leverage: number): number {
-  return (1 - liquidationPrice(1, leverage)) * 100;
+/** How far the price must move against a fresh position (down for a long, up for a short) to liquidate it, in percent. */
+export function liquidationDropPct(leverage: number, side: Side = "long"): number {
+  return Math.abs(liquidationPrice(1, leverage, side) - 1) * 100;
 }
 
-type Full = Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & LeverageSettings;
+type Full = Required<Pick<LeverageSettings, "leverage" | "fundingApr" | "side">> & LeverageSettings;
 
 /** One position while the run is under way. */
 interface Live {
@@ -178,11 +182,14 @@ function stepDay(p: Live, day: DailyClose, s: Full, budgetLeft: number): number 
   const L = s.leverage;
   const ms = dayMs(day.date);
   // Funding builds up through the days since the last price, on the position's value at this close.
-  p.funding += p.size * day.price * (s.fundingApr / 100) * ((ms - p.prevMs) / DAY_MS / 365);
+  // +1 for a long, -1 for a short: it flips which way a price move pays, and funding is paid by longs and received by shorts
+  // (when the rate is positive, as it usually is), so a short's funding is a credit.
+  const dir = s.side === "short" ? -1 : 1;
+  p.funding += dir * p.size * day.price * (s.fundingApr / 100) * ((ms - p.prevMs) / DAY_MS / 365);
   p.prevMs = ms;
   p.lastPrice = day.price;
   p.lastDate = day.date;
-  p.equity = p.margin + p.size * (day.price - p.buy.price) - p.entryFee - p.funding;
+  p.equity = p.margin + dir * p.size * (day.price - p.buy.price) - p.entryFee - p.funding;
   const maintenance = maintenanceRate(L) * p.size * day.price;
   let added = 0;
 
@@ -229,7 +236,7 @@ function finish(p: Live, s: Full): Position {
     topUps: p.topUps,
     topUpCount: p.topUpCount,
     notional: p.notional,
-    liquidationPrice: liquidationPrice(p.buy.price, s.leverage),
+    liquidationPrice: liquidationPrice(p.buy.price, s.leverage, s.side),
     status: p.status,
     closeDate: p.status === "open" ? null : p.closeDate,
     closePrice: p.closePrice,
@@ -245,7 +252,7 @@ function finish(p: Live, s: Full): Position {
  */
 export function simulateLeverage(opts: { buys: LeverageBuy[]; daily: DailyClose[]; endDate: string; settings: LeverageSettings }): LeverageResult {
   const leverage = Math.min(MAX_LEVERAGE, Math.max(1, opts.settings.leverage));
-  const settings = { ...opts.settings, leverage, fundingApr: opts.settings.fundingApr ?? DEFAULT_FUNDING_APR };
+  const settings = { ...opts.settings, leverage, side: opts.settings.side ?? "long", fundingApr: opts.settings.fundingApr ?? DEFAULT_FUNDING_APR } as Full;
   // The positions run side by side, day by day, so a top-up budget shared by all of them is spent in the order things happened.
   const live = opts.buys.map((b) => openPosition(b, settings));
   let spent = 0;
@@ -287,7 +294,7 @@ export function simulateLeverage(opts: { buys: LeverageBuy[]; daily: DailyClose[
     tip.invested = invested;
   }
   return {
-    settings: { leverage, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.topUpBudget !== undefined ? { topUpBudget: settings.topUpBudget } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
+    settings: { leverage, side: settings.side, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.topUpBudget !== undefined ? { topUpBudget: settings.topUpBudget } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
     positions,
     series,
     summary: {

@@ -18,7 +18,7 @@ const FRAMES = [1, 3, 5] as const;
 const YEAR_MS = 365.25 * 86_400_000;
 
 /** The backtest as a picture: what you put in against what it was worth, and the price against your average cost. */
-export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "Replay", leverage }: { buys: BuyRow[]; priceToday: number | null; priceTodayDate: string | null; unit: "shares" | "tokens"; title?: string; leverage?: { times: number; series: LeverageSeriesPoint[] } }) {
+export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "Replay", leverage }: { buys: BuyRow[]; priceToday: number | null; priceTodayDate: string | null; unit: "shares" | "tokens"; title?: string; leverage?: { times: number; side?: "long" | "short"; series: LeverageSeriesPoint[] } }) {
   const [viewPick, setView] = useState<View>("growth");
   // A leveraged run only has the growth picture: there is no single average cost to compare the price with.
   const view: View = leverage ? "growth" : viewPick;
@@ -119,7 +119,7 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
   return (
     <section className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-6" aria-label="Charts">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-base font-bold">{leverage ? `How it grew with ${leverage.times}x leverage` : view === "growth" ? "How it grew" : "Price against your average cost"}</h3>
+        <h3 className="text-base font-bold">{leverage ? `How it grew with ${leverage.times}x ${leverage.side === "short" ? "short" : "leverage"}` : view === "growth" ? "How it grew" : "Price against your average cost"}</h3>
         <div role="group" aria-label="Chart" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           {/* Timeframe, like a trading terminal: small pills, the active one lit. */}
           <div role="group" aria-label="Timeframe" className="flex gap-1">

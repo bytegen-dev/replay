@@ -103,3 +103,14 @@ test("the series tracks money in and worth over time", () => {
   close(last.invested, 1000, 1e-9);
   assert.ok(last.value > 1000);
 });
+
+test("a short gains when the price falls and is liquidated when it rises", () => {
+  const down = simulateLeverage({ buys: [buy(1000, 100)], daily: px(["2024-01-02", 90], ["2024-01-03", 80]), endDate: "2024-01-03", settings: { leverage: 5, side: "short", fundingApr: 0 } });
+  assert.equal(down.positions[0].status, "open");
+  assert.ok(down.positions[0].value > 1000 + 5 * 1000 * 0.19, "5x short on a 20% fall nets about +100% less fees");
+  const up = simulateLeverage({ buys: [buy(1000, 100)], daily: px(["2024-01-02", 110], ["2024-01-03", 125]), endDate: "2024-01-03", settings: { leverage: 5, side: "short", fundingApr: 0 } });
+  assert.equal(up.positions[0].status, "liquidated");
+  assert.equal(up.positions[0].closeDate, "2024-01-03");
+  assert.ok(up.positions[0].liquidationPrice > 100 && up.positions[0].liquidationPrice < 125);
+  assert.equal(up.settings.side, "short");
+});

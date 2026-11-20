@@ -91,9 +91,10 @@ export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>
   if (input.plan !== undefined && input.plan !== "" && !isPlan(input.plan)) errors.plan = `plan must be one of ${PLANS.map((p) => p.value).join(", ")}`;
 
   if (input.leverage !== undefined) {
-    const lv = input.leverage as { leverage?: unknown; fundingApr?: unknown; topUpMax?: unknown; topUpBudget?: unknown; maxLoss?: unknown; maxLossPct?: unknown } | null;
+    const lv = input.leverage as { leverage?: unknown; fundingApr?: unknown; topUpMax?: unknown; topUpBudget?: unknown; maxLoss?: unknown; maxLossPct?: unknown; side?: unknown } | null;
     const x = Number(lv?.leverage);
     if (!lv || typeof lv !== "object" || !Number.isFinite(x) || x < 1 || x > MAX_LEVERAGE) errors.leverage = `Leverage must be between 1 and ${MAX_LEVERAGE}`;
+    else if (lv.side !== undefined && lv.side !== "long" && lv.side !== "short") errors.leverage = "side must be long or short";
     else if (lv.fundingApr !== undefined && !(Number.isFinite(Number(lv.fundingApr)) && Number(lv.fundingApr) >= 0 && Number(lv.fundingApr) <= 500)) errors.leverage = "Funding must be a yearly rate between 0 and 500 percent";
     else if (lv.topUpMax !== undefined && !(Number.isFinite(Number(lv.topUpMax)) && Number(lv.topUpMax) > 0)) errors.leverage = "The most margin to add must be more than 0";
     else if (lv.topUpBudget !== undefined && !(Number.isFinite(Number(lv.topUpBudget)) && Number(lv.topUpBudget) > 0)) errors.leverage = "The margin budget must be more than 0";
