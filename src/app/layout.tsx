@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Chakra_Petch, JetBrains_Mono } from "next/font/google";
 import { BackgroundMotion } from "@/components/BackgroundMotion";
 import { PwaRegister } from "@/components/PwaRegister";
+import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { SettingsProvider } from "@/components/SettingsProvider";
 import { HEAD_SCRIPT } from "@/lib/settings.ts";
 import "./globals.css";
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SettingsProvider>
           <div className="relative z-10 flex min-h-dvh w-full flex-1 flex-col">{children}</div>
           <PwaRegister />
+          <UpdatePrompt />
           <BackgroundMotion />
         </SettingsProvider>
       </body>
