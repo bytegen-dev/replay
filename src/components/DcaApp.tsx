@@ -918,10 +918,10 @@ export function DcaApp() {
                 </div>
               </Field>
               {leveraged && (
-                <div className="min-[480px]:col-span-2">
+                <div className="min-[480px]:col-span-2 lg:col-span-4">
                 
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-4 lg:max-w-2xl">
+                  <div className="flex flex-col gap-3.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-muted-foreground">Leverage</span>
                       <span className="text-lg font-bold tabular-nums" aria-hidden>
