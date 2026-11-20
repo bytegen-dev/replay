@@ -891,7 +891,7 @@ export function DcaApp() {
               <Field id="amount" className="min-[480px]:col-span-2" label={plan === "monthly" ? "Monthly amount" : plan === "once" ? "Amount" : "Amount each buy"} error={errors.amount ?? errors.currency}>
                 {/* The currency sits in front of the number. Anything other than USD is converted at each month's own rate. */}
                 <div className="flex">
-                  <CurrencyPicker id="currency" ariaLabel="Currency" variant="compact" value={currency} onChange={setCurrency} className="w-[6.5rem]! shrink-0 border-r-0" />
+                  <CurrencyPicker id="currency" ariaLabel="Currency" variant="compact" value={currency} onChange={setCurrency} className="h-auto! max-h-none! min-h-0! w-[6.5rem]! shrink-0 self-stretch border-r-0" />
                   <AmountInput
                     id="amount"
                     className="form-control-h min-w-0 flex-1 text-sm"
@@ -901,8 +901,8 @@ export function DcaApp() {
                   />
                   {/* How often it is bought, on the same row as the amount. Every month by default; the others buy only in some months, counted from the start month. */}
                   <Select value={leveraged ? "leverage" : plan} onValueChange={(v) => (v === "leverage" ? (setLev(String(DEFAULT_LEVERAGE)), setPlan("once")) : (setLev("1"), setPlan(v as Plan)))}>
-                    <SelectTrigger id="plan" aria-label="How often you buy, or leverage" className="form-control-h w-[8.5rem]! shrink-0 rounded-none border-l-0 px-2 text-sm">
-                      <SelectValue>{leveraged ? (side === "short" ? "Short" : "Leverage") : PLANS.find((p) => p.value === plan)?.short}</SelectValue>
+                    <SelectTrigger id="plan" aria-label="How often you buy, or leverage" className="form-control-h h-auto! max-h-none! min-h-0! w-[8.5rem]! shrink-0 self-stretch rounded-none border-l-0 px-2 text-sm">
+                      <SelectValue>{leveraged ? "Leverage" : PLANS.find((p) => p.value === plan)?.short}</SelectValue>
                     </SelectTrigger>
                     <SelectContent className={selectContent}>
                       {PLANS.map((p) => (
