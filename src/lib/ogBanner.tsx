@@ -51,7 +51,7 @@ function Chart({ check, w, h }: { check: DemoCheck; w: number; h: number }) {
   );
 }
 
-export function OgBanner({ headline, sub, body, card, footer }: { headline: string[]; sub: string; body: string; card: OgCard; footer?: string }) {
+export function OgBanner({ headline, sub, body, card, footer, cta = "Join the waitlist" }: { headline: string[]; sub: string; body: string; card: OgCard; footer?: string; cta?: string }) {
   const CARD_W = 520;
   const CARD_H = 470;
   return (
@@ -80,7 +80,7 @@ export function OgBanner({ headline, sub, body, card, footer }: { headline: stri
         </div>
 
         <div style={{ display: "flex" }}>
-          <div style={{ display: "flex", background: C.mint, color: "#03090b", fontSize: 24, fontWeight: 700, padding: "15px 34px" }}>Join the waitlist</div>
+          <div style={{ display: "flex", background: C.mint, color: "#03090b", fontSize: 24, fontWeight: 700, padding: "15px 34px" }}>{cta}</div>
         </div>
       </div>
 

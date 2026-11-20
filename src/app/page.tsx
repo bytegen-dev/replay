@@ -218,7 +218,7 @@ export default function LandingPage() {
                 <li key={t} className="tex-hover flex flex-col gap-3 border border-border bg-secondary p-5 transition-colors duration-300 hover:border-primary/50">
                   <div className="flex items-center justify-between">
                     <Icon className="size-7 text-primary" strokeWidth={1.5} aria-hidden />
-                    <span className="border border-primary/50 px-2 py-0.5 text-xs font-bold text-primary">Coming soon</span>
+                    <span className="border border-primary/50 bg-card/40 px-2 py-0.5 text-xs font-bold text-primary backdrop-blur-md">Coming soon</span>
                   </div>
                   <h3 className="text-lg font-bold">{t}</h3>
                   <SpotlightText className="text-sm leading-relaxed text-muted-foreground" text={d} />
