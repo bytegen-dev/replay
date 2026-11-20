@@ -1,4 +1,5 @@
 import { todayUtc } from "./months.ts";
+import type { Plan } from "./plan.ts";
 import type { Basis, DcaRequest, Market } from "./types.ts";
 
 /**
@@ -20,11 +21,25 @@ export interface Example {
   basis: Basis;
   /** Stocks only: treat dividends as reinvested. */
   reinvest?: boolean;
+  /** How often it buys. Monthly when absent. */
+  plan?: Plan;
   /** A line of context shown with the result. */
   note?: string;
 }
 
 export const EXAMPLES: Example[] = [
+  {
+    id: "sp500-2017",
+    label: "S&P 500, monthly since 2017",
+    question: "$500 a month into the S&P 500 since January 2017: what is it worth today?",
+    market: "equity",
+    address: "SPY",
+    amount: 500,
+    startMonth: "2017-01",
+    basis: "month-end",
+    reinvest: true,
+    note: "Uses SPY, the S&P 500 ETF, buying $500 every month.",
+  },
   {
     id: "sp500-1998",
     label: "S&P 500 since 1998",
@@ -38,40 +53,52 @@ export const EXAMPLES: Example[] = [
     note: "Uses SPY, the S&P 500 ETF, with dividends reinvested. SPY started trading in 1993.",
   },
   {
-    id: "apple-2013",
-    label: "Apple since 2013",
-    question: "$100 a month into Apple stock since January 2013: what is it worth today?",
+    id: "apple-once",
+    label: "Apple, $5,000 once in 2017",
+    question: "$5,000 into Apple stock in a single buy in January 2017: what is it worth today?",
     market: "equity",
     address: "AAPL",
-    amount: 100,
-    startMonth: "2013-01",
+    amount: 5000,
+    startMonth: "2017-01",
     basis: "month-end",
+    plan: "once",
     reinvest: false,
-    note: "Price only, adjusted for Apple's 2014 and 2020 stock splits. Dividends are not included.",
+    note: "A single buy, priced at the end of January 2017. Price only, adjusted for Apple's 2020 stock split.",
   },
   {
-    id: "nasdaq-2005",
-    label: "Nasdaq-100 since 2005",
-    question: "$250 a month into the Nasdaq-100 since January 2005: what is it worth today?",
+    id: "bitcoin-monthly",
+    label: "Bitcoin, $200 a month since 2020",
+    question: "$200 a month into Bitcoin since January 2020: what is it worth today?",
+    market: "equity",
+    address: "BTC-USD",
+    amount: 200,
+    startMonth: "2020-01",
+    basis: "month-end",
+    note: "Bitcoin's USD price, buying $200 every month.",
+  },
+  {
+    id: "ethereum-once",
+    label: "Ethereum, $1,000 once in 2021",
+    question: "$1,000 into Ethereum in a single buy in January 2021: what is it worth today?",
+    market: "equity",
+    address: "ETH-USD",
+    amount: 1000,
+    startMonth: "2021-01",
+    basis: "month-end",
+    plan: "once",
+    note: "A single buy, priced at the end of January 2021.",
+  },
+  {
+    id: "nasdaq-2017",
+    label: "Nasdaq-100, monthly since 2017",
+    question: "$250 a month into the Nasdaq-100 since January 2017: what is it worth today?",
     market: "equity",
     address: "QQQ",
     amount: 250,
-    startMonth: "2005-01",
+    startMonth: "2017-01",
     basis: "month-end",
     reinvest: true,
-    note: "Uses QQQ, the Nasdaq-100 ETF, with dividends reinvested.",
-  },
-  {
-    id: "berkshire-2000",
-    label: "Berkshire since 2000",
-    question: "$200 a month into Berkshire Hathaway (class B) since January 2000: what is it worth today?",
-    market: "equity",
-    address: "BRK-B",
-    amount: 200,
-    startMonth: "2000-01",
-    basis: "month-end",
-    reinvest: false,
-    note: "Price only. Berkshire pays no dividend.",
+    note: "Uses QQQ, the Nasdaq-100 ETF, buying $250 every month.",
   },
 ];
 
@@ -92,6 +119,7 @@ export function exampleRequest(ex: Example, now: number = Date.now()): DcaReques
     endMonth: lastFullMonth(now),
     basis: ex.basis,
     ...(ex.reinvest ? { reinvest: true } : {}),
+    ...(ex.plan && ex.plan !== "monthly" ? { plan: ex.plan } : {}),
   };
 }
 

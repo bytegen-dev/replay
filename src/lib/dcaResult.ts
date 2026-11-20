@@ -3,6 +3,7 @@ import { isMajorSymbol } from "./majors.ts";
 import { fmtNum, fmtPct, fmtUsd } from "./format.ts";
 import { buildBuys, chooseDecimals, summarize } from "./math.ts";
 import { compressMonths } from "./months.ts";
+import type { LeverageResult } from "./leverage.ts";
 import type { DcaRequest, DcaResponse } from "./types.ts";
 
 /** What the public API returns: the numbers, a ready-to-quote sentence, and (with detail=full) every month. */
@@ -48,6 +49,13 @@ export interface ApiResult {
     source: string;
     notes: string[];
   }[];
+  /** Present when `leverage` was asked for: the same buys as leveraged futures-style positions. */
+  leverage?: {
+    settings: LeverageResult["settings"];
+    summary: LeverageResult["summary"];
+    /** Only with detail=full. */
+    positions?: LeverageResult["positions"];
+  };
   sources: { label: string; url: string }[];
   warnings: string[];
 }
@@ -105,6 +113,11 @@ export function toApiResult(res: DcaResponse, req: DcaRequest, detail: "summary"
     sources: res.sources,
     warnings: res.warnings,
   };
+  if (res.leverage) {
+    const lv = res.leverage;
+    out.leverage = { settings: lv.settings, summary: lv.summary, ...(detail === "full" ? { positions: lv.positions } : {}) };
+    out.answer += ` With ${lv.settings.leverage}x leverage (futures style, ${lv.settings.fundingApr}% a year funding) the same buys would have put in ${fmtUsd(lv.summary.invested)} and ended at ${fmtUsd(lv.summary.value)} (${fmtPct(lv.summary.gainPct)}), with ${lv.summary.liquidated} of ${lv.summary.positions} positions liquidated.`;
+  }
   if (detail === "full") {
     out.months = buys.map((b) => ({
       month: b.month,

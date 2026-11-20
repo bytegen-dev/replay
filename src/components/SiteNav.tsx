@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils";
 const LINKS = [
   { href: "/", label: "Hindsight" },
   { href: "/wayback", label: "Wayback" },
+  { href: "/docs", label: "Docs" },
 ];
 
 const EXTERNAL = [
-  { href: "https://github.com/bytegen-dev/replay#readme", label: "Docs" },
   { href: "https://github.com/bytegen-dev", label: "GitHub" },
 ];
 

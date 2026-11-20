@@ -11,6 +11,8 @@ import {
 } from "./providers.ts";
 import { dexhunterSeries } from "./dexhunter.ts";
 import { fillGaps, gtCardanoSeries, resolveCardanoUnit } from "./gtCardano.ts";
+import { simulateLeverage } from "./leverage.ts";
+import { buildBuys, chooseDecimals } from "./math.ts";
 import { isBuyMonth } from "./plan.ts";
 import { selectAllMonths } from "./select.ts";
 import { runStockDca } from "./stocks.ts";
@@ -26,7 +28,31 @@ export { DcaError };
  * then gets that day's exchange rate (units per dollar), so a ₦100,000 buy is converted at the rate of the month it was made.
  */
 export async function runDca(req: DcaRequest, now: number = Date.now(), opts: { tiingoKey?: string } = {}): Promise<DcaResponse> {
-  const res = await runDcaUsd(req, now, opts);
+  const res = await withCurrency(req, await runDcaUsd(req, now, opts), now);
+  return req.leverage && req.leverage.leverage > 1 ? addLeverage(req, res) : stripDaily(res);
+}
+
+const stripDaily = (res: DcaResponse): DcaResponse => {
+  const { daily: _daily, ...rest } = res;
+  void _daily;
+  return rest;
+};
+
+/** Works out the leveraged version of the same buys, then drops the daily prices it needed. */
+function addLeverage(req: DcaRequest, res: DcaResponse): DcaResponse {
+  const daily = res.daily ?? [];
+  const decimals = chooseDecimals(res.rows, req.amount);
+  const bought = buildBuys(res.rows, req.amount, res.currentPrice, {}, decimals, req.plan).filter((b) => b.buy !== false && b.price !== null && b.tokens !== null && b.amount > 0);
+  const buys = bought.map((b) => ({ month: b.month, date: b.priceDate ?? b.targetDate, price: b.price as number, amount: b.amount }));
+  const lastBuyDate = res.rows.filter((r) => r.price !== null).map((r) => r.priceDate ?? r.targetDate).sort().pop();
+  const endDate = req.sellAtEnd && lastBuyDate ? lastBuyDate : res.currentPriceDate;
+  const leverage = simulateLeverage({ buys, daily, endDate, settings: req.leverage! });
+  const warnings = [...res.warnings];
+  if (daily.length === 0) warnings.push("Daily prices weren't available for this asset, so the leveraged result can't check for liquidation between buys.");
+  return { ...stripDaily(res), warnings, leverage };
+}
+
+async function withCurrency(req: DcaRequest, res: DcaResponse, now: number): Promise<DcaResponse> {
   const code = req.currency?.trim().toUpperCase();
   if (!code || code === "USD") return res;
   const cur = currencyByCode(code);
@@ -231,6 +257,7 @@ async function runDcaUsd(req: DcaRequest, now: number, opts: { tiingoKey?: strin
     ...(req.basis === "day-of-month" && req.basisDay !== undefined ? { basisDay: req.basisDay } : {}),
     currentPrice,
     currentPriceDate: today,
+    ...(req.leverage ? { daily: points.filter((p) => p.date >= req.startMonth + "-01").map((p) => ({ date: p.date, price: p.price })) } : {}),
     rows,
     sources,
     warnings,

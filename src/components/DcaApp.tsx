@@ -3,6 +3,7 @@
 import { SourceBadge } from "@/components/SourceBadge";
 import Link from "next/link";
 import { ChainLogo, CoinLogo } from "@/components/ChainLogo";
+import { StockLogo } from "@/components/StockLogo";
 import { AlertTriangle, Check, Copy, FileSpreadsheet, History, Settings, Share2, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
@@ -38,6 +39,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { downloadFile } from "@/lib/download.ts";
 import { EXAMPLES, exampleRequest, type Example } from "@/lib/examples.ts";
+import { exampleSnapshot } from "@/lib/exampleResults.ts";
+import { DEFAULT_FUNDING_APR, liquidationDropPct, MAX_LEVERAGE } from "@/lib/leverage.ts";
+import { LeverageCard } from "@/components/LeverageCard";
 import { xlsxFileName, type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
@@ -45,6 +49,9 @@ import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel, isMont
 import { CHAINS, CHAIN_LABELS, MARKET_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
 import { MAJORS, isMajorSymbol } from "@/lib/majors.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
+
+/** What the Hindsight form opens with. */
+const START_PLAN: Plan = "once";
 
 function shiftMonth(m: string, delta: number): string {
   const [y, mo] = m.split("-").map(Number);
@@ -155,7 +162,16 @@ export function DcaApp() {
   // "Sell at end month": value the holding at the end month's price instead of today's. Applied when the check runs.
   const [sellAtEnd, setSellAtEnd] = useState(false);
   // How often the amount is bought: every month, every 3 or 6 months, yearly, or once at the start month.
-  const [plan, setPlan] = useState<Plan>(DEFAULT_PLAN);
+  // The form starts on a single buy at the start month. (The API's own default stays "monthly"; only what the page opens with changes.)
+  const [plan, setPlan] = useState<Plan>(START_PLAN);
+  // Leverage, futures style. 1 means plain buying. The other settings only matter above 1x.
+  const [lev, setLev] = useState("1");
+  const [fundingApr, setFundingApr] = useState(String(DEFAULT_FUNDING_APR));
+  const [topUp, setTopUp] = useState(false);
+  const [topUpMax, setTopUpMax] = useState("");
+  const [maxLoss, setMaxLoss] = useState("");
+  const levNum = Number(lev);
+  const leveraged = Number.isFinite(levNum) && levNum > 1;
   // Prices come from the data source and are read-only unless the person switches editing on (for what-if prices, or to fill a gap).
   const [editPrices, setEditPrices] = useState(false);
   // Switching tab clears the results, so a switch with results nobody has exported or shared asks first. These track that.
@@ -222,6 +238,17 @@ export function DcaApp() {
       if (q.get("sell") === "1") setSellAtEnd(true);
       const pl = q.get("plan");
       if (isPlan(pl)) setPlan(pl);
+      const lv = Number(q.get("lev"));
+      if (Number.isFinite(lv) && lv > 1 && lv <= MAX_LEVERAGE) {
+        setLev(String(lv));
+        const fa = q.get("fund");
+        if (fa !== null && Number.isFinite(Number(fa)) && Number(fa) >= 0 && Number(fa) <= 500) setFundingApr(fa);
+        if (q.get("topup") === "1") setTopUp(true);
+        const tm = cleanAmount(q.get("topmax"));
+        if (tm) setTopUpMax(tm);
+        const ml = cleanAmount(q.get("maxloss"));
+        if (ml) setMaxLoss(ml);
+      }
       const a = cleanAmount(q.get("amt"));
       if (a) setAmount(formatAmountInput(a));
       const cur = q.get("cur")?.toUpperCase();
@@ -284,9 +311,14 @@ export function DcaApp() {
       basis: basis !== "month-end" && basis,
       day: basis === "day-of-month" && String(basisDay),
       sell: sellAtEnd && "1",
-      plan: plan !== DEFAULT_PLAN && plan,
+      plan: plan !== START_PLAN && plan,
+      lev: leveraged && String(levNum),
+      fund: leveraged && fundingApr !== String(DEFAULT_FUNDING_APR) && fundingApr,
+      topup: leveraged && topUp && "1",
+      topmax: leveraged && topUp && cleanAmount(topUpMax),
+      maxloss: leveraged && cleanAmount(maxLoss),
     });
-  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan]);
+  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, maxLoss]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -432,7 +464,7 @@ export function DcaApp() {
   /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(parseAmount(maxLoss) > 0 ? { maxLoss: parseAmount(maxLoss) } : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
         ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
@@ -444,10 +476,17 @@ export function DcaApp() {
     await execute(input);
   }
 
-  /** Fills the form from a ready-made check and runs it straight away. */
+  /**
+   * Fills the form from a ready-made check and shows its result. A result worked out ahead of time appears at once (marked with its
+   * date) while live prices are fetched in the background and replace it; without one, the check just runs.
+   */
   function runExample(ex: Example) {
     const req = exampleRequest(ex);
-    if (ex.market === "equity") {
+    if (isMajorSymbol(ex.address)) {
+      setMode("token");
+      setCryptoKind("major");
+      setMajor(ex.address);
+    } else if (ex.market === "equity") {
       setMode("equity");
       setTicker(ex.address);
       setTickerName(ex.label);
@@ -461,17 +500,38 @@ export function DcaApp() {
     setStartMonth(req.startMonth);
     setEndMonth(req.endMonth);
     setBasis(ex.basis);
+    setPlan(ex.plan ?? "monthly");
+    setLev("1");
+    setSellAtEnd(false);
+    setCurrency("USD");
     setErrors({});
-    setExampleNote(ex.note ?? null);
-    void execute(req);
+    const snap = exampleSnapshot(ex.id);
+    if (snap) {
+      const ran = req.plan ?? DEFAULT_PLAN;
+      setData({ ...snap.response, amount: ex.amount, ...(ran !== DEFAULT_PLAN ? { plan: ran } : {}) });
+      setMonthFilter({ ...NO_FILTER, onlyBought: ran !== DEFAULT_PLAN });
+      setOverrides({});
+      setDrafts({});
+      setShare(null);
+      setExported(false);
+      setApiError(null);
+      setExampleNote(`${ex.note ?? ""} Saved result from ${snap.asOf}. Checking live prices.`.trim());
+      void execute(req, false, { note: ex.note ?? null });
+    } else {
+      setExampleNote(ex.note ?? null);
+      void execute(req, false);
+    }
   }
 
-  async function execute(input: Omit<DcaRequest, "unit">) {
-    setLoading(true);
-    setApiError(null);
-    setExportError(null);
-    setShare(null);
-    setShareError(null);
+  async function execute(input: Omit<DcaRequest, "unit">, sold: boolean = sellAtEnd, refresh?: { note: string | null }) {
+    // A refresh replaces a saved result quietly: no loading state, and if it fails the saved result stays.
+    if (!refresh) {
+      setLoading(true);
+      setApiError(null);
+      setExportError(null);
+      setShare(null);
+      setShareError(null);
+    }
     try {
       const res = await fetch("/api/dca", {
         method: "POST",
@@ -484,17 +544,24 @@ export function DcaApp() {
         if (j.fields) setErrors(j.fields);
         throw new Error(j.error ?? `Request failed (${res.status})`);
       }
-      setData({ ...(j as DcaResponse), amount: input.amount, ...(sellAtEnd ? { sold: true } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}) });
+      // What ran comes from the request itself, so a ready-made check (always monthly) isn't labelled with the form's plan.
+      const ran = input.plan ?? DEFAULT_PLAN;
+      setData({ ...(j as DcaResponse), amount: input.amount, ...(sold ? { sold: true } : {}), ...(ran !== DEFAULT_PLAN ? { plan: ran } : {}) });
       setExported(false);
       // Under a plan that buys only some months, start with the list showing just those; one click shows every month.
-      setMonthFilter({ ...NO_FILTER, onlyBought: plan !== DEFAULT_PLAN });
+      setMonthFilter({ ...NO_FILTER, onlyBought: ran !== DEFAULT_PLAN });
       setOverrides({});
       setDrafts({});
+      if (refresh) setExampleNote(refresh.note);
     } catch (err) {
+      if (refresh) {
+        setExampleNote((n) => `${(n ?? "").replace(/ Checking live prices\.$/, "")} Live prices could not be loaded, so this is the saved result.`.trim());
+        return;
+      }
       setData(null);
       setApiError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
-      setLoading(false);
+      if (!refresh) setLoading(false);
     }
   }
 
@@ -881,6 +948,53 @@ export function DcaApp() {
                   <span className="text-xs text-muted-foreground">up to last month</span>
                 </div>
 
+                {/* Leverage, futures style: each buy opens its own position. 1x is plain buying. */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                    <label htmlFor="leverage" className="mr-1 text-sm text-muted-foreground">
+                      Leverage
+                    </label>
+                    {[1, 2, 3, 5, 10, 20].map((n) => (
+                      <button key={n} type="button" aria-pressed={levNum === n} onClick={() => setLev(String(n))} className={cn("h-8 border px-3 text-xs sm:text-sm", levNum === n ? "border-primary text-foreground" : "border-border text-muted-foreground hover:border-primary hover:text-foreground")}>
+                        {n}x
+                      </button>
+                    ))}
+                    <span className="flex items-center gap-1">
+                      <input id="leverage" inputMode="decimal" value={lev} onChange={(e) => setLev(e.target.value.replace(/[^\d.]/g, "").slice(0, 5))} aria-invalid={!!errors.leverage} className="h-8 w-16 border border-input bg-transparent px-2 text-center text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                      <span className="text-sm text-muted-foreground">x</span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {leveraged ? `liquidated if the price falls about ${liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy` : "1x is plain buying"}
+                    </span>
+                  </div>
+                  {(errors.leverage || (Number.isFinite(levNum) && levNum > MAX_LEVERAGE)) && (
+                    <p role="alert" className="text-sm font-bold">
+                      {errors.leverage ?? `Leverage goes up to ${MAX_LEVERAGE}x`}
+                    </p>
+                  )}
+                  {leveraged && (
+                    <div className="grid gap-4 border border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                        Funding (% a year)
+                        <input inputMode="decimal" value={fundingApr} onChange={(e) => setFundingApr(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))} className="form-control-h border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                        <span className="text-xs">{DEFAULT_FUNDING_APR}% is the usual exchange rate</span>
+                      </label>
+                      <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                        <label className="flex cursor-pointer items-center gap-2 transition-colors hover:text-foreground">
+                          <input type="checkbox" checked={topUp} onChange={(e) => setTopUp(e.target.checked)} className="size-4 shrink-0 cursor-pointer accent-primary" />
+                          Add margin to avoid liquidation
+                        </label>
+                        {topUp && <AmountInput aria-label="Most margin to add per buy, in dollars" placeholder="Up to $ per buy (optional)" value={topUpMax} onValueChange={setTopUpMax} className="form-control-h text-sm" />}
+                      </div>
+                      <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                        Max loss per buy ($, optional)
+                        <AmountInput placeholder="No limit" value={maxLoss} onValueChange={setMaxLoss} className="form-control-h text-sm" />
+                      </label>
+                      <p className="text-xs leading-relaxed text-muted-foreground">Each buy opens its own position, as on a futures exchange. Fees are 0.045% each way. It uses daily closes, so real trading can be harsher.</p>
+                    </div>
+                  )}
+                </div>
+
                 {/* The action: what you are about to run, in a sentence, and a button that is only as wide as its words. */}
                 <div className="flex flex-col gap-4 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
                   <p className="text-sm leading-snug text-muted-foreground" aria-live="polite">
@@ -945,6 +1059,8 @@ export function DcaApp() {
         <div ref={resultsRef} className="reveal-stack flex scroll-mt-[calc(4.5rem+env(safe-area-inset-top))] flex-col gap-6 sm:scroll-mt-28 sm:gap-8">
           <section className="border border-border bg-card p-4 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center gap-2">
+              {/* The asset's logo: the company for a stock or ETF, the coin for a major. */}
+              {data.chain === "equity" && (isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-8 shrink-0" /> : <StockLogo symbol={data.address} className="size-8 text-sm" />)}
               <h2 className="text-xl font-bold tracking-tight">{data.token.name ?? "Unknown token"}</h2>
               <Badge variant="outline" className="gap-1.5 rounded-none font-normal">
                 {isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-3.5 shrink-0" /> : <ChainLogo chain={data.chain} className="size-3.5 shrink-0" />}
@@ -986,6 +1102,8 @@ export function DcaApp() {
               </p>
             )}
           </section>
+
+          {data.leverage && <LeverageCard result={data.leverage} plainGainPct={computed.summary.gainPct} sold={val?.sold} />}
 
           {data.warnings.length > 0 && (
             <Alert className="rounded-none border-border">
@@ -1114,13 +1232,14 @@ export function DcaApp() {
           </div>
 
           <div className="flex flex-col gap-3 border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">Download results for accounting or offline review.</p>
+            <p className="text-sm text-muted-foreground">{data.leverage ? "Export and sharing cover the plain buys only. Set leverage to 1x to use them." : "Download results for accounting or offline review."}</p>
             <Button
               type="button"
               variant="outline"
               className="h-11 w-full rounded-none transition-transform hover:-translate-y-px active:translate-y-0 sm:h-10 sm:w-auto"
               onClick={() => doExport()}
-              disabled={exporting}
+              disabled={exporting || !!data.leverage}
+              title={data.leverage ? "The spreadsheet has the plain (unleveraged) buys, so it is off while a leveraged result is showing. Set leverage to 1x to export." : undefined}
             >
               {exporting ? <MarkLoader /> : <FileSpreadsheet />}
               {exporting ? "Building XLSX" : "Export spreadsheet"}
@@ -1144,7 +1263,8 @@ export function DcaApp() {
                 variant="outline"
                 className="h-11 w-full rounded-none transition-transform hover:-translate-y-px active:translate-y-0 sm:h-10 sm:w-auto"
                 onClick={() => doShare()}
-                disabled={sharing}
+                disabled={sharing || !!data.leverage}
+                title={data.leverage ? "Sharing saves the plain (unleveraged) buys, so it is off while a leveraged result is showing. Set leverage to 1x to share." : undefined}
               >
                 {sharing ? <MarkLoader /> : <Share2 />}
                 {sharing ? "Saving" : share ? "Share again" : "Share"}

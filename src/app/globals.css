@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
 
 /* Single theme: `dark:` utilities only apply under a .dark ancestor, which this app never sets. */
 @custom-variant dark (&:is(.dark *));
@@ -584,3 +586,39 @@
     font-size: 16px;
   }
 }
+
+/* The documentation (Fumadocs) uses Replay's own colours, so it follows the light, dark and high-contrast settings. Unlayered, so it
+   wins over Fumadocs' defaults, and on :root so its dialogs and popovers (drawn outside the page) match too. */
+:root {
+  --color-fd-background: var(--background);
+  --color-fd-foreground: var(--foreground);
+  --color-fd-muted: var(--secondary);
+  --color-fd-muted-foreground: var(--muted-foreground);
+  --color-fd-popover: var(--popover);
+  --color-fd-popover-foreground: var(--popover-foreground);
+  --color-fd-card: var(--card);
+  --color-fd-card-foreground: var(--card-foreground);
+  --color-fd-border: var(--border);
+  --color-fd-primary: var(--primary);
+  --color-fd-primary-foreground: var(--primary-foreground);
+  --color-fd-secondary: var(--secondary);
+  --color-fd-secondary-foreground: var(--secondary-foreground);
+  --color-fd-accent: var(--secondary);
+  --color-fd-accent-foreground: var(--foreground);
+  --color-fd-ring: var(--ring);
+}
+
+/* Replay's fonts have a regular and a bold weight only, so the documentation's medium-weight emphasis would look regular. Use bold. */
+.prose strong,
+.prose b,
+.prose th {
+  font-weight: 700;
+}
+
+/* Code blocks: Fumadocs picks its dark token colours from a .dark class, which Replay doesn't set (its dark theme is the default
+   and the light theme is marked on <html>). Use the dark colours unless the light theme is on. */
+:root:not([data-theme="light"]) .shiki:not(.not-fumadocs-codeblock *) code span {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style);
+}
+/* v8 */

@@ -1,3 +1,4 @@
+import { MAX_LEVERAGE } from "./leverage.ts";
 import { isPlan, PLANS } from "./plan.ts";
 import { isCurrency } from "./fxCurrencies.ts";
 import { isMonth } from "./months.ts";
@@ -70,7 +71,7 @@ export function validateAddress(address: string, chain: Market): string | null {
 }
 
 export type FieldErrors = Partial<
-  Record<"address" | "chain" | "amount" | "currency" | "plan" | "startMonth" | "endMonth" | "basis" | "basisDay", string>
+  Record<"address" | "chain" | "amount" | "currency" | "plan" | "leverage" | "startMonth" | "endMonth" | "basis" | "basisDay", string>
 >;
 
 export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>>): FieldErrors {
@@ -88,6 +89,15 @@ export function validateRequest(input: Partial<Record<keyof DcaRequest, unknown>
   if (input.currency !== undefined && input.currency !== "" && !isCurrency(input.currency)) errors.currency = `Unknown currency "${String(input.currency)}". Use a three-letter code such as USD, EUR or NGN.`;
 
   if (input.plan !== undefined && input.plan !== "" && !isPlan(input.plan)) errors.plan = `plan must be one of ${PLANS.map((p) => p.value).join(", ")}`;
+
+  if (input.leverage !== undefined) {
+    const lv = input.leverage as { leverage?: unknown; fundingApr?: unknown; topUpMax?: unknown; maxLoss?: unknown } | null;
+    const x = Number(lv?.leverage);
+    if (!lv || typeof lv !== "object" || !Number.isFinite(x) || x < 1 || x > MAX_LEVERAGE) errors.leverage = `Leverage must be between 1 and ${MAX_LEVERAGE}`;
+    else if (lv.fundingApr !== undefined && !(Number.isFinite(Number(lv.fundingApr)) && Number(lv.fundingApr) >= 0 && Number(lv.fundingApr) <= 500)) errors.leverage = "Funding must be a yearly rate between 0 and 500 percent";
+    else if (lv.topUpMax !== undefined && !(Number.isFinite(Number(lv.topUpMax)) && Number(lv.topUpMax) > 0)) errors.leverage = "The most margin to add must be more than 0";
+    else if (lv.maxLoss !== undefined && !(Number.isFinite(Number(lv.maxLoss)) && Number(lv.maxLoss) > 0)) errors.leverage = "The maximum loss must be more than 0";
+  }
 
   const s = String(input.startMonth ?? "");
   const e = String(input.endMonth ?? "");

@@ -1,0 +1,21 @@
+---
+title: Export and share
+description: Take a result with you as a spreadsheet, or save it as a read-only link.
+---
+
+## Export a spreadsheet
+
+**Export spreadsheet** downloads an `.xlsx` built from the table you see: `Summary`, `Buys` and `Sources` sheets, with the Replay logo. Blue font is a hardcoded input and black is a formula (`ROUND(amount/price, decimals)`, `SUM` totals), so you can change a price and watch the totals move. Months between buys under a plan are listed with a zero amount.
+
+## Share a result
+
+**Share** saves the current result, including any prices you edited, and gives you a public link like `/r/k3x9a2Qw`. Anyone with the link sees a read-only copy exactly as it was saved. The link is unlisted (not indexed by search engines) but **not private**: anyone who has it can open it.
+
+- Right after saving, the page can delete the link. The delete secret is shown only to that browser session, and only its hash is stored.
+- At most 72 months and 200 KB per share, and 20 saves an hour per client.
+- The server rebuilds the saved data from a list of allowed fields, and only `https://` source links are kept.
+- **Share again** makes a new link and leaves the old one up.
+
+<Callout title="Switching tabs">
+  Switching tab clears the results. Once you have exported or shared them, Replay doesn't ask first.
+</Callout>

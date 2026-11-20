@@ -15,6 +15,7 @@ export function GET(request: Request) {
         from: ex.startMonth,
         to: r.endMonth,
         ...(ex.reinvest ? { reinvest: "true" } : {}),
+        ...(ex.plan && ex.plan !== "monthly" ? { plan: ex.plan } : {}),
       });
       return { id: ex.id, question: ex.question, note: ex.note ?? null, call: { method: "GET", url: `${origin}/api/v1/dca?${qs}` } };
     });

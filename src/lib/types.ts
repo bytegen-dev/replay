@@ -1,3 +1,4 @@
+import type { LeverageResult, LeverageSettings } from "./leverage.ts";
 import type { Plan } from "./plan.ts";
 export const CHAINS = ["ethereum", "solana", "base", "bsc", "arbitrum", "hyperevm", "cardano"] as const;
 export type Chain = (typeof CHAINS)[number];
@@ -85,6 +86,10 @@ export interface DcaResponse {
   warnings: string[];
   /** Present when the monthly amount was in a currency other than USD. */
   currency?: { code: string; name: string; symbol: string; perUsdToday: number | null; firstRateDate: string | null };
+  /** Present when the request asked for leverage: what the same buys would have done as leveraged positions. */
+  leverage?: LeverageResult;
+  /** Daily closing prices, kept only while a leveraged run is worked out. Removed before the response is sent. */
+  daily?: { date: string; price: number }[];
 }
 
 export interface DcaRequest {
@@ -104,4 +109,8 @@ export interface DcaRequest {
   currency?: string;
   /** How often the amount is bought: every month (the default), every 3 or 6 months, yearly, or once at the start month. */
   plan?: Plan;
+  /** Buy with leverage, like a perpetual futures long. Absent (or 1x) means plain buying. */
+  leverage?: LeverageSettings;
+  /** Value the holding at the end month instead of today (used for the leveraged run). */
+  sellAtEnd?: boolean;
 }

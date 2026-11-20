@@ -1,0 +1,36 @@
+---
+title: Wayback
+description: The price of a token or stock at any past date and time, typed the way people say it.
+---
+
+Wayback (at `/wayback`) answers "what was this worth at that date and time?" The same lookup is the `historical-price` endpoint of the [API](/docs/api).
+
+## The page
+
+- **Stocks** and **Crypto** tabs. Under Crypto, pick the chain, then search by name or paste an address.
+- A **calendar** that can't go earlier than the asset's first price, or type the date: `15/09/2026`, `5 days ago`, `yesterday`.
+- A **clock** with AM/PM, or type the time: `13:40`, `1:40pm`.
+- A searchable **timezone** list. UTC is the default.
+- A line under the form shows exactly how your words were read, before you press the button.
+
+## Dates, times and zones
+
+Dates are read the way people write them: `15/09/2026` (day first), `2026-09-15`, `September 15 2026`, `15 Sep`, `today`, `yesterday`, `5 days ago`, `3 weeks ago`, `5 months ago` (calendar months), `1 year ago`, `2 hours ago`, `30 min ago`, `now`, or a unix timestamp. With no year it uses this year, or last year if that day hasn't happened yet. It never guesses the future: that is an error.
+
+Times are `13:40`, `1:40pm` or `1pm`. Timezones are `UTC`, `UTC+2`, `EST`, or a name like `Europe/London`, with daylight saving handled.
+
+## What the price means
+
+With a time, it is the last trade before that minute. With no time, it is that day's closing price in UTC. If nothing traded for a while, that last price still stands and the answer says how old it is.
+
+## How far back, and how precisely
+
+The lookup tries the finest data first and steps down, and the response says which it used.
+
+| Tokens (Ethereum, Base, BSC, Arbitrum, Hyperliquid, Solana) | Cardano | Stocks |
+|---|---|---|
+| 1-minute candles from the top pool, about six months back | 1-minute candles from DexHunter, converted with Bitstamp's ADA/USD | 1-minute bars for about a week, 5-minute for two months, hourly for two years |
+| then hourly or daily candles | then hourly, then daily | then the day's close, back decades |
+| then CoinGecko hourly snapshots, out to a year | CoinGecko hourly snapshots inside a year | A weekend or holiday gets the last close, and says so |
+
+Stocks that have split show the price it traded at then, plus the figure in today's shares. Thin tokens can have quiet stretches; those are flagged, never smoothed over.

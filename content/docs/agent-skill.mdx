@@ -1,0 +1,25 @@
+---
+title: Agent skill
+description: Teach an AI agent to answer monthly-buy questions with real historical prices.
+---
+
+`skills/replay/SKILL.md` teaches an AI agent to use the [API](/docs/api): how to turn "$500 a month into the S&P 500 since 1998" into one call, which ticker stands for which index, how to report the answer and its caveats, and what each error means. It also covers buying every few months or once, amounts in other currencies, and the price-at-a-moment lookup.
+
+<Steps>
+  <Step>
+    ### Copy the folder
+    Copy `skills/replay` into your agent's skills directory. For Claude Code that is `~/.claude/skills/replay`, or a project's `.claude/skills/replay`.
+  </Step>
+  <Step>
+    ### Point it at your site (optional)
+    It uses the deployed site by default. Set `REPLAY_URL` to use another.
+  </Step>
+  <Step>
+    ### Ask
+    "What would $200 a month into Bitcoin since 2020 be worth?" The agent makes one API call and reports the `answer` sentence with the warnings that matter.
+  </Step>
+</Steps>
+
+<Callout title="Honest by design">
+  The skill tells the agent never to invent a price, a return or a missing month, and to pass on every warning the API returns.
+</Callout>

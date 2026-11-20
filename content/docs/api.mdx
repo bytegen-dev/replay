@@ -1,0 +1,85 @@
+---
+title: Public API
+description: The calculations as JSON, for other apps and AI agents.
+---
+
+A versioned JSON API under `/api/v1`. The machine-readable description is at `/api/v1/openapi.json` (OpenAPI 3.1).
+
+<Tabs items={["curl", "JavaScript"]}>
+  <Tab value="curl">
+    ```bash
+    # $500 a month into the S&P 500 (SPY) since 1998, dividends reinvested
+    curl "https://YOUR-SITE/api/v1/dca?market=stock&asset=SPY&amount=500&from=1998-01&reinvest=true"
+
+    # One purchase of 5,000,000 naira into Bitcoin in January 2021
+    curl "https://YOUR-SITE/api/v1/dca?market=stock&asset=BTC-USD&amount=5000000&currency=NGN&plan=once&from=2021-01"
+
+    # Resolve a name to the market and asset to use
+    curl "https://YOUR-SITE/api/v1/search?q=apple"
+    ```
+  </Tab>
+  <Tab value="JavaScript">
+    ```js
+    const url = new URL("https://YOUR-SITE/api/v1/dca");
+    url.search = new URLSearchParams({ market: "stock", asset: "AAPL", amount: "100", from: "2013-01" });
+    const res = await fetch(url, { headers: { "x-api-key": process.env.REPLAY_KEY } }); // key only if you set DCA_API_KEYS
+    const { answer, summary } = await res.json();
+    ```
+  </Tab>
+</Tabs>
+
+## Endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `GET` or `POST /api/v1/dca` | The backtest |
+| `GET` or `POST /api/v1/historical-price` | The price at a past moment |
+| `GET /api/v1/search?q=&type=` | Find the `market` and `asset` for a name (`type` is `all`, `stock` or `token`) |
+| `GET /api/v1/examples` | Suggested checks |
+| `GET /api/v1/openapi.json` | The OpenAPI description |
+
+## `/api/v1/dca` parameters
+
+| Parameter | Required | Meaning |
+|---|---|---|
+| `market` | yes | `stock` for a US stock or ETF (also the major coins as `asset=BTC-USD`), otherwise a chain: `ethereum`, `base`, `bsc`, `arbitrum`, `hyperevm`, `solana`, `cardano` |
+| `asset` | yes | A ticker, or a contract address, mint or Cardano policy id |
+| `amount` | yes | Invested at each buy, in `currency` |
+| `from` | yes | First month, `YYYY-MM` |
+| `to` | no | Last month. Default is the last full month |
+| `currency` | no | ISO code the amount is in (`EUR`, `NGN` ...). Default `USD` |
+| `plan` | no | `monthly` (default), `quarterly`, `semiannual`, `yearly` or `once` |
+| `leverage` | no | 1 to 50. Buys like a perpetual futures long: each buy opens its own position of `amount × leverage`. Adds a `leverage` object to the result |
+| `funding` | no | With `leverage`: yearly funding in percent (default 10.95) |
+| `topup` | no | With `leverage`: `true` adds margin when a position nears liquidation |
+| `topupMax` | no | With `topup`: the most margin, in dollars, one position may be given |
+| `maxLoss` | no | With `leverage`: close a position once it has lost this many dollars |
+| `basis` | no | `month-end` (default), `first-of-month`, or `day-of-month` with `day` |
+| `reinvest` | no | Stocks only. Treat dividends as reinvested |
+| `detail` | no | `summary` (default) or `full`, which adds every month |
+
+The result has an `answer` sentence that is safe to quote ("$500 a month for 120 months", "$500 every 3 months for 40 buys", "$5,000 once"), a `summary`, the `sources` and `warnings`, and with `detail=full` every month. Errors always look like this, and `fields` names each bad input:
+
+```json
+{ "error": { "code": "invalid_request", "message": "…", "fields": { "from": "Pick a start month" } } }
+```
+
+## `/api/v1/historical-price`
+
+Named fields (`market`, `asset`, `date`, `time`, `tz`) or one line of text in `q`: `<address> <chain> [time] <date> [timezone]`, where the chain is `SOL`, `ETH`, `BASE`, `BSC`, `ARB`, `ADA` or `STOCK`. Add `format=text` for one ready-to-post chat message. How dates, times and zones are read is on the [Wayback](/docs/wayback) page.
+
+```bash
+curl -G "https://YOUR-SITE/api/v1/historical-price" \
+  --data-urlencode "q=So11111111111111111111111111111111111111112 SOL 13:40 15/09/2026" \
+  --data-urlencode "format=text"
+```
+
+## Access and limits
+
+- **CORS** is open (`*`), so browser apps can call it directly.
+- **Keys (optional).** If the server sets `DCA_API_KEYS`, every request must send one as `Authorization: Bearer <key>` or `x-api-key`.
+- **Rate limits.** 30 requests a minute per caller without a key and 120 with one, with `X-RateLimit-*` and `Retry-After` headers.
+
+<Callout type="warn" title="Public unless you set keys">
+  With `DCA_API_KEYS` unset the API is open, and every call can use your CoinGecko and Yahoo allowance.
+</Callout>

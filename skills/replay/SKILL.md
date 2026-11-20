@@ -1,11 +1,11 @@
 ---
 name: replay
-description: Answers "what would $X a month into <stock, ETF or token> since <date> be worth today?" by calling the Replay API. Use it whenever someone asks about dollar-cost averaging, monthly or recurring investing, "if I had invested", backtesting a fixed monthly purchase, or comparing what a regular investment into the S&P 500, Apple, Nasdaq, Berkshire, a crypto token or similar would be worth now. Also answers "what was X worth on <date> at <time>?" (the price of a token or stock at a past moment). Covers US stocks and ETFs with decades of history, and tokens on Ethereum, Base, BSC, Arbitrum, Solana and Cardano.
+description: Answers "what would $X a month into <stock, ETF or token> since <date> be worth today?" by calling the Replay API. Use it whenever someone asks about dollar-cost averaging, monthly or recurring investing, "if I had invested", backtesting a fixed monthly purchase, or comparing what a regular investment into the S&P 500, Apple, Nasdaq, Berkshire, a crypto token or similar would be worth now. Also answers "what was X worth on <date> at <time>?" (the price of a token or stock at a past moment). Covers US stocks and ETFs with decades of history, the major coins (Bitcoin, Ethereum and others), and tokens on Ethereum, Base, BSC, Arbitrum, Solana and Cardano. Buys can be every month, every few months, yearly or a single lump sum, and the amount can be in another currency (for example naira or euros).
 ---
 
 # Replay
 
-Backtests a fixed monthly purchase: invest a set dollar amount on the same day every month, then see what the holding is worth today. The API does all the math with real historical prices. Your job is to turn the question into one API call, then report the result faithfully.
+Backtests a fixed purchase: invest a set amount on a schedule (every month by default), then see what the holding is worth today. On the website this is the **Hindsight** page, and the price-at-a-moment lookup is **Wayback**. The API does all the math with real historical prices. Your job is to turn the question into one API call, then report the result faithfully.
 
 **Base URL:** `https://dca-checker-neon.vercel.app` (use `$REPLAY_URL` instead if the environment sets it; the address will change if the site is moved to its own domain).
 **Auth:** none by default. If the server was set up with keys, send `Authorization: Bearer <key>` (or `x-api-key`); a `401` means a key is needed.
@@ -19,16 +19,19 @@ GET /api/v1/dca?market=stock&asset=SPY&amount=500&from=1998-01&reinvest=true
 
 | Parameter | Required | Meaning |
 |---|---|---|
-| `market` | yes | `stock` for a US-listed stock or ETF, otherwise the chain: `ethereum`, `base`, `bsc`, `arbitrum`, `hyperevm` (Hyperliquid), `solana`, `cardano` |
+| `market` | yes | `stock` for a US-listed stock or ETF (also the major coins, as `asset=BTC-USD`, `ETH-USD`, `SOL-USD` ...), otherwise the chain: `ethereum`, `base`, `bsc`, `arbitrum`, `hyperevm` (Hyperliquid), `solana`, `cardano` |
 | `asset` | yes | Ticker for stocks (`AAPL`, `SPY`, `BRK-B`). Contract address, mint, or Cardano policy id for tokens |
-| `amount` | yes | Dollars invested each month |
+| `amount` | yes | Invested at each buy, in `currency` (dollars unless a currency is given) |
+| `currency` | no | ISO code the amount is in (`EUR`, `GBP`, `NGN` ...). Each buy is converted to dollars at that day's official rate. Default `USD` |
+| `leverage` | no | 1 to 50. Models the buys as perpetual futures longs (each buy its own position). Also `funding` (yearly %, default 10.95), `topup=true`, `topupMax`, `maxLoss` (dollars per buy). The result gains a `leverage` object and the `answer` says how many positions were liquidated |
+| `plan` | no | How often to buy, counted from `from`: `monthly` (default), `quarterly` (every 3 months), `semiannual` (every 6), `yearly`, or `once` (a single buy; if the start month has no price it moves forward to the first month with one) |
 | `from` | yes | First month, `YYYY-MM` |
 | `to` | no | Last month, `YYYY-MM`. Default is the last full month. Leave it out for "until today" |
 | `basis` | no | `month-end` (default), `first-of-month`, or `day-of-month` with `day=15` |
 | `reinvest` | no | Stocks only. `true` reinvests dividends (total return). Default `false` is price only |
 | `detail` | no | `summary` (default) or `full`, which adds every month |
 
-A `POST` with the same fields as JSON also works. Limits: stocks up to 40 years (480 months), tokens up to 6 years.
+A `POST` with the same fields as JSON also works. Limits: stocks up to 40 years (480 months), tokens up to 6 years. The `answer` sentence reads "$500 a month for 120 months", "$500 every 3 months for 40 buys" or "$5,000 once", matching the plan.
 
 ## What comes back
 
@@ -52,7 +55,10 @@ A `POST` with the same fields as JSON also works. Limits: stocks up to 40 years 
    - "Nasdaq" / "Nasdaq 100" -> `QQQ` (trading since 1999).
    - "the market", "total market" -> `VTI` (since 2001).
    - "since 1998" -> `from=1998-01`. "Since 2013" -> `from=2013-01`. A bare year means January of that year.
-   - "per month", "monthly", "a month" -> `amount`. "$500 weekly" is not supported; say so and offer the closest monthly figure.
+   - "per month", "monthly", "a month" -> `amount`. "Every quarter" -> `plan=quarterly`, "every 6 months" -> `semiannual`, "yearly" or "once a year" -> `yearly`, "lump sum", "all at once" or "one purchase" -> `plan=once`. "$500 weekly" is not supported; say so and offer the closest monthly figure.
+   - "With 5x leverage", "futures", "leveraged" -> `leverage=5`. Say it is a daily-close estimate of futures trading: liquidations, funding and fees are modeled, but real trading can be harsher, and it is not advice to use leverage.
+   - "In naira", "₦100,000 a month", "€200" -> `currency=NGN` / `EUR` with `amount` in that currency. Rates are official or interbank, not street rates; say so for currencies where the two differ a lot.
+   - "Bitcoin", "Ethereum", "Solana" -> `market=stock&asset=BTC-USD` (or `ETH-USD`, `SOL-USD`); these have fixed first-price dates and the API says if the range starts too early.
    - Indexes themselves (`^GSPC`), futures, and non-USD listings are not supported. Use the ETF.
 3. **Call the API once.** Use `detail=summary` unless the user wants the month-by-month table.
 4. **Report the result.** Lead with the `answer` sentence, which is safe to quote. Add 1 to 3 facts that matter from `summary` (units bought, average buy price, gain percent). Do not recompute or round the numbers differently.
@@ -116,10 +122,11 @@ How to read the result:
 
 `GET /api/v1/examples` returns ready-made questions, each with the exact call that answers it. Good ones to offer when the user is not sure what to ask:
 
-- $500 a month into the S&P 500 since January 1998, dividends reinvested.
-- $100 a month into Apple since January 2013, price only.
-- $250 a month into the Nasdaq-100 since January 2005, dividends reinvested.
-- $200 a month into Berkshire Hathaway (class B) since January 2000.
+- $500 a month into the S&P 500 since January 2017, or since January 1998 with dividends reinvested.
+- $5,000 into Apple in a single buy in January 2017 (`plan=once`).
+- $200 a month into Bitcoin since January 2020 (`asset=BTC-USD`).
+- $1,000 into Ethereum in a single buy in January 2021 (`plan=once`).
+- $250 a month into the Nasdaq-100 since January 2017, dividends reinvested.
 
 `GET /api/v1/examples` also returns `priceExamples`: ready-made price lookups, each as a chat command and as the exact call.
 

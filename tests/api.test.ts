@@ -139,11 +139,13 @@ test("detail=full lists every month with its units and notes", () => {
 
 test("every ready-made example is a valid request that ends last month", () => {
   assert.ok(EXAMPLES.length >= 4);
+  assert.ok(EXAMPLES.some((e) => e.id === "sp500-2017" && (e.plan ?? "monthly") === "monthly"), "an S&P 500 example buys monthly");
+  assert.ok(EXAMPLES.some((e) => e.plan === "once"), "and some are single buys");
   assert.ok(EXAMPLES.some((e) => e.id === "sp500-1998" && e.amount === 500 && e.startMonth === "1998-01"), "the S&P 500 since 1998 check is there");
   for (const ex of EXAMPLES) {
     const req = exampleRequest(ex, NOW);
     assert.equal(req.endMonth, "2026-10");
-    const parsed = parseApiParams({ market: ex.market === "equity" ? "stock" : ex.market, asset: ex.address, amount: ex.amount, from: ex.startMonth, reinvest: ex.reinvest }, NOW);
+    const parsed = parseApiParams({ market: ex.market === "equity" ? "stock" : ex.market, asset: ex.address, amount: ex.amount, from: ex.startMonth, reinvest: ex.reinvest, plan: ex.plan }, NOW);
     assert.ok(parsed.ok, `${ex.id}: ${JSON.stringify(parsed)}`);
   }
 });

@@ -7,9 +7,9 @@ import { ThemeSelector } from "@/components/ThemeSelector";
 const PAGES = [
   { label: "Hindsight", href: "/" },
   { label: "Wayback", href: "/wayback" },
+  { label: "Docs", href: "/docs" },
 ];
 const LINKS = [
-  { label: "Documentation", href: "https://github.com/bytegen-dev/replay#readme" },
   { label: "GitHub", href: "https://github.com/bytegen-dev" },
   { label: "X / Twitter", href: "https://x.com/bytegen_dev" },
 ];

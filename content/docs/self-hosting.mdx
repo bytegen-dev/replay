@@ -1,0 +1,41 @@
+---
+title: Run it yourself
+description: Setup, environment variables and limits.
+---
+
+Replay is Next.js (App Router), TypeScript and Tailwind.
+
+```bash
+pnpm install                     # npm install also works
+cp .env.example .env.local       # optional
+pnpm dev                          # http://localhost:3000
+```
+
+Other scripts: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`. `node scripts/update-stocks.mjs` refreshes the saved list of US tickers, and `node --experimental-strip-types scripts/update-examples.mjs` refreshes the saved results behind the "Try one" buttons.
+
+## Environment variables
+
+These are read on the server and never sent to the browser.
+
+| Name | Default | Meaning |
+|---|---|---|
+| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` | The site's public address, for Open Graph and the PWA |
+| `COINGECKO_API_KEY` | unset | Optional. Without it the public CoinGecko tier is used (last 365 days only) |
+| `COINGECKO_PLAN` | `demo` | `demo` or `pro`. Only `pro` unlocks history older than 365 days |
+| `DATABASE_URL` | unset | A Neon Postgres connection string. Needed for Share, and used to keep stock histories and rate-limit counters |
+| `DEXHUNTER_PARTNER_ID` | unset | Optional DexHunter partner key, sent if present |
+| `YAHOO_BASE_URL` | Yahoo directly | Comma-separated proxy base URLs, for when Yahoo blocks your server's address |
+| `DCA_API_KEYS` | unset | Comma-separated keys. If set, every `/api/v1` request needs one |
+| `DCA_API_RATE_LIMIT_ANON`, `DCA_API_RATE_LIMIT_KEY` | 30, 120 | API requests a minute per caller, without and with a key |
+
+Without `DATABASE_URL` the Share button shows a clear error and everything else works. On Vercel, add Neon from the Marketplace and it sets the variable for you.
+
+## Limits
+
+- The free CoinGecko tier serves only the last 365 days and rate-limits aggressively. Requests retry with backoff and responses are cached for an hour.
+- Yahoo Finance's endpoint is unofficial and blocks by address. The Nasdaq and Tiingo fallbacks and Bitstamp for majors reduce the impact, but a stock or coin that only Yahoo has can fail while Yahoo is blocking your server. Set `YAHOO_BASE_URL` to a proxy if that happens.
+- Currency rates are official or interbank, which can be far from the rate you could actually get.
+
+## Settings in the browser
+
+The footer's **Settings** holds the theme (light, system, dark), **Reduce animations**, **High contrast**, and the optional Tiingo key. Everything is saved in the browser.

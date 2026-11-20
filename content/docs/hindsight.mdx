@@ -1,0 +1,80 @@
+---
+title: Hindsight
+description: What if you had bought once, at the start, or every month? Stocks, crypto and currencies, with several ways to buy.
+---
+
+Hindsight answers "what would my buys be worth today?" for a US stock or ETF, a coin or token, or a currency pair.
+
+## The form
+
+Choose a tab in the card header, then fill in:
+
+- **The asset.** A ticker or company name (the box opens with popular stocks), a major coin, or a token by name or address.
+- **The amount.** Typed with commas as you go, in any of 50 currencies. A non-USD amount is converted to dollars at each month's own exchange rate.
+- **How often.** Beside the amount. The form opens on **once, at the start**: a single buy, then what it is worth today.
+- **Start and end month.** A start month earlier than the asset's first price moves up to it automatically.
+- **Buy on.** Month-end, the 1st, or a custom day of the month. Each buy uses that day's price, or the nearest day within 3 days.
+
+Press **See what it's worth**.
+
+## How often you buy
+
+| Plan | Buys |
+|---|---|
+| Every month | In every month of the range |
+| Every 3 months | In the start month and every third month after it |
+| Every 6 months | In the start month and every sixth month after it |
+| Every year | In the start month and every twelfth month after it |
+| Once, at the start | A single buy (the default on the website) |
+
+<Callout title="A single buy with no price at the start">
+  If the start month has no price (a token that launched later, or a gap in the data), the single buy moves **forward** to the first month that has one, and its Note says so. It never moves backwards, before your range. The other plans skip a buying month that has no price.
+</Callout>
+
+## Leverage
+
+Under the quick range there is a **Leverage** row (1x to 50x). At 1x you are buying plainly. Above 1x, Hindsight models the same buys the way a **perpetual futures long** works on an exchange such as Hyperliquid or Binance:
+
+- Each buy opens its **own position**. The amount is the margin you put up, and the position controls `amount × leverage`. The rest is borrowed from the exchange.
+- **Funding** is charged on the position's value, as a yearly rate you can change. The default, 10.95% a year, is the usual exchange rate (0.01% every 8 hours).
+- There is a **0.045% fee** on the way in and on the way out.
+- A position is **liquidated** when its margin falls to 1% of its value. The margin is lost, and the loss stops there. The form shows how far the price has to fall below a buy for that to happen.
+- **Add margin to avoid liquidation** puts margin back in when a position gets close, up to a limit you can set, to keep it at its starting leverage. Margin added counts as money you put in.
+- **Max loss per buy** closes a position once it has lost that many dollars.
+
+The result adds a **With Nx leverage** card above the table: what the leveraged buys put in, what they were worth, the gain next to the unleveraged gain, how many positions were liquidated, funding and fees paid, and every position with its liquidation price and status.
+
+<Callout type="warn" title="Daily prices, so real trading is harsher">
+  The model uses daily closing prices. It can't see a spike inside a day that would have liquidated a position sooner. Funding rates really change over time, and real exchanges have tiers, insurance funds and different margin rules. Treat the result as an estimate, and past results say nothing about the future.
+</Callout>
+
+Spreadsheet export and share links cover the plain buys only, so they are off while a leveraged result is showing. Set leverage back to 1x to use them.
+
+## Sell at end month
+
+Tick **Sell at end month** under the end month to value what you bought at the end month's price instead of today's. Results, exports and shared pages then say "at sale" instead of "today".
+
+## The result
+
+A sentence, tiles, a chart and a table.
+
+- The table lists each buying month with its price, price date, amount, units, value, **Source** (a link to that source's page for the asset) and Note. On a phone it scrolls sideways with the Month column pinned.
+- **Filters** change what the list shows, never the totals: year, price range, order, in profit or at a loss, only months with notes, and **Only months bought**.
+- **Prices are read-only**, since they come from the data source. Tick **Edit prices (what-if)** to type your own price for any month. Edits flow into the totals, the spreadsheet and shared pages, and are marked `manual`.
+- **Warnings** say anything that changes how to read the number: nearest-day prices, thin volume, a fallback source, months left out.
+
+Token maths: `tokens = ROUND(amount / price, 0)`. If any single buy would be under 100 tokens, 6 decimals are used instead. Stocks allow fractional shares.
+
+## Charts and Replay
+
+The growth chart can be **replayed**: press play and the line draws month by month, with 1x, 2x and 4x speed, a slider to scrub, and a readout of what you had put in and what it was worth at each point. **Download video** generates a 1280×720 video of the replay in your browser (MP4 where supported, otherwise WebM). Keep the tab open while it generates.
+
+The **Dots** toggle shows or hides a dot on each month, and the choice is remembered.
+
+## Switching tabs
+
+Switching tab clears the results, because they belong to the tab they were made on. If you haven't exported them or saved a share link, you are asked first.
+
+## Links remember the form
+
+The tab, asset, amount, currency, plan, range and options are kept in the address bar, so a reload or a copied link brings them back. A range that ends last month is stored as a length (`range=10y`), so an old link still means "the last ten years". Add `run=1` to run it on arrival.

@@ -12,9 +12,9 @@ import { cn } from "@/lib/utils";
 const TOOLS = [
   { href: "/", label: "Hindsight", note: "What a monthly buy would be worth today", Icon: History },
   { href: "/wayback", label: "Wayback", note: "Any token or stock at a past moment", Icon: LineChart },
+  { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },
 ];
 const LINKS = [
-  { href: "https://github.com/bytegen-dev/replay#readme", label: "Documentation", note: "Guides and the public API", Icon: BookOpen },
   { href: "https://x.com/bytegen_dev", label: "X / Twitter", note: "Updates and news", Icon: XIcon },
   { href: "https://github.com/bytegen-dev", label: "GitHub", note: "bytegen-dev", Icon: GithubIcon },
 ];
