@@ -2,18 +2,25 @@
 
 import { Check } from "lucide-react";
 import { MarkLoader } from "@/components/MarkLoader";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { OPEN_WAITLIST_EVENT } from "@/lib/viewerClient.ts";
 
-/** The Subscribe button in the header and the box it opens: one field, one promise. */
+/** The waitlist button in the header and the box it opens: one field, one promise. Other buttons on the site can open it too. */
 export function SubscribeDialog() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_WAITLIST_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_WAITLIST_EVENT, onOpen);
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,22 +47,23 @@ export function SubscribeDialog() {
     >
       <DialogTrigger asChild>
         <Button type="button" variant="outline" className="cut-btn h-10 rounded-none border-primary text-primary px-4 text-sm font-bold sm:h-11 sm:px-6 sm:text-base">
-          Subscribe
+          <span className="sm:hidden">Waitlist</span>
+          <span className="hidden sm:inline">Join the waitlist</span>
         </Button>
       </DialogTrigger>
       <DialogContent>
         {state === "done" ? (
           <div className="flex flex-col gap-2 pt-2">
             <DialogTitle className="flex items-center gap-2">
-              <Check className="pop-in size-5 text-primary" aria-hidden /> You&rsquo;re on the list
+              <Check className="pop-in size-5 text-primary" aria-hidden /> You&rsquo;re on the waitlist
             </DialogTitle>
-            <DialogDescription>We&rsquo;ll email {email.trim()} when Replay gets something new.</DialogDescription>
+            <DialogDescription>We&rsquo;ll email {email.trim()} as soon as there&rsquo;s something new to try.</DialogDescription>
           </div>
         ) : (
           <form onSubmit={submit} noValidate className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5 pr-6">
-              <DialogTitle>Get notified of updates</DialogTitle>
-              <DialogDescription>One email when Replay gets new features or data sources. Nothing else.</DialogDescription>
+              <DialogTitle>Join the waitlist</DialogTitle>
+              <DialogDescription>Be first in when Replay opens up to more people. One email when there&rsquo;s something new. Nothing else.</DialogDescription>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="subscribe-email" className="text-sm text-muted-foreground">
@@ -68,7 +76,7 @@ export function SubscribeDialog() {
                 </div>
                 <Button type="submit" disabled={state === "sending"} className="cut-tr cut-primary h-10 shrink-0 gap-2 rounded-none border-0 px-4 text-sm font-bold text-primary-foreground">
                   {state === "sending" && <MarkLoader className="size-4" />}
-                  {state === "sending" ? "Subscribing" : "Subscribe"}
+                  {state === "sending" ? "Joining" : "Join"}
                 </Button>
               </div>
               {error && (

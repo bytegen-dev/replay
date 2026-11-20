@@ -24,6 +24,7 @@ function providers(over: Partial<PriceProviders> = {}) {
     cardanoCandles: async (_u, period) => (calls.push(`ada:${period}`), period === "1min" ? [cd(T - 60, 0.0003, 0.00031)] : []),
     equityHistory: async () => ({ meta: { symbol: "AAPL", name: "Apple Inc.", currency: "USD", exchange: "NasdaqGS", price: 300, priceDate: "2026-11-18", splits: [] }, days: [{ date: "2026-09-15", close: 258, adjClose: 258 }], staleSince: null }),
     equityBars: async () => [],
+    marketCapNow: async () => null,
     ...over,
   };
   return { p, calls };

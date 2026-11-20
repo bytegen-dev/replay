@@ -3,12 +3,23 @@ import { DcaError, runDca } from "@/lib/dca.ts";
 import type { LeverageSettings } from "@/lib/leverage.ts";
 import type { DcaRequest } from "@/lib/types.ts";
 import { isPlan } from "@/lib/plan.ts";
-import { ownerTiingoKey } from "@/lib/access.ts";
+import { tiingoKeyFor } from "@/lib/accessStore.ts";
+import { isHuman } from "@/lib/human.ts";
+import { countRun, limitMessage, whoIs } from "@/lib/limits.ts";
 import { isTiingoKey } from "@/lib/tiingo.ts";
 import { cardanoUnit, normalizeAddress, validateRequest } from "@/lib/validate.ts";
 
 
 export async function POST(request: Request) {
+  // Who is asking, and whether they still have runs left today. Checked first, so a refused run costs nothing.
+  const viewer = await whoIs(request);
+  // Anonymous visitors also have to have passed the invisible bot check (when it is set up).
+  if (viewer.kind === "anonymous" && !isHuman(request)) return NextResponse.json({ error: "Quick check needed.", code: "human_required" }, { status: 403, headers: { "cache-control": "no-store" } });
+  const run = await countRun(viewer);
+  if (!run.ok) {
+    return NextResponse.json({ error: limitMessage(run), limit: { code: run.code, kind: run.kind, max: run.limit, resetSeconds: run.resetSeconds } }, { status: 429, headers: { "retry-after": String(run.resetSeconds ?? 60), "cache-control": "no-store" } });
+  }
+
   let body: Partial<DcaRequest>;
   try {
     body = await request.json();
@@ -57,7 +68,7 @@ export async function POST(request: Request) {
     // A key the user pasted into Settings, sent only to look up their own stock prices. Never logged or stored.
     const key = request.headers.get("x-tiingo-key")?.trim();
     // Otherwise the site's own key, for a browser that entered the access code. The key stays on the server.
-    const tiingoKey = isTiingoKey(key) ? key : ownerTiingoKey(request);
+    const tiingoKey = isTiingoKey(key) ? key : await tiingoKeyFor(request);
     return NextResponse.json(await runDca(req, Date.now(), tiingoKey ? { tiingoKey } : {}));
   } catch (e) {
     if (e instanceof DcaError) return NextResponse.json({ error: e.message }, { status: e.status });

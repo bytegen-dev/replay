@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Chakra_Petch, JetBrains_Mono } from "next/font/google";
 import { AccessPanel } from "@/components/AccessPanel";
+import { SignInDialog } from "@/components/SignInDialog";
 import { BackgroundMotion } from "@/components/BackgroundMotion";
 import { PwaRegister } from "@/components/PwaRegister";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PwaRegister />
           <UpdatePrompt />
           <AccessPanel />
+          <SignInDialog />
           <BackgroundMotion />
         </SettingsProvider>
       </body>

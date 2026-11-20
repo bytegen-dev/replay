@@ -20,7 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           url: "/",
         }}
         links={[
-          { text: "Hindsight", url: "/" },
+          { text: "Hindsight", url: "/hindsight" },
           { text: "Wayback", url: "/wayback" },
           // The icons in the sidebar footer: the same links as the site's footer.
           { type: "icon", label: "GitHub", text: "GitHub", icon: <GithubIcon className="size-4" />, url: "https://github.com/bytegen-dev/replay", external: true },

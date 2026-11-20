@@ -193,6 +193,7 @@ export function openApiSpec(origin: string): Record<string, unknown> {
                 splitAdjustedUsd: { type: "number", description: "Stocks that have split since: the same price in today's shares." },
               },
             },
+            marketCap: { type: ["object", "null"], description: "The market cap at that moment: { usd, basis: \"reported\" | \"estimated\", note, todayUsd }. Reported when the source records it (CoinGecko). Otherwise estimated from today's supply or market cap, and the note says what that leaves out. Null when no source has one." },
             current: { type: ["object", "null"], description: "The price now and the percent change since." },
             series: {
               type: "array",

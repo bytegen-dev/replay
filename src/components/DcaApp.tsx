@@ -18,7 +18,9 @@ import { AmountInput } from "@/components/AmountInput";
 import { CoinPicker } from "@/components/CoinPicker";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { currencyByCode, isCurrency } from "@/lib/fxCurrencies.ts";
+import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
 import { getTiingoKey } from "@/lib/userKeys.ts";
+import { openSignIn } from "@/lib/viewerClient.ts";
 import { countBuys, DEFAULT_PLAN, isPlan, PLANS, planInfo, type Plan } from "@/lib/plan.ts";
 import { cleanAmount, formatAmountInput, parseAmount, decodeRange, encodeRange, readQuery, writeQuery } from "@/lib/urlState.ts";
 import { RollText } from "@/components/RollText";
@@ -558,15 +560,28 @@ export function DcaApp() {
       setShareError(null);
     }
     try {
-      const res = await fetch("/api/dca", {
-        method: "POST",
-        // Stocks only: a key from Settings lets the server fall back to Tiingo when Yahoo refuses.
-        headers: { "content-type": "application/json", ...(input.chain === "equity" && getTiingoKey() ? { "x-tiingo-key": getTiingoKey()! } : {}) },
-        body: JSON.stringify({ ...input, address: input.address.trim() }),
-      });
-      const j = await res.json();
+      const post = () =>
+        fetch("/api/dca", {
+          method: "POST",
+          // Stocks only: a key from Settings lets the server fall back to Tiingo when Yahoo refuses.
+          headers: { "content-type": "application/json", ...(input.chain === "equity" && getTiingoKey() ? { "x-tiingo-key": getTiingoKey()! } : {}) },
+          body: JSON.stringify({ ...input, address: input.address.trim() }),
+        });
+      let res = await post();
+      let j = await res.json();
+      // The invisible bot check: pass it once (usually unseen), then run again.
+      if (res.status === 403 && j.code === "human_required") {
+        const key = await humanSiteKey();
+        if (key) {
+          await passHumanCheck(key);
+          res = await post();
+          j = await res.json();
+        }
+      }
       if (!res.ok) {
         if (j.fields) setErrors(j.fields);
+        // Out of free checks for the day: offer to sign in, which raises the allowance.
+        if (res.status === 429 && j.limit?.kind === "anonymous" && j.limit?.code === "day" && !refresh) openSignIn(j.error);
         throw new Error(j.error ?? `Request failed (${res.status})`);
       }
       // What ran comes from the request itself, so a ready-made check (always monthly) isn't labelled with the form's plan.

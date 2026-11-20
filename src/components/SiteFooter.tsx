@@ -5,7 +5,7 @@ import { SettingsDialog } from "@/components/SettingsDialog";
 import { ThemeSelector } from "@/components/ThemeSelector";
 
 const PAGES = [
-  { label: "Hindsight", href: "/" },
+  { label: "Hindsight", href: "/hindsight" },
   { label: "Wayback", href: "/wayback" },
   { label: "Docs", href: "/docs" },
 ];

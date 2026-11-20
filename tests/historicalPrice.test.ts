@@ -40,6 +40,7 @@ function fake(over: Partial<PriceProviders> = {}) {
     cardanoCandles: async (_u, period) => (calls.push(`ada:${period}`), []),
     equityHistory: async () => (calls.push("equityHistory"), { meta: { symbol: "AAPL", name: "Apple Inc.", currency: "USD", exchange: "NasdaqGS", price: 300, priceDate: "2026-11-18", splits: [] }, days: [], staleSince: null }),
     equityBars: async (_s, interval) => (calls.push(`bars:${interval}`), []),
+    marketCapNow: async () => null,
     ...over,
   };
   return { p, calls };
@@ -389,4 +390,53 @@ test("the chart series: stocks that split are charted at what they traded at eac
   assert.ok(Math.abs((byDay.get("2014-06-10") ?? 0) - 93.5) < 1e-9, "after the split a close is already in the new shares");
   const thin = await historicalPrice(request("equity", "AAPL", when("15/09/2026")), NOW, fake({ equityHistory: async () => ({ ...aapl(), days: days([["2026-09-15", 258]]) }) }).p);
   assert.deepEqual(thin.series, [], "one point is not a chart");
+});
+
+/* ---------------------------------- market cap ---------------------------------- */
+
+import { marketCapAt, parseMoney, parseNasdaqMarketCap } from "../src/lib/marketCap.ts";
+
+test("market cap text from Nasdaq and others becomes dollars", () => {
+  assert.equal(parseMoney("5,030,880,101,180"), 5_030_880_101_180);
+  assert.equal(parseMoney("$1.2T"), 1.2e12);
+  assert.equal(parseMoney("350M"), 3.5e8);
+  assert.equal(parseMoney("N/A"), null);
+  assert.equal(parseNasdaqMarketCap({ data: { summaryData: { MarketCap: { value: "2,000,000,000" } } } }), 2e9);
+  assert.equal(parseNasdaqMarketCap({ data: null }), null);
+});
+
+test("a reported market cap is used as is; otherwise it is estimated from supply, or scaled from today's", () => {
+  const rep = marketCapAt({ reportedUsd: 5e9, priceUsd: 2, nowPriceUsd: 4, now: null });
+  assert.equal(rep?.basis, "reported");
+  assert.equal(rep?.usd, 5e9);
+  const bySupply = marketCapAt({ reportedUsd: null, priceUsd: 2, nowPriceUsd: 4, now: { usd: 8e8, supply: 2e8 } });
+  assert.equal(bySupply?.basis, "estimated");
+  assert.equal(bySupply?.usd, 4e8);
+  assert.equal(bySupply?.todayUsd, 8e8);
+  const byScale = marketCapAt({ reportedUsd: null, priceUsd: 100, nowPriceUsd: 400, now: { usd: 4e12, supply: null } });
+  assert.equal(byScale?.usd, 1e12);
+  const split = marketCapAt({ reportedUsd: null, priceUsd: 400, nowPriceUsd: 200, now: { usd: 3e12, supply: null }, sharesAdjustedPriceUsd: 100 });
+  assert.equal(split?.usd, 1.5e12, "a split-adjusted price keeps the share count honest");
+  assert.equal(marketCapAt({ reportedUsd: null, priceUsd: 2, nowPriceUsd: 4, now: null }), null);
+});
+
+test("a CoinGecko snapshot carries its market cap through to the result", async () => {
+  const w = when("15/09/2026", "13:40");
+  const T = Math.floor(w.instantMs / 1000);
+  const { p } = fake({
+    gtPool: async () => null,
+    cgSnapshots: async () => ({ candles: [{ t: T - 600, open: 1.4, high: 1.4, low: 1.4, close: 1.4, marketCap: 7e8 }], stepSec: 3600 }),
+  });
+  const r = await historicalPrice(request("ethereum", "0xabc", w), NOW, p);
+  assert.equal(r.marketCap?.basis, "reported");
+  assert.equal(r.marketCap?.usd, 7e8);
+});
+
+test("when no source has a market cap the result says null and the price still comes back", async () => {
+  const w = when("15/09/2026", "13:40");
+  const T = Math.floor(w.instantMs / 1000);
+  const { p } = fake({ gtCandles: async () => [{ t: T - 60, open: 1, high: 2, low: 1, close: 1.5 }] });
+  const r = await historicalPrice(request("ethereum", "0xabc", w), NOW, p);
+  assert.equal(r.price.usd, 1.5);
+  assert.equal(r.marketCap, null);
 });

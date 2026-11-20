@@ -53,13 +53,21 @@ export async function gtCandles(pool: GtPool, timeframe: GtTimeframe, instantSec
 /** CoinGecko's `prices: [[ms, usd]]` -> point-in-time prices, plus how far apart they are. */
 export function parseCgPoints(body: unknown): { candles: Candle[]; stepSec: number } {
   const prices = (body as { prices?: unknown } | null)?.prices;
+  const caps = new Map<number, number>();
+  for (const c of ((body as { market_caps?: unknown } | null)?.market_caps as unknown[]) ?? []) {
+    if (!Array.isArray(c)) continue;
+    const ms = num(c[0]);
+    const usd = num(c[1]);
+    if (ms !== null && usd !== null && usd > 0) caps.set(Math.floor(ms / 1000), usd);
+  }
   const candles: Candle[] = [];
   if (Array.isArray(prices)) {
     for (const p of prices as unknown[]) {
       if (!Array.isArray(p)) continue;
       const ms = num(p[0]);
       const usd = num(p[1]);
-      if (ms !== null && usd !== null && usd > 0) candles.push({ t: Math.floor(ms / 1000), open: usd, high: usd, low: usd, close: usd });
+      const cap = ms !== null ? caps.get(Math.floor(ms / 1000)) : undefined;
+      if (ms !== null && usd !== null && usd > 0) candles.push({ t: Math.floor(ms / 1000), open: usd, high: usd, low: usd, close: usd, ...(cap ? { marketCap: cap } : {}) });
     }
   }
   candles.sort((a, b) => a.t - b.t);

@@ -21,7 +21,7 @@ export function accessToken(): string {
   return createHmac("sha256", tiingo()).update(`replay-access:${code()}`).digest("hex");
 }
 
-const same = (a: string, b: string): boolean => {
+export const same = (a: string, b: string): boolean => {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
   return x.length === y.length && timingSafeEqual(x, y);
@@ -30,7 +30,7 @@ const same = (a: string, b: string): boolean => {
 /** Whether the typed code is the right one. Compared in constant time. */
 export const checkCode = (typed: unknown): boolean => accessConfigured() && typeof typed === "string" && /^\d{4}$/.test(typed) && same(typed, code());
 
-function cookieValue(header: string | null, name: string): string | null {
+export function cookieValue(header: string | null, name: string): string | null {
   for (const part of (header ?? "").split(";")) {
     const i = part.indexOf("=");
     if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim();

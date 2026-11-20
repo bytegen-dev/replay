@@ -8,9 +8,10 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { GithubIcon, XIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/utils";
+import { AUTH_CHANGED_EVENT, openSignIn, useViewer } from "@/lib/viewerClient.ts";
 
 const TOOLS = [
-  { href: "/", label: "Hindsight", note: "What a monthly buy would be worth today", Icon: History },
+  { href: "/hindsight", label: "Hindsight", note: "What a monthly buy would be worth today", Icon: History },
   { href: "/wayback", label: "Wayback", note: "Any token or stock at a past moment", Icon: LineChart },
   { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },
 ];
@@ -45,6 +46,7 @@ function MorphIcon({ open }: { open: boolean }) {
 /** Phone-only menu: a slanted-bars button in the header that morphs into an X and slides a drawer in from the right. */
 export function MobileMenu() {
   const [open, setOpen] = useState(false);
+  const viewer = useViewer();
   // The floating button is added after mount, since it lives on <body> rather than inside the header.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -124,6 +126,41 @@ export function MobileMenu() {
           </nav>
 
           <div className="my-6 h-px bg-border" style={enter(TOOLS.length)} />
+
+          {viewer?.canSignIn && viewer.kind !== "trusted" && (
+            <div className="mb-4 flex items-center justify-between gap-3 border border-border px-4 py-3" style={enter(TOOLS.length + 1)}>
+              {viewer.kind === "user" ? (
+                <>
+                  <span className="min-w-0 truncate text-sm">{viewer.email}</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await fetch("/api/auth/signout", { method: "POST" });
+                      window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
+                      close();
+                    }}
+                    className="shrink-0 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm text-muted-foreground">More checks each day when you sign in</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      close();
+                      setTimeout(() => openSignIn(), 250);
+                    }}
+                    className="shrink-0 text-sm font-bold text-primary underline underline-offset-4"
+                  >
+                    Sign in
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           <nav aria-label="More" className="flex flex-col">
             {LINKS.map(({ href, label, note, Icon }, i) => (

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "/", label: "Hindsight" },
+  { href: "/hindsight", label: "Hindsight" },
   { href: "/wayback", label: "Wayback" },
   { href: "/docs", label: "Docs" },
 ];

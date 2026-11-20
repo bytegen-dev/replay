@@ -16,6 +16,7 @@ import {
   type YahooInterval,
 } from "./priceProviders.ts";
 import { cgResolve, gtTopPool, type GtPool, type ResolvedToken } from "./providers.ts";
+import { marketCapAt, marketCapNow, type MarketCapAt, type MarketCapNow } from "./marketCap.ts";
 import { getStockHistory, splitFactorAfter, type StockDay, type StockMeta } from "./stocks.ts";
 import { MARKET_LABELS, type Chain, type Market } from "./types.ts";
 import type { When } from "./when.ts";
@@ -70,6 +71,8 @@ export interface HistoricalPriceResult {
     /** Stocks only: the same price adjusted for later splits, i.e. in today's shares. */
     splitAdjustedUsd?: number;
   };
+  /** The market cap at that moment: reported by the source, or estimated from today's. Null when neither is known. */
+  marketCap: MarketCapAt | null;
   /** The price now, and how much it has moved since. Null when it isn't cheaply known. */
   current: { usd: number; changePercent: number } | null;
   /** Prices around the moment, oldest first, for a small chart. Empty when there are too few to draw. */
@@ -89,6 +92,7 @@ export interface PriceProviders {
   cardanoCandles(unit: string, period: CardanoPeriod, instantSec: number): Promise<Candle[]>;
   equityHistory(symbol: string, nowMs: number): Promise<{ meta: StockMeta; days: StockDay[]; staleSince: number | null }>;
   equityBars(symbol: string, interval: YahooInterval, instantSec: number): Promise<Candle[]>;
+  marketCapNow(market: Market, address: string): Promise<MarketCapNow | null>;
 }
 
 export const defaultProviders: PriceProviders = {
@@ -100,6 +104,7 @@ export const defaultProviders: PriceProviders = {
   cardanoCandles,
   equityHistory: getStockHistory,
   equityBars: yahooBars,
+  marketCapNow,
 };
 
 /* ------------------------------ wording ------------------------------ */
@@ -512,6 +517,14 @@ export async function historicalPrice(req: HistoricalPriceRequest, nowMs: number
     warnings.push(`Nothing traded near that time. The price shown was set ${formatAge(pick.staleSec)} earlier.`);
   }
 
+  // Market cap: the source's own figure for that moment when it has one, otherwise an estimate from today's. Never blocks the price.
+  const marketCap = await (async () => {
+    const reportedCap = c.marketCap ?? null;
+    if (reportedCap) return marketCapAt({ reportedUsd: reportedCap, priceUsd: reported, nowPriceUsd: r.current, now: null });
+    const now = await Promise.race([providers.marketCapNow(req.market, req.address).catch(() => null), new Promise<null>((res) => setTimeout(() => res(null), 6000))]);
+    return marketCapAt({ reportedUsd: null, priceUsd: reported, nowPriceUsd: r.current, now, sharesAdjustedPriceUsd: chosen.extra?.splitAdjusted });
+  })();
+
   return {
     answer: describeHistorical({
       name: label,
@@ -548,6 +561,7 @@ export async function historicalPrice(req: HistoricalPriceRequest, nowMs: number
       volumeUsd: c.volume !== undefined ? c.volume : null,
       ...(chosen.extra?.splitAdjusted !== undefined ? { splitAdjustedUsd: chosen.extra.splitAdjusted } : {}),
     },
+    marketCap,
     current: r.current !== null && r.current > 0 && reported > 0 ? { usd: r.current, changePercent: Math.round((r.current / reported - 1) * 10000) / 100 } : null,
     series: ((s) => (s.length >= 3 ? s : []))(toSeries(chosen.candles ?? [], pick.resolutionSec, chosen.pointPrice ?? ((c) => c.close * scale))),
     source: { label: chosen.sourceLabel, url: chosen.sourceUrl },

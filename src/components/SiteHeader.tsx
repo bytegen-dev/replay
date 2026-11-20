@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { AccountButton } from "@/components/AccountButton";
 import { BrandMark } from "@/components/BrandMark";
 import { MobileMenu } from "@/components/MobileMenu";
 import { SiteNav } from "@/components/SiteNav";
@@ -22,7 +23,8 @@ export function SiteHeader() {
             <SiteNav />
           </Suspense>
         </div>
-        <div className="sm:order-3 sm:ml-5">
+        <AccountButton className="hidden sm:order-3 sm:ml-5 sm:block" />
+        <div className="sm:order-4 sm:ml-5">
           <SubscribeDialog />
         </div>
         <Suspense fallback={<div className="size-9 sm:hidden" />}>

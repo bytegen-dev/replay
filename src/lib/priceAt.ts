@@ -15,6 +15,8 @@ export interface Candle {
   close: number;
   /** Volume in USD, when the source gives it. */
   volume?: number;
+  /** Market cap in USD at that moment, when the source gives it (CoinGecko snapshots). */
+  marketCap?: number;
 }
 
 export type Basis =

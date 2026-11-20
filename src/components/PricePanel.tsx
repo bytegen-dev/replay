@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PRICE_EXAMPLES, type PriceExample } from "@/lib/examples.ts";
 import type { HistoricalPriceResult } from "@/lib/historicalPrice.ts";
+import { fmtBig } from "@/lib/format.ts";
 import { formatAge, formatUsdPrice } from "@/lib/priceAt.ts";
 import type { Chain, Market } from "@/lib/types.ts";
 import { readQuery, writeQuery } from "@/lib/urlState.ts";
@@ -437,6 +438,14 @@ export function PricePanel() {
           {/* The answer, once: the price, when it was, and how it has moved. */}
           <div className="flex flex-col gap-1.5 border-l-2 border-primary pl-4">
             <p className="text-4xl font-bold tabular-nums sm:text-5xl">{formatUsdPrice(result.price.usd)}</p>
+            {result.marketCap && (
+              <p className="text-base sm:text-lg" title={result.marketCap.note}>
+                <span className="text-muted-foreground">Market cap </span>
+                <b className="tabular-nums">{fmtBig(result.marketCap.usd)}</b>
+                {result.marketCap.basis === "estimated" && <span className="text-muted-foreground"> (estimated)</span>}
+                {result.marketCap.todayUsd && <span className="text-sm text-muted-foreground"> · now {fmtBig(result.marketCap.todayUsd)}</span>}
+              </p>
+            )}
             <p className="text-sm sm:text-base">
               {result.when.description}
               {result.current && (
@@ -462,6 +471,8 @@ export function PricePanel() {
             </dl>
           )}
 
+          {result.marketCap?.basis === "estimated" && <p className="text-xs leading-snug text-muted-foreground">{result.marketCap.note}</p>}
+
           <p className="text-sm text-muted-foreground">
             {result.price.resolution} price: {result.price.basis}
             {result.price.ageSeconds > 60 && `, set ${formatAge(result.price.ageSeconds)} earlier (${asOf(result.price.asOfUtc)})`}. Source:{" "}
@@ -485,7 +496,7 @@ export function PricePanel() {
           {/* The same asset as regular buys: opens Hindsight with it already chosen. */}
           <p className="text-sm text-muted-foreground">
             What would a buy back then be worth today?{" "}
-            <Link href={market === "equity" ? `/?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
+            <Link href={market === "equity" ? `/hindsight?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/hindsight?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
               Open it in Hindsight
             </Link>
           </p>

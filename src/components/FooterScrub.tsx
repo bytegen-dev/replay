@@ -119,7 +119,7 @@ export function FooterScrub() {
               Start from <b className="text-foreground">{pickedLabel}</b>
             </span>
             {choices.map((c) => (
-              <Link key={c.label} href={`/?${c.q}&range=${range}&run=1`} className="h-8 border border-border px-3 leading-8 transition-colors hover:border-primary hover:text-primary">
+              <Link key={c.label} href={`/hindsight?${c.q}&range=${range}&run=1`} className="h-8 border border-border px-3 leading-8 transition-colors hover:border-primary hover:text-primary">
                 {c.label}
               </Link>
             ))}

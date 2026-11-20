@@ -407,6 +407,23 @@
     transform: translateX(130%);
   }
 }
+@keyframes hatch-flow {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(12.73px, 12.73px, 0);
+  }
+}
+/* People who ask for less motion (in the app's settings or in their system) get the lines standing still. */
+html[data-motion="reduce"] body::after {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+  }
+}
 @keyframes nudge {
   30% {
     transform: translateY(-2px) rotate(-8deg);
@@ -446,12 +463,17 @@
       radial-gradient(60% 50% at calc(92% - var(--p, 0) * 22%) calc(-6% + var(--p, 0) * 16%), var(--glow-a), transparent 70%),
       radial-gradient(50% 40% at calc(0% + var(--p, 0) * 24%) calc(104% - var(--p, 0) * 18%), var(--glow-b), transparent 70%);
   }
+  /* The lines also flow on their own, slowly, toward the bottom right. The layer is a little bigger than the screen and slides
+     exactly one line spacing (18px along the slant, 12.73px across and down) each turn, so the loop has no seam. Moving the
+     layer, not repainting it, keeps this cheap. */
   body::after {
     content: "";
     position: fixed;
-    inset: 0;
+    inset: -24px;
     z-index: 0;
     pointer-events: none;
+    animation: hatch-flow 5s linear infinite;
+    will-change: transform;
     background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 18px);
     background-position: calc(var(--p, 0) * 60px) calc(var(--p, 0) * -60px);
     /* Fades out toward the bottom and into the top-left corner (the two masks are intersected); both fades shift a little with --p. */
@@ -533,6 +555,15 @@
   }
   .cut-btn:not(:disabled):hover {
     --fill: color-mix(in srgb, var(--primary) 16%, var(--background));
+  }
+  /* The main call to action: filled with the brand colour instead of outlined. */
+  .cut-btn.cut-btn-solid {
+    --fill: var(--primary);
+    color: var(--primary-foreground);
+    --cut: 14px;
+  }
+  .cut-btn.cut-btn-solid:not(:disabled):hover {
+    --fill: color-mix(in srgb, var(--primary) 86%, var(--background));
   }
   .cut-card::before,
   .cut-card::after,
