@@ -1128,6 +1128,8 @@ export function DcaApp() {
 
       {data && computed && !loading && (
         <div ref={resultsRef} className="reveal-stack flex scroll-mt-[calc(4.5rem+env(safe-area-inset-top))] flex-col gap-6 sm:scroll-mt-28 sm:gap-8">
+          {data.leverage && <LeverageCard result={data.leverage} plainGainPct={computed.summary.gainPct} sold={val?.sold} />}
+
           <section className="border border-border bg-card p-4 sm:p-6">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {/* The asset's logo: the company for a stock or ETF, the coin for a major. */}
@@ -1147,6 +1149,7 @@ export function DcaApp() {
               )}
             </div>
             {exampleNote && <p className="mb-4 text-sm text-muted-foreground">{exampleNote}</p>}
+            {data.leverage && <p className="mb-4 text-sm text-muted-foreground">The same plan without leverage, for comparison. The chart and table below are for these plain buys.</p>}
             <div className="border-l-2 border-primary pl-4">
               <ResultSentence
                 amount={data.amount}
@@ -1173,8 +1176,6 @@ export function DcaApp() {
               </p>
             )}
           </section>
-
-          {data.leverage && <LeverageCard result={data.leverage} plainGainPct={computed.summary.gainPct} sold={val?.sold} />}
 
           {data.warnings.length > 0 && (
             <Alert className="rounded-none border-border">
