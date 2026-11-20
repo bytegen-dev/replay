@@ -12,9 +12,9 @@ export function HindsightVisual() {
     <div className={panel} aria-hidden>
       <div className={grid} />
       <svg viewBox="0 0 400 160" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" fill="none">
-        <path d="M8 146 L392 92" stroke="var(--muted-foreground)" strokeWidth="1" strokeDasharray="4 4" opacity="0.55" vectorEffect="non-scaling-stroke" />
-        <path className="fx-area" d="M8 146 L40 138 L66 142 L98 120 L128 126 L160 100 L196 108 L232 78 L268 90 L304 56 L340 66 L392 26 L392 160 L8 160 Z" fill="var(--primary)" opacity="0.12" />
-        <path className="fx-draw" pathLength="1" d="M8 146 L40 138 L66 142 L98 120 L128 126 L160 100 L196 108 L232 78 L268 90 L304 56 L340 66 L392 26" stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        <path d="M0 146 L400 92" stroke="var(--muted-foreground)" strokeWidth="1" strokeDasharray="4 4" opacity="0.55" vectorEffect="non-scaling-stroke" />
+        <path className="fx-area" d="M0 146 L33.3 138 L60.4 142 L93.8 120 L125 126 L158.3 100 L195.8 108 L233.3 78 L270.8 90 L308.3 56 L345.8 66 L400 26 L400 160 L0 160 Z" fill="var(--primary)" opacity="0.12" />
+        <path className="fx-draw" pathLength="1" d="M0 146 L33.3 138 L60.4 142 L93.8 120 L125 126 L158.3 100 L195.8 108 L233.3 78 L270.8 90 L308.3 56 L345.8 66 L400 26" stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       </svg>
       <span className="absolute bottom-3 left-3 text-[11px] text-muted-foreground">Put in</span>
       <span className="fx-pop absolute top-3 right-3 bg-primary px-2 py-1 text-xs font-bold text-primary-foreground">Worth today</span>

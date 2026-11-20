@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Bot, FlaskConical, Wallet } from "lucide-react";
 import Link from "next/link";
 import { Faq } from "@/components/landing/Faq";
 import { HindsightVisual, LeverageVisual, ShareVisual, WaybackVisual } from "@/components/landing/FeatureVisuals";
@@ -23,12 +24,12 @@ const TITLE = `${SITE_NAME}: ${TAGLINE.toLowerCase()}`;
 export const metadata: Metadata = pageMeta({ title: TITLE, description: DESCRIPTION, path: "/" });
 
 /** A headline whose words rise out of their own mask, one after another. Each is a plain word to a screen reader. */
-function WordRise({ text }: { text: string }) {
+function WordRise({ text, from = 0 }: { text: string; from?: number }) {
   const words = text.split(" ");
   return words.map((w, i) => (
     <span key={i}>
       <span className="word-mask">
-        <span className="word-rise" style={{ "--w": i } as React.CSSProperties}>
+        <span className="word-rise" style={{ "--w": from + i } as React.CSSProperties}>
           {w}
         </span>
       </span>
@@ -67,6 +68,11 @@ const faqs = (anon: number, user: number) => [
     a: `Yes. Without an account you get ${anon} checks a day, and a free account raises that to ${user}. Joining the waitlist means an email when there is something new to try.`,
   },
   {
+    q: "What is coming next?",
+    topic: "Coming",
+    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. None of them is open yet. Join the waitlist to hear when each one is.",
+  },
+  {
     q: "Do you keep my searches?",
     topic: "Account",
     a: "No. A check is worked out when you ask and is not saved unless you share it as a link. To keep the service fair we count how many checks each visitor runs in a day, using a scrambled version of the network address.",
@@ -103,7 +109,9 @@ export default function LandingPage() {
         <section className={`${section} grid items-center gap-10 py-10 sm:py-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:py-24`}>
           <div className="flex flex-col gap-6">
             <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-6xl">
-              <WordRise text="A time machine for your" /> <RotatingWord index={5} />
+              <WordRise text="A time machine for" /> <br className="sm:hidden" />
+              {/* On a phone "your money" gets a line of its own. */}
+              <WordRise text="your" from={4} /> <RotatingWord index={5} />
             </h1>
             <p className="enter-up max-w-xl font-heading text-xl leading-snug text-primary sm:text-2xl" style={{ "--base": "650ms", "--i": 0 } as React.CSSProperties}>
               You can&rsquo;t change the past. You can learn from it.
@@ -193,32 +201,48 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Free now, more with an account. */}
+        {/* What is coming: learn from the past, rehearse, then trade. Shown as coming soon, never as something you can do today. */}
+        <section className={`${section} py-10 sm:py-16`}>
+          <div className="mb-8 flex max-w-2xl flex-col gap-2 sm:mb-10" data-reveal-on-scroll style={later()}>
+            <h2 className={h2}>Coming next: from looking back to acting.</h2>
+            <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Replay starts with the past. These three are being built on top of it. Join the waitlist to hear when each one opens." />
+          </div>
+          <ul className="grid gap-x-4 gap-y-9 sm:grid-cols-3 sm:gap-x-6">
+            {[
+              { Icon: Bot, t: "Data to train your AI agents", d: "The same clean price history Replay uses, prepared so your agents can learn from it and be tested against it." },
+              { Icon: FlaskConical, t: "Paper trading", d: "Try your strategies with practice money first, and see how they hold up before you spend any real money." },
+              { Icon: Wallet, t: "Live trading", d: "Deposit stablecoins (USDC or USDG) and trade any asset or market in the world, yourself or through an agent you give access to." },
+            ].map(({ Icon, t, d }, i) => (
+              <li key={t} className="cut-card pulse-hover shadow-hard flex flex-col gap-4 border border-border bg-card p-5 sm:p-6" data-reveal-on-scroll style={later(i * 120)}>
+                <div className="flex items-center justify-between">
+                  <Icon className="size-8 text-primary" strokeWidth={1.5} aria-hidden />
+                  <span className="border border-primary/50 px-2 py-0.5 text-xs font-bold text-primary">Coming soon</span>
+                </div>
+                <h3 className="text-lg font-bold">{t}</h3>
+                <SpotlightText className="text-sm leading-relaxed text-muted-foreground" text={d} />
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        {/* Free now; the waitlist is how to hear about accounts. */}
         <section className={`${section} py-10 sm:py-16`}>
           {/* A line runs through this card from edge to edge, behind it; hovering sends a pulse along it, round the card and out the far side. */}
           <LineCard className="grid gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-12" data-reveal-on-scroll style={later()}>
             <div className="flex flex-col gap-3">
               <h2 className={h2}>Free to try. More when Replay opens up.</h2>
-              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Everything on this page works without an account. Join the waitlist and we will email you when accounts open, with a higher daily limit, saved checks and exports." />
+              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Everything on this page works without an account. Join the waitlist and we will email you when there is more." />
               <WaitlistButton />
             </div>
-            <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
-              <div className="flex flex-col gap-3 bg-card p-5">
-                <h3 className="text-sm font-bold text-muted-foreground">Without an account</h3>
+            <div className="flex flex-col justify-center gap-5 border border-border bg-secondary p-5 sm:p-6">
+              <div className="flex flex-col gap-3">
+                <h3 className="text-sm font-bold text-primary">Coming soon</h3>
                 <ul className="flex flex-col gap-2 text-sm">
-                  <li>{anon} checks a day</li>
-                  <li>Ready-made examples</li>
-                  <li>Wayback lookups</li>
-                  <li>Leverage and short</li>
-                </ul>
-              </div>
-              <div className="flex flex-col gap-3 bg-secondary p-5">
-                <h3 className="text-sm font-bold text-primary">With an account</h3>
-                <ul className="flex flex-col gap-2 text-sm">
-                  <li>{user} checks a day</li>
-                  <li>All the free features</li>
-                  <li className="text-muted-foreground">Saved checks, coming</li>
-                  <li className="text-muted-foreground">Exports, coming</li>
+                  <li>Accounts with {user} checks a day</li>
+                  <li>Saved checks and exports</li>
+                  <li>Paper trading</li>
+                  <li>Live trading</li>
+                  <li>Trained data for AI agents</li>
                 </ul>
               </div>
             </div>

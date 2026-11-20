@@ -476,10 +476,10 @@
    when idle (it is not removed, so the full stop does not jump). */
 .type-caret {
   display: inline-block;
+  position: absolute; /* out of the line, so the full stop sits right after the word whether or not the caret is showing */
   width: 0.07em;
   height: 0.82em;
-  margin-left: 0.03em;
-  margin-right: 0.03em;
+  margin-left: 0.02em;
   vertical-align: -0.06em;
   background: var(--primary);
   animation: caret-blink 0.9s steps(1, end) infinite;
