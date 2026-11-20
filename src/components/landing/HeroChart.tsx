@@ -45,7 +45,7 @@ export function HeroChart({ checks }: { checks: DemoCheck[] }) {
           </span>
         </span>
       </figcaption>
-      <div className="enter-up -mx-4 sm:-mx-6" style={{ "--base": "800ms", "--i": 3 } as React.CSSProperties}>
+      <div className="enter-up -mx-1 sm:-mx-2" style={{ "--base": "800ms", "--i": 3 } as React.CSSProperties}>
         <DrawChart compact points={check.points} runKey={check.id} height={250} firstDelayMs={1250} ariaLabel={`${check.buying} into ${check.name} ${check.timing}: ${usd(check.invested)} put in, worth ${usd(check.value)} today.`} />
       </div>
       <div className="enter-up flex items-center justify-between gap-4" style={{ "--base": "800ms", "--i": 5 } as React.CSSProperties}>

@@ -1,5 +1,6 @@
 "use client";
 
+import { cn } from "@/lib/utils";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatChartTime, niceScale, thinTicks, timeTicks } from "@/lib/charts.ts";
 
@@ -48,7 +49,7 @@ export const DOWN = "var(--destructive)";
 
 const MARGINS = { top: 18, right: 66, bottom: 28, left: 10 };
 /** For a chart that runs to the edges of its card: less room on each side. */
-const COMPACT_MARGINS = { top: 18, right: 62, bottom: 28, left: 4 };
+const COMPACT_MARGINS = { top: 18, right: 62, bottom: 28, left: 8 };
 const CHAR = 6.7; // width of one 11px mono character, for sizing the pills
 const PILL_H = 18;
 
@@ -149,7 +150,7 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
     // min-w-0 + overflow-hidden: the chart is as wide as the space it is given, never the other way round. Without them
     // the svg's own width holds the box open, the box measures itself, and the chart can never shrink on a narrow screen.
     <div ref={box} className="relative w-full min-w-0 overflow-hidden">
-      <ul className="mb-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground">
+      <ul className={cn("mb-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground", compact && "pl-1 sm:pl-2")}>
         {series.map((s) => (
           <li key={s.key} className="flex items-center gap-2">
             <svg width="22" height="8" aria-hidden>
