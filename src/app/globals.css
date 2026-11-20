@@ -1547,3 +1547,39 @@ html[data-motion="reduce"] .big-four {
     animation: none;
   }
 }
+
+/* A texture that fades in under a card's content when it is hovered: a grid of fine mint dots, brightest in one corner, drifting slowly. */
+.tex-hover {
+  position: relative;
+  isolation: isolate;
+}
+.tex-hover::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease-out;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--primary) 55%, transparent) 1px, transparent 1.6px);
+  background-size: 12px 12px;
+  -webkit-mask-image: linear-gradient(155deg, #000 0%, rgb(0 0 0 / 0.25) 55%, transparent 100%);
+  mask-image: linear-gradient(155deg, #000 0%, rgb(0 0 0 / 0.25) 55%, transparent 100%);
+}
+.tex-hover:hover::before {
+  opacity: 0.55;
+  animation: tex-drift 6s linear infinite;
+}
+@keyframes tex-drift {
+  to {
+    background-position: 12px 12px;
+  }
+}
+html[data-motion="reduce"] .tex-hover:hover::before {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tex-hover:hover::before {
+    animation: none;
+  }
+}

@@ -24,7 +24,7 @@ const num = (name: string, fallback: number): number => {
 };
 
 export const limitsFor = (kind: Kind) => ({
-  day: kind === "anonymous" ? num("RUN_LIMIT_ANON_DAY", 20) : kind === "user" ? num("RUN_LIMIT_USER_DAY", 150) : num("RUN_LIMIT_TRUSTED_DAY", 1000),
+  day: kind === "anonymous" ? num("RUN_LIMIT_ANON_DAY", 20) : kind === "user" ? num("RUN_LIMIT_USER_DAY", 2000) : num("RUN_LIMIT_TRUSTED_DAY", 5000),
   minute: kind === "anonymous" ? num("RUN_LIMIT_ANON_MINUTE", 10) : num("RUN_LIMIT_MINUTE", 30),
 });
 

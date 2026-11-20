@@ -215,7 +215,7 @@ export default function LandingPage() {
                 { Icon: FlaskConical, t: "Paper trading", d: "Try your strategies with practice money first, and see how they hold up before you spend any real money." },
                 { Icon: Wallet, t: "Live trading", d: "Deposit stablecoins (USDC or USDG) and trade any asset or market in the world, yourself or through an agent you give access to." },
               ].map(({ Icon, t, d }) => (
-                <li key={t} className="flex flex-col gap-3 border border-border bg-secondary p-5">
+                <li key={t} className="tex-hover flex flex-col gap-3 border border-border bg-secondary p-5 transition-colors duration-300 hover:border-primary/50">
                   <div className="flex items-center justify-between">
                     <Icon className="size-7 text-primary" strokeWidth={1.5} aria-hidden />
                     <span className="border border-primary/50 px-2 py-0.5 text-xs font-bold text-primary">Coming soon</span>
@@ -227,7 +227,7 @@ export default function LandingPage() {
             </ul>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <WaitlistButton />
-              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with {user} checks a day, saved checks and exports.</p>
+              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with up to thousands of checks daily, saved checks and exports.</p>
             </div>
           </LineCard>
         </section>

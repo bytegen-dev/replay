@@ -30,7 +30,7 @@ Other scripts: `pnpm test`, `pnpm typecheck`, `pnpm lint`, `pnpm build`.
 | `ADMIN_PASSWORD` | unset | 8 or more characters. Turns on the `/admin` page (subscribers, access codes, Tiingo keys). Also encrypts the Tiingo keys saved there, so changing it means adding them again. Needs `DATABASE_URL`. |
 | `RESEND_API_KEY`, `MAIL_FROM` | unset | Turn on sign-in by emailed link (Resend). Needs `DATABASE_URL`. |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | unset | An invisible Cloudflare Turnstile check for anonymous visitors. Both are needed. |
-| `RUN_LIMIT_ANON_DAY`, `RUN_LIMIT_USER_DAY`, `RUN_LIMIT_TRUSTED_DAY`, `RUN_LIMIT_ANON_MINUTE`, `RUN_LIMIT_MINUTE` | 20, 150, 1000, 10, 30 | How many times someone can run a check per day (anonymous, signed in, access code) and per minute. |
+| `RUN_LIMIT_ANON_DAY`, `RUN_LIMIT_USER_DAY`, `RUN_LIMIT_TRUSTED_DAY`, `RUN_LIMIT_ANON_MINUTE`, `RUN_LIMIT_MINUTE` | 20, 2000, 5000, 10, 30 | How many times someone can run a check per day (anonymous, signed in, access code) and per minute. |
 | `ACCESS_CODE`, `TIINGO_API_KEY` | unset | A built-in four-digit code (Cmd+K, or `/access-code` on a phone) that lets a browser use `TIINGO_API_KEY` for stock prices. Codes added on the admin page work beside it. |
 | `DEXHUNTER_PARTNER_ID` | unset | Optional DexHunter partner key, sent if present (Cardano history). |
 | `YAHOO_BASE_URL` | Yahoo directly | Comma-separated proxy base URLs, for when Yahoo blocks your server's address. |
