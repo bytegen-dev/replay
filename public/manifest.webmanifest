@@ -1,7 +1,7 @@
 {
-  "name": "Replay",
+  "name": "Replay: a time machine for your money",
   "short_name": "Replay",
-  "description": "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
+  "description": "See what a stock, coin or currency buy from the past would be worth today, or its price on any day. Real daily prices, no sign-up to try.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

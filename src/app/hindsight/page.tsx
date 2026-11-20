@@ -5,12 +5,12 @@ import { RollText } from "@/components/RollText";
 import { DcaApp } from "@/components/DcaApp";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { pageMeta } from "@/lib/site.ts";
 
-export const metadata: Metadata = {
-  title: "Hindsight",
-  description: "What a buy from the past would be worth today. A stock, coin or currency, bought once or on a schedule, with leverage if you want it.",
-  alternates: { canonical: "/hindsight" },
-};
+const TITLE = "Hindsight: what a past buy would be worth today";
+const DESCRIPTION = "Pick a stock, coin or currency and a date. See what one buy, or the same amount every month, would be worth today, with leverage and dividends if you want them.";
+
+export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} | Replay`, description: DESCRIPTION, path: "/hindsight" });
 
 export default function HindsightPage() {
   return (

@@ -4,6 +4,7 @@ import { Faq } from "@/components/landing/Faq";
 import { HindsightVisual, LeverageVisual, ShareVisual, WaybackVisual } from "@/components/landing/FeatureVisuals";
 import { HeroChart } from "@/components/landing/HeroChart";
 import { LandingDemo } from "@/components/landing/LandingDemo";
+import { LineCard } from "@/components/landing/LineCard";
 import { RevealObserver } from "@/components/landing/RevealObserver";
 import { SignInLink } from "@/components/landing/SignInLink";
 import { SmoothScroll } from "@/components/landing/SmoothScroll";
@@ -15,16 +16,11 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { CURRENCIES } from "@/lib/fxCurrencies.ts";
 import { demoChecks, heroChecks } from "@/lib/landingData.ts";
 import { limitsFor } from "@/lib/limits.ts";
+import { DESCRIPTION, pageMeta, SITE_NAME, TAGLINE } from "@/lib/site.ts";
 
-const TITLE = "Replay: see what a past buy would be worth today";
-const DESCRIPTION = "Pick a stock, a coin or a currency and a date. Replay uses real daily prices to show what one buy, or a monthly habit, would have turned into.";
+const TITLE = `${SITE_NAME}: ${TAGLINE.toLowerCase()}`;
 
-export const metadata: Metadata = {
-  title: { absolute: TITLE },
-  description: DESCRIPTION,
-  alternates: { canonical: "/" },
-  openGraph: { title: TITLE, description: DESCRIPTION, url: "/" },
-};
+export const metadata: Metadata = pageMeta({ title: TITLE, description: DESCRIPTION, path: "/" });
 
 /** A headline whose words rise out of their own mask, one after another. Each is a plain word to a screen reader. */
 function WordRise({ text }: { text: string }) {
@@ -195,7 +191,8 @@ export default function LandingPage() {
 
         {/* Free now, more with an account. */}
         <section className={`${section} py-10 sm:py-16`}>
-          <div className="cut-card pulse-hover grid gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-12" data-reveal-on-scroll style={later()}>
+          {/* A line runs through this card from edge to edge, behind it; hovering sends a pulse along it, round the card and out the far side. */}
+          <LineCard className="grid gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-12" data-reveal-on-scroll style={later()}>
             <div className="flex flex-col gap-3">
               <h2 className={h2}>Free to try. More when you sign in.</h2>
               <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Everything on this page works without an account. Sign in with your email, with no password to remember, and the daily limit goes up. Saved checks and exports are next." />
@@ -221,7 +218,7 @@ export default function LandingPage() {
                 </ul>
               </div>
             </div>
-          </div>
+          </LineCard>
         </section>
 
         {/* Questions. */}
@@ -250,6 +247,23 @@ export default function LandingPage() {
             <WaitlistButton />
           </div>
         </section>
+        {/* What the site is, for search engines: a free web app for finance. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebApplication",
+              name: SITE_NAME,
+              alternateName: TAGLINE,
+              description: DESCRIPTION,
+              applicationCategory: "FinanceApplication",
+              operatingSystem: "Any",
+              browserRequirements: "Requires JavaScript",
+              offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+            }),
+          }}
+        />
       </main>
 
       <SiteFooter />

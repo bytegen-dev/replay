@@ -5,11 +5,12 @@ import { RollText } from "@/components/RollText";
 import { PricePanel } from "@/components/PricePanel";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { pageMeta } from "@/lib/site.ts";
 
-export const metadata: Metadata = {
-  title: "Wayback Machine",
-  description: "The price of a token or stock at any past date and time.",
-};
+const TITLE = "Wayback: the price of any token or stock on a past day";
+const DESCRIPTION = "Ask for a price the way you would say it: Apple on 14 March 2025, or SOL three days ago at 9am. You get the price, the market cap and the move since.";
+
+export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} | Replay`, description: DESCRIPTION, path: "/wayback" });
 
 export default function PricePage() {
   return (

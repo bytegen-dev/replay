@@ -7,6 +7,7 @@ import { PwaRegister } from "@/components/PwaRegister";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { SettingsProvider } from "@/components/SettingsProvider";
 import { HEAD_SCRIPT } from "@/lib/settings.ts";
+import { DESCRIPTION, KEYWORDS, SITE_NAME, TAGLINE, X_HANDLE } from "@/lib/site.ts";
 import "./globals.css";
 
 // Chakra Petch (angular, game-HUD) for the wordmark, headings, buttons and tabs; JetBrains Mono for prices, tables and body text.
@@ -17,34 +18,34 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "Replay", template: "%s | Replay" },
-  description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
-  applicationName: "Replay",
+  title: { default: `${SITE_NAME}: ${TAGLINE.toLowerCase()}`, template: `%s | ${SITE_NAME}` },
+  description: DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: KEYWORDS,
+  category: "finance",
   manifest: "/manifest.webmanifest",
+  // The tab icon is the <link id="app-icon"> in the head below, which follows the site's theme. Only the home-screen icon is set here.
   icons: {
-    icon: [
-      { url: "/replay-logo.png", type: "image/png" },
-      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
-    ],
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
   appleWebApp: {
     capable: true,
-    title: "Replay",
+    title: SITE_NAME,
     statusBarStyle: "black-translucent",
   },
   openGraph: {
     type: "website",
     locale: "en_US",
-    siteName: "Replay",
-    title: "Replay",
-    description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME}: ${TAGLINE.toLowerCase()}`,
+    description: DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
-    title: "Replay",
-    description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
+    site: X_HANDLE,
+    creator: X_HANDLE,
+    title: `${SITE_NAME}: ${TAGLINE.toLowerCase()}`,
+    description: DESCRIPTION,
   },
   formatDetection: { telephone: false },
 };
@@ -61,6 +62,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning: the script in <head> sets data-theme and friends on <html> before React starts, by design.
     <html lang="en" suppressHydrationWarning className={`h-full font-sans ${display.variable} ${data.variable}`}>
       <head>
+        {/* The tab icon: the dark-page mark by default; the script below swaps in the light-page mark when the theme is light. */}
+        <link id="app-icon" rel="icon" type="image/png" href="/replay-logo.png" />
         {/* Applies the saved theme before the first paint, so a light-mode visitor never sees a dark flash. */}
         <script dangerouslySetInnerHTML={{ __html: HEAD_SCRIPT }} />
       </head>
