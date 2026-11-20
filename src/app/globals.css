@@ -484,6 +484,59 @@
     transform 1.1s cubic-bezier(0.16, 1, 0.3, 1);
   transition-delay: calc(var(--d, 0) * 1ms);
 }
+/* ---- The full-width band behind the landing page's demo. ---------------------------------------------------------------------
+   The page's own backdrop is slanted lines, so the band uses something else: a grid of fine dots, like chart paper. Over it a mint
+   glow sits in the corner, and a soft band of light sweeps slowly across, lighting the dots it passes (the same dots, drawn
+   brighter and shown through a moving mask, so they stay exactly on the grid). The edges of the dots fade out so the band has no
+   visible box. */
+.band-surface {
+  background:
+    radial-gradient(60% 80% at 100% 0%, color-mix(in srgb, var(--primary) 13%, transparent), transparent 70%),
+    radial-gradient(50% 70% at 0% 100%, color-mix(in srgb, var(--primary) 8%, transparent), transparent 70%),
+    color-mix(in srgb, var(--card) 62%, transparent);
+}
+.band-dots,
+.band-dots-lit {
+  inset: 0;
+  background-size: 24px 24px;
+  background-position: 12px 12px;
+}
+.band-dots {
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--accent) 34%, transparent) 1.1px, transparent 1.7px);
+  -webkit-mask-image: radial-gradient(80% 100% at 50% 50%, #000 30%, transparent 100%);
+  mask-image: radial-gradient(80% 100% at 50% 50%, #000 30%, transparent 100%);
+}
+.band-dots-lit {
+  background-image: radial-gradient(circle, var(--primary) 1.3px, transparent 1.9px);
+  -webkit-mask-image: linear-gradient(105deg, transparent 38%, #000 50%, transparent 62%);
+  mask-image: linear-gradient(105deg, transparent 38%, #000 50%, transparent 62%);
+  -webkit-mask-size: 320% 100%;
+  mask-size: 320% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  animation: band-sweep 9s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+@keyframes band-sweep {
+  from {
+    -webkit-mask-position: 100% 0;
+    mask-position: 100% 0;
+  }
+  to {
+    -webkit-mask-position: 0% 0;
+    mask-position: 0% 0;
+  }
+}
+html[data-motion="reduce"] .band-dots-lit {
+  animation: none;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .band-dots-lit {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 /* ---- The small pictures in the "how it works" cards. All loop on a 6 second beat and are fully drawn when still. ------------- */
 @keyframes step-type {
   0%,

@@ -130,14 +130,20 @@ export default function LandingPage() {
           {hero.length > 0 && <HeroChart checks={hero} />}
         </section>
 
-        {/* The live demo: both tools, with limits. */}
-        <section id="demo" className={`${section} scroll-mt-24 py-10 sm:py-16`}>
-          <div className="mb-6 flex max-w-2xl flex-col gap-2 sm:mb-8" data-reveal-on-scroll style={later()}>
-            <h2 className={h2}>What if you had bought it back then?</h2>
-            <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Hindsight answers from saved results, so they appear at once. Wayback runs a live lookup, which takes a second or two." />
-          </div>
-          <div data-reveal-on-scroll style={later(120)}>
-            <LandingDemo checks={checks} />
+        {/* The live demo, on a band that runs the full width of the screen: a dot grid with a sweep of light across it, a mint
+            glow in the corner and hairlines top and bottom, so it reads as a place of its own. */}
+        <section id="demo" className="relative isolate scroll-mt-20 overflow-hidden border-y border-border py-14 sm:py-24">
+          <div aria-hidden className="band-surface pointer-events-none absolute inset-0 -z-10" />
+          <div aria-hidden className="band-dots pointer-events-none absolute -z-10" />
+          <div aria-hidden className="band-dots-lit pointer-events-none absolute -z-10" />
+          <div className={section}>
+            <div className="mb-6 flex max-w-2xl flex-col gap-2 sm:mb-8" data-reveal-on-scroll style={later()}>
+              <h2 className={h2}>What if you had bought it back then?</h2>
+              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Hindsight answers from saved results, so they appear at once. Wayback runs a live lookup, which takes a second or two." />
+            </div>
+            <div data-reveal-on-scroll style={later(120)}>
+              <LandingDemo checks={checks} />
+            </div>
           </div>
         </section>
 
