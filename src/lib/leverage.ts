@@ -82,10 +82,20 @@ export interface LeverageSummary {
   fees: number;
 }
 
+/** One point of the leveraged run over time: all the money in so far and what the positions were worth that day. */
+export interface LeverageSeriesPoint {
+  date: string;
+  invested: number;
+  value: number;
+  price: number;
+}
+
 export interface LeverageResult {
   settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "topUpBudget" | "maxLoss" | "maxLossPct">;
   positions: Position[];
   summary: LeverageSummary;
+  /** About one point a week, for the chart. */
+  series: LeverageSeriesPoint[];
 }
 
 /** The trading fee on each side (opening and closing): 0.045%, a typical exchange taker fee. */
@@ -240,22 +250,46 @@ export function simulateLeverage(opts: { buys: LeverageBuy[]; daily: DailyClose[
   const live = opts.buys.map((b) => openPosition(b, settings));
   let spent = 0;
   const budgetLeft = () => (settings.topUpBudget === undefined ? Infinity : Math.max(0, settings.topUpBudget - spent));
-  for (const day of opts.daily) {
-    if (day.date > opts.endDate) break;
+  const series: LeverageSeriesPoint[] = [];
+  const firstBuy = live.reduce((m, p) => (p.buy.date < m ? p.buy.date : m), "9999-99-99");
+  const days = opts.daily.filter((d) => d.date <= opts.endDate);
+  let sinceSample = 7;
+  days.forEach((day, i) => {
     for (const p of live) {
       if (p.status !== "open" || day.date <= p.buy.date) continue;
       spent += stepDay(p, day, settings, budgetLeft());
     }
-  }
+    if (day.date < firstBuy) return;
+    const isBuyDay = live.some((p) => p.buy.date === day.date);
+    sinceSample += 1;
+    if (sinceSample >= 7 || isBuyDay || i === days.length - 1) {
+      sinceSample = 0;
+      let inn = 0;
+      let val = 0;
+      for (const p of live) {
+        if (p.buy.date > day.date) continue;
+        inn += p.margin;
+        val += p.status === "liquidated" ? 0 : Math.max(0, p.equity);
+      }
+      series.push({ date: day.date, invested: inn, value: val, price: day.price });
+    }
+  });
   const positions = live.map((p) => finish(p, settings));
   const margin = positions.reduce((a, p) => a + p.margin, 0);
   const topUps = positions.reduce((a, p) => a + p.topUps, 0);
   const invested = margin + topUps;
   const value = positions.reduce((a, p) => a + p.value, 0);
   const gain = value - invested;
+  // The chart ends on the same figures as the summary (the closing fee is taken out there).
+  const tip = series[series.length - 1];
+  if (tip) {
+    tip.value = value;
+    tip.invested = invested;
+  }
   return {
     settings: { leverage, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.topUpBudget !== undefined ? { topUpBudget: settings.topUpBudget } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
     positions,
+    series,
     summary: {
       invested,
       value,

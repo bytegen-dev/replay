@@ -6,6 +6,7 @@ const HOME: Record<string, string> = {
   Nasdaq: "https://www.nasdaq.com/market-activity/quotes/historical",
   Tiingo: "https://www.tiingo.com/",
   Bitstamp: "https://www.bitstamp.net/markets/",
+  Hyperliquid: "https://app.hyperliquid.xyz/trade/HYPE",
   CoinGecko: "https://www.coingecko.com/",
   GeckoTerminal: "https://www.geckoterminal.com/",
   DexHunter: "https://app.dexhunter.io/",

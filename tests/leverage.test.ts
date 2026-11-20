@@ -95,3 +95,11 @@ test("leverage is held between 1 and 100", () => {
   assert.equal(simulateLeverage({ buys: [buy(100, 100)], daily: [], endDate: "2024-01-02", settings: { leverage: 500 } }).settings.leverage, 100);
   assert.equal(simulateLeverage({ buys: [buy(100, 100)], daily: [], endDate: "2024-01-02", settings: { leverage: 0 } }).settings.leverage, 1);
 });
+
+test("the series tracks money in and worth over time", () => {
+  const r = simulateLeverage({ buys: [buy(1000, 100, "2024-01-01")], daily: px(["2024-01-01", 100], ["2024-01-02", 101], ["2024-01-09", 110]), endDate: "2024-01-09", settings: { leverage: 2, fundingApr: 0 } });
+  const last = r.series[r.series.length - 1];
+  assert.equal(last.date, "2024-01-09");
+  close(last.invested, 1000, 1e-9);
+  assert.ok(last.value > 1000);
+});

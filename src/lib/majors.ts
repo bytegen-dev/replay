@@ -15,6 +15,7 @@ export const MAJORS: { symbol: string; firstPrice: string; ticker: string; name:
   { symbol: "LTC-USD", firstPrice: "2014-09-17", ticker: "LTC", name: "Litecoin" },
   { symbol: "LINK-USD", firstPrice: "2017-11-09", ticker: "LINK", name: "Chainlink" },
   { symbol: "AVAX-USD", firstPrice: "2020-07-13", ticker: "AVAX", name: "Avalanche" },
+  { symbol: "HYPE-USD", firstPrice: "2024-12-05", ticker: "HYPE", name: "Hyperliquid" },
 ];
 
 /** The major a Yahoo ticker stands for, if it is one. */

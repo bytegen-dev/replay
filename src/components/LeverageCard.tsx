@@ -1,4 +1,5 @@
 import { AlertTriangle } from "lucide-react";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmtPct, fmtPrice, fmtUsd } from "@/lib/format.ts";
@@ -9,7 +10,7 @@ import { cn } from "@/lib/utils";
  * What the same buys would have done as leveraged, futures-style positions: the totals, how many were liquidated, and each
  * position. The plain (unleveraged) result stays above it for comparison.
  */
-export function LeverageCard({ result, plainGainPct, sold }: { result: LeverageResult; plainGainPct: number | null; sold?: boolean }) {
+export function LeverageCard({ result, plainGainPct, sold, asset }: { result: LeverageResult; plainGainPct: number | null; sold?: boolean; asset?: ReactNode }) {
   const { settings, summary, positions } = result;
   const when = sold ? "at sale" : "today";
   const up = summary.gain >= 0;
@@ -24,6 +25,7 @@ export function LeverageCard({ result, plainGainPct, sold }: { result: LeverageR
 
   return (
     <section aria-label="Leveraged result" className="flex flex-col gap-5 border border-border bg-card p-4 sm:p-6">
+      {asset}
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="text-xl font-bold tracking-tight">With {settings.leverage}x leverage</h2>
         <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">

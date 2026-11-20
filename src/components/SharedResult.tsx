@@ -1,6 +1,7 @@
 import { SourceBadge } from "@/components/SourceBadge";
 import { planInfo } from "@/lib/plan.ts";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ChevronDown } from "lucide-react";
+import { LeverageCard } from "@/components/LeverageCard";
 import { GrowthChart } from "@/components/GrowthChart";
 import { InsightsCard } from "@/components/InsightsCard";
 import { SharedExport } from "@/components/SharedExport";
@@ -35,8 +36,8 @@ export function SharedResult({ data }: { data: SharePayload }) {
     { key: "Gain / loss %", value: fmtPct(summary.gainPct), highlight: true },
   ];
 
-  return (
-    <div className="reveal-stack flex flex-col gap-6 sm:gap-8">
+  const plain = (
+    <>
       <section className="border border-border bg-card p-4 sm:p-6">
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <h2 className="text-xl font-bold tracking-tight">{data.tokenName || data.tokenLabel || "Unknown token"}</h2>
@@ -157,6 +158,43 @@ export function SharedResult({ data }: { data: SharePayload }) {
           </TableBody>
         </Table>
       </div>
+
+    </>
+  );
+
+  return (
+    <div className="reveal-stack flex flex-col gap-6 sm:gap-8">
+      {data.leverage && (
+        <>
+          <LeverageCard
+            result={data.leverage}
+            plainGainPct={summary.gainPct}
+            sold={data.sold}
+            asset={
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-bold tracking-tight">{data.tokenName || data.tokenLabel || "Unknown token"}</h2>
+                {data.chain && (
+                  <Badge variant="outline" className="rounded-none font-normal">
+                    {data.chain}
+                  </Badge>
+                )}
+              </div>
+            }
+          />
+          <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} leverage={{ times: data.leverage.settings.leverage, series: data.leverage.series }} />
+        </>
+      )}
+      {data.leverage ? (
+        <details className="group">
+          <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+            <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden />
+            The same plan without leverage
+          </summary>
+          <div className="mt-6 flex flex-col gap-6 border-l-2 border-border pl-4 sm:gap-8">{plain}</div>
+        </details>
+      ) : (
+        plain
+      )}
 
       <SharedExport data={data} />
 

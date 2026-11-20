@@ -174,6 +174,8 @@ export function DcaApp() {
   const [stopUnit, setStopUnit] = useState<"%" | "$">("%");
   // The funding, top-up and max-loss settings are details: shown when asked for (or when a link already changed them).
   const [levMore, setLevMore] = useState(false);
+  // With leverage on, the plain (unleveraged) result is secondary: shown only when asked for.
+  const [plainOpen, setPlainOpen] = useState(false);
   const levNum = Number(lev);
   const leveraged = Number.isFinite(levNum) && levNum > 1;
   // Prices come from the data source and are read-only unless the person switches editing on (for what-if prices, or to fill a gap).
@@ -679,6 +681,7 @@ export function DcaApp() {
       unit: isEquity ? "shares" : "tokens",
       ...(data.sold ? { sold: true } : {}),
       ...(data.plan ? { plan: data.plan } : {}),
+      ...(data.leverage ? { leverage: data.leverage } : {}),
       ...(data.currency ? { currency: { code: data.currency.code, symbol: data.currency.symbol, perUsdToday: data.currency.perUsdToday } } : {}),
     };
     try {
@@ -739,6 +742,44 @@ export function DcaApp() {
         { key: "Gain / loss %", value: fmtPct(computed.summary.gainPct), highlight: true },
       ]
     : [];
+
+  // Pieces of the result that sit in a different place when leverage is on.
+  const assetHeader =
+    data && computed ? (
+    <div className="flex flex-wrap items-center gap-2">
+      {/* The asset's logo: the company for a stock or ETF, the coin for a major. */}
+      {data.chain === "equity" && (isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-8 shrink-0" /> : <StockLogo symbol={data.address} className="size-8 text-sm" />)}
+      <h2 className="text-xl font-bold tracking-tight">{data.token.name ?? "Unknown token"}</h2>
+      <Badge variant="outline" className="gap-1.5 rounded-none font-normal">
+        {isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-3.5 shrink-0" /> : <ChainLogo chain={data.chain} className="size-3.5 shrink-0" />}
+        {marketLabel(data.chain, data.address)}
+      </Badge>
+      <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
+        {basisBadgeLabel(data.basis, data.basisDay)}
+      </Badge>
+      {data.chain === "equity" && isEquity && (
+        <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
+          {data.reinvest ? "Dividends reinvested" : "Price only"}
+        </Badge>
+      )}
+    </div>
+    ) : null;
+  const warningsEl =
+    data && data.warnings.length > 0 ? (
+
+    <Alert className="rounded-none border-border">
+      <AlertTriangle />
+      <AlertDescription>
+        {data.warnings.map((w) => (
+          <p key={w}>{w}</p>
+        ))}
+      </AlertDescription>
+    </Alert>
+    ) : null;
+  const chartEl =
+    data && computed ? (
+      <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} leverage={data.leverage ? { times: data.leverage.settings.leverage, series: data.leverage.series } : undefined} title={`${tokenSymbol(data.token)}, ${data.currency ? data.currency.symbol : "$"}${data.amount.toLocaleString("en-US")} a month`} />
+    ) : null;
 
   return (
     <div className="mt-6 flex flex-col gap-6 sm:mt-8 sm:gap-8">
@@ -1128,26 +1169,20 @@ export function DcaApp() {
 
       {data && computed && !loading && (
         <div ref={resultsRef} className="reveal-stack flex scroll-mt-[calc(4.5rem+env(safe-area-inset-top))] flex-col gap-6 sm:scroll-mt-28 sm:gap-8">
-          {data.leverage && <LeverageCard result={data.leverage} plainGainPct={computed.summary.gainPct} sold={val?.sold} />}
+          {data.leverage && <LeverageCard result={data.leverage} plainGainPct={computed.summary.gainPct} sold={val?.sold} asset={assetHeader} />}
+          {data.leverage && warningsEl}
+          {data.leverage && chartEl}
+          {data.leverage && (
+            <button type="button" aria-expanded={plainOpen} onClick={() => setPlainOpen((o) => !o)} className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+              <ChevronDown className={cn("size-4 transition-transform", plainOpen && "rotate-180")} aria-hidden />
+              {plainOpen ? "Hide the plain buys" : "Show the same plan without leverage"}
+            </button>
+          )}
 
+          {(!data.leverage || plainOpen) && (
+            <div className={cn("flex flex-col gap-6 sm:gap-8", data.leverage && "border-l-2 border-border pl-4")}>
           <section className="border border-border bg-card p-4 sm:p-6">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
-              {/* The asset's logo: the company for a stock or ETF, the coin for a major. */}
-              {data.chain === "equity" && (isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-8 shrink-0" /> : <StockLogo symbol={data.address} className="size-8 text-sm" />)}
-              <h2 className="text-xl font-bold tracking-tight">{data.token.name ?? "Unknown token"}</h2>
-              <Badge variant="outline" className="gap-1.5 rounded-none font-normal">
-                {isMajorSymbol(data.address) ? <CoinLogo symbol={data.address} className="size-3.5 shrink-0" /> : <ChainLogo chain={data.chain} className="size-3.5 shrink-0" />}
-                {marketLabel(data.chain, data.address)}
-              </Badge>
-              <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
-                {basisBadgeLabel(data.basis, data.basisDay)}
-              </Badge>
-              {data.chain === "equity" && isEquity && (
-                <Badge variant="outline" className="rounded-none font-normal text-muted-foreground">
-                  {data.reinvest ? "Dividends reinvested" : "Price only"}
-                </Badge>
-              )}
-            </div>
+            {!data.leverage && assetHeader}
             {exampleNote && <p className="mb-4 text-sm text-muted-foreground">{exampleNote}</p>}
             {data.leverage && <p className="mb-4 text-sm text-muted-foreground">The same plan without leverage, for comparison. The chart and table below are for these plain buys.</p>}
             <div className="border-l-2 border-primary pl-4">
@@ -1177,16 +1212,7 @@ export function DcaApp() {
             )}
           </section>
 
-          {data.warnings.length > 0 && (
-            <Alert className="rounded-none border-border">
-              <AlertTriangle />
-              <AlertDescription>
-                {data.warnings.map((w) => (
-                  <p key={w}>{w}</p>
-                ))}
-              </AlertDescription>
-            </Alert>
-          )}
+          {!data.leverage && warningsEl}
 
           <div className="grid grid-cols-1 gap-px border border-border bg-border min-[400px]:grid-cols-2 sm:grid-cols-4 lg:grid-cols-7">
             {statTiles.map(({ key, value, highlight }) => (
@@ -1208,9 +1234,9 @@ export function DcaApp() {
             ))}
           </div>
 
-          <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} title={`${tokenSymbol(data.token)}, ${data.currency ? data.currency.symbol : "$"}${data.amount.toLocaleString("en-US")} a month`} />
+          {!data.leverage && chartEl}
 
-          <InsightsCard buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} amount={data.amount} />
+          {!data.leverage && <InsightsCard buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} amount={data.amount} />}
 
           {computed.summary.skippedMonths > 0 && (
             <p className="flex items-start gap-2 text-sm">
@@ -1303,8 +1329,11 @@ export function DcaApp() {
             </Table>
           </div>
 
+            </div>
+          )}
+
           <div className="flex flex-col gap-3 border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">{data.leverage ? "Export and sharing cover the plain buys only. Set leverage to 1x to use them." : "Download results for accounting or offline review."}</p>
+            <p className="text-sm text-muted-foreground">{data.leverage ? "The spreadsheet covers the plain buys only. Set leverage to off to export." : "Download results for accounting or offline review."}</p>
             <Button
               type="button"
               variant="outline"
@@ -1335,8 +1364,7 @@ export function DcaApp() {
                 variant="outline"
                 className="h-11 w-full rounded-none transition-transform hover:-translate-y-px active:translate-y-0 sm:h-10 sm:w-auto"
                 onClick={() => doShare()}
-                disabled={sharing || !!data.leverage}
-                title={data.leverage ? "Sharing saves the plain (unleveraged) buys, so it is off while a leveraged result is showing. Set leverage to 1x to share." : undefined}
+                disabled={sharing}
               >
                 {sharing ? <MarkLoader /> : <Share2 />}
                 {sharing ? "Saving" : share ? "Share again" : "Share"}

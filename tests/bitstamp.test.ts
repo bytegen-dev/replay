@@ -21,3 +21,13 @@ test("only the coins where Bitstamp's history is as long as Yahoo's are asked fi
   assert.ok(!("BNB-USD" in BITSTAMP_PAIRS));
   for (const s of BITSTAMP_PRIMARY) assert.ok(s in BITSTAMP_PAIRS);
 });
+
+import { parseHyperliquid } from "../src/lib/hyperliquid.ts";
+
+test("Hyperliquid candles become clean daily closes", () => {
+  const out = parseHyperliquid([{ t: Date.parse("2024-12-06T00:00:00Z"), c: "13.5" }, { t: Date.parse("2024-12-05T00:00:00Z"), c: "12.7" }, { t: 1, c: "0" }], "HYPE-USD");
+  assert.ok(out);
+  assert.deepEqual(out!.days.map((d) => d.date), ["2024-12-05", "2024-12-06"]);
+  assert.equal(out!.meta.via, "hyperliquid");
+  assert.equal(parseHyperliquid([], "HYPE-USD"), null);
+});

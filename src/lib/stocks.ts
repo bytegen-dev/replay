@@ -4,6 +4,7 @@ import { getJson, HttpError } from "./http.ts";
 import { addDays, monthsBetween, targetDate, todayUtc } from "./months.ts";
 import { selectAllMonths } from "./select.ts";
 import { BITSTAMP_PAIRS, BITSTAMP_PRIMARY, fetchBitstampHistory } from "./bitstamp.ts";
+import { fetchHyperliquidHistory, HYPERLIQUID_COINS } from "./hyperliquid.ts";
 import { fetchNasdaqHistory } from "./nasdaqHistory.ts";
 import { isBuyMonth } from "./plan.ts";
 import { fetchTiingoHistory } from "./tiingo.ts";
@@ -37,7 +38,7 @@ export interface StockMeta {
   /** Stock splits, oldest first. `ratio` is new shares per old share (7 for a 7-for-1 split). */
   splits?: { date: string; ratio: number }[];
   /** Set when the history came from the backup source instead of Yahoo. */
-  via?: "nasdaq" | "tiingo" | "bitstamp";
+  via?: "nasdaq" | "tiingo" | "bitstamp" | "hyperliquid";
 }
 
 interface YahooChart {
@@ -115,7 +116,7 @@ export function parseYahooChart(body: unknown): { meta: StockMeta; days: StockDa
 }
 
 /** Trading days -> price points. `reinvest` uses the dividend-adjusted close, otherwise the split-adjusted close. */
-export function stockPoints(days: StockDay[], reinvest: boolean, source: "Yahoo" | "Nasdaq" | "Tiingo" | "Bitstamp" = "Yahoo"): DailyPoint[] {
+export function stockPoints(days: StockDay[], reinvest: boolean, source: "Yahoo" | "Nasdaq" | "Tiingo" | "Bitstamp" | "Hyperliquid" = "Yahoo"): DailyPoint[] {
   return days.map((d) => ({ date: d.date, price: reinvest ? d.adjClose : d.close, source }));
 }
 
@@ -254,10 +255,14 @@ async function loadStockHistory(symbol: string, now: number, fetchChart: NonNull
   }
 }
 
+/** The feed asked before Yahoo for a coin that has one: Bitstamp for Bitcoin, Ethereum and XRP, Hyperliquid for HYPE. */
+const primaryFor = (symbol: string): StockDeps["fetchBackup"] | undefined =>
+  HYPERLIQUID_COINS[symbol] ? fetchHyperliquidHistory : BITSTAMP_PAIRS[symbol] && BITSTAMP_PRIMARY.has(symbol) ? fetchBitstampHistory : undefined;
+
 /** A ticker's saved daily history (split-adjusted), fetched from Yahoo at most every few hours. */
 export async function getStockHistory(symbol: string, now: number = Date.now()): Promise<Loaded> {
   const pair = BITSTAMP_PAIRS[symbol];
-  return loadStockHistory(symbol, now, fetchStockChart, true, pair ? fetchBitstampHistory : fetchNasdaqHistory, pair && BITSTAMP_PRIMARY.has(symbol) ? fetchBitstampHistory : undefined);
+  return loadStockHistory(symbol, now, fetchStockChart, true, pair ? fetchBitstampHistory : HYPERLIQUID_COINS[symbol] ? undefined : fetchNasdaqHistory, primaryFor(symbol));
 }
 
 /** Test hook: forget everything cached in memory. */
@@ -277,14 +282,16 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
   // After Yahoo: the user's own Tiingo key if they gave one, then Nasdaq. A key that fails is reported, not hidden.
   let keyNote: string | null = null;
   const pair = BITSTAMP_PAIRS[symbol];
-  const primary: StockDeps["fetchBackup"] | undefined = !deps.fetchChart && pair && BITSTAMP_PRIMARY.has(symbol) ? fetchBitstampHistory : undefined;
+  const primary: StockDeps["fetchBackup"] | undefined = !deps.fetchChart ? primaryFor(symbol) : undefined;
   const backup: StockDeps["fetchBackup"] | undefined =
     deps.fetchBackup ??
     (deps.fetchChart
       ? undefined
       : pair
         ? fetchBitstampHistory
-        : async (sym, today) => {
+        : HYPERLIQUID_COINS[symbol]
+          ? undefined
+          : async (sym, today) => {
           if (deps.tiingoKey) {
             try {
               const t = await fetchTiingoHistory(sym, today, deps.tiingoKey);
@@ -309,7 +316,7 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     throw new DcaError(422, `${symbol} is priced in ${meta.currency}. Only USD-quoted stocks and ETFs are supported.`);
   }
 
-  const sourceName = meta.via === "nasdaq" ? "Nasdaq" : meta.via === "tiingo" ? "Tiingo" : meta.via === "bitstamp" ? "Bitstamp" : "Yahoo";
+  const sourceName = meta.via === "nasdaq" ? "Nasdaq" : meta.via === "tiingo" ? "Tiingo" : meta.via === "bitstamp" ? "Bitstamp" : meta.via === "hyperliquid" ? "Hyperliquid" : "Yahoo";
   const rows = selectAllMonths(req.startMonth, req.endMonth, stockPoints(days, reinvest, sourceName), {
     basis: req.basis,
     basisDay: req.basisDay,
@@ -361,6 +368,8 @@ export async function runStockDca(req: DcaRequest & { chain: "equity" }, now: nu
     rows,
     sources: viaBackup
       ? [{ label: "Nasdaq historical prices (daily)", url: `https://www.nasdaq.com/market-activity/stocks/${encodeURIComponent(symbol.toLowerCase())}/historical` }]
+      : meta.via === "hyperliquid"
+        ? [{ label: "Hyperliquid daily prices (USD)", url: "https://app.hyperliquid.xyz/trade/HYPE" }]
       : meta.via === "bitstamp"
         ? [{ label: "Bitstamp daily prices (USD)", url: `https://www.bitstamp.net/markets/${encodeURIComponent((BITSTAMP_PAIRS[symbol] ?? "").replace("usd", "")) }/usd/` }]
       : meta.via === "tiingo"

@@ -104,3 +104,24 @@ test("every price source survives a share, including DexHunter", () => {
   const p = parseShare({ ...good, rows: [{ ...row("2026-09", 0.02), source: "Made Up" }] });
   assert.ok(typeof p === "object" && p.rows[0].source === "none", "an unknown source is still dropped");
 });
+
+import { simulateLeverage } from "../src/lib/leverage.ts";
+
+test("a leveraged result round-trips through parseShare, and a broken one is refused", () => {
+  const lev = simulateLeverage({
+    buys: [{ month: "2026-09", date: "2026-09-01", price: 100, amount: 200 }],
+    daily: [
+      { date: "2026-09-01", price: 100 },
+      { date: "2026-09-10", price: 120 },
+    ],
+    endDate: "2026-09-10",
+    settings: { leverage: 5 },
+  });
+  const ok = parseShare({ ...good, leverage: lev });
+  assert.ok(typeof ok !== "string");
+  if (typeof ok !== "string") {
+    assert.equal(ok.leverage?.summary.value, lev.summary.value);
+    assert.equal(ok.leverage?.series.length, lev.series.length);
+  }
+  assert.equal(typeof parseShare({ ...good, leverage: { ...lev, series: "x" } }), "string");
+});

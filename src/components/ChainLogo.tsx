@@ -27,6 +27,7 @@ const COIN_FILES: Record<string, string> = {
   "LTC-USD": "ltc.png",
   "LINK-USD": "link.png",
   "AVAX-USD": "avax.png",
+  "HYPE-USD": "hyperevm.jpg",
 };
 
 function Logo({ file, className, mono }: { file: string; className: string; mono: boolean }) {

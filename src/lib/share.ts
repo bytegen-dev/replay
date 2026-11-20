@@ -1,12 +1,15 @@
 import { isPlan } from "./plan.ts";
 import { createHash, randomBytes } from "node:crypto";
 import type { ExportPayload } from "./exportData.ts";
+import type { LeverageResult, LeverageSeriesPoint, Position, PositionStatus } from "./leverage.ts";
 import type { MonthRow, Note, NoteCode, PriceSource, SourceLink } from "./types.ts";
 
 /** What a public share link stores: the export data plus what the read-only page needs to show it. */
 export interface SharePayload extends ExportPayload {
   tokenName: string;
   warnings: string[];
+  /** The leveraged result that was on screen, saved as it was worked out. Absent for plain results. */
+  leverage?: LeverageResult;
 }
 
 /** Hard cap on the posted body. A 72-month result is well under 100 KB. */
@@ -20,7 +23,7 @@ const MAX_WARNINGS = 10;
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const NOTE_CODES: NoteCode[] = ["nearest-day", "low-volume", "outlier", "no-data", "out-of-range", "future", "manual"];
-const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "DexHunter", "Yahoo", "Nasdaq", "Tiingo", "Bitstamp", "manual", "none"];
+const SOURCES: PriceSource[] = ["CoinGecko", "GeckoTerminal", "DexHunter", "Yahoo", "Nasdaq", "Tiingo", "Bitstamp", "Hyperliquid", "manual", "none"];
 
 /** 8 URL-safe characters (48 random bits). Unguessable enough for an unlisted link. */
 export function newShareId(): string {
@@ -72,6 +75,70 @@ function cleanSources(x: unknown): SourceLink[] {
   return out;
 }
 
+const MAX_SERIES = 1500;
+const STATUSES: PositionStatus[] = ["open", "liquidated", "stopped"];
+const num = (x: unknown): number | null => (typeof x === "number" && Number.isFinite(x) ? x : null);
+const opt = (x: unknown): number | undefined => num(x) ?? undefined;
+
+/** Rebuilds a saved leveraged result from untrusted input, keeping only numbers, dates and known words. */
+function cleanLeverage(x: unknown): LeverageResult | null {
+  const l = x as { settings?: Record<string, unknown>; positions?: unknown; summary?: Record<string, unknown>; series?: unknown } | null;
+  if (!l || typeof l !== "object" || !l.settings || !l.summary || !Array.isArray(l.positions) || !Array.isArray(l.series)) return null;
+  if (l.positions.length > MAX_ROWS || l.series.length > MAX_SERIES) return null;
+  const lev = num(l.settings.leverage);
+  const apr = num(l.settings.fundingApr);
+  if (lev === null || apr === null || lev < 1 || lev > 100) return null;
+  const positions: Position[] = [];
+  for (const raw of l.positions) {
+    const p = raw as Record<string, unknown>;
+    const nums = ["openPrice", "margin", "topUps", "topUpCount", "notional", "liquidationPrice", "funding", "fees", "value"].map((k) => num(p?.[k]));
+    if (!p || typeof p.month !== "string" || !MONTH.test(p.month) || nums.some((n) => n === null) || !STATUSES.includes(p.status as PositionStatus)) return null;
+    const date = (v: unknown) => (typeof v === "string" && DAY.test(v) ? v : null);
+    positions.push({
+      month: p.month,
+      openDate: date(p.openDate) ?? "",
+      openPrice: nums[0]!,
+      margin: nums[1]!,
+      topUps: nums[2]!,
+      topUpCount: nums[3]!,
+      notional: nums[4]!,
+      liquidationPrice: nums[5]!,
+      status: p.status as PositionStatus,
+      closeDate: date(p.closeDate),
+      closePrice: num(p.closePrice),
+      funding: nums[6]!,
+      fees: nums[7]!,
+      value: nums[8]!,
+    });
+  }
+  const series: LeverageSeriesPoint[] = [];
+  for (const raw of l.series) {
+    const p = raw as Record<string, unknown>;
+    const a = num(p?.invested);
+    const b = num(p?.value);
+    const c = num(p?.price);
+    if (!p || typeof p.date !== "string" || !DAY.test(p.date) || a === null || b === null || c === null) return null;
+    series.push({ date: p.date, invested: a, value: b, price: c });
+  }
+  const s = l.summary;
+  const need = ["invested", "value", "gain", "positions", "liquidated", "stopped", "topUps", "funding", "fees"].map((k) => num(s[k]));
+  if (need.some((n) => n === null)) return null;
+  return {
+    settings: {
+      leverage: lev,
+      fundingApr: apr,
+      ...(l.settings.topUp === true ? { topUp: true } : {}),
+      ...(opt(l.settings.topUpMax) !== undefined ? { topUpMax: opt(l.settings.topUpMax) } : {}),
+      ...(opt(l.settings.topUpBudget) !== undefined ? { topUpBudget: opt(l.settings.topUpBudget) } : {}),
+      ...(opt(l.settings.maxLoss) !== undefined ? { maxLoss: opt(l.settings.maxLoss) } : {}),
+      ...(opt(l.settings.maxLossPct) !== undefined ? { maxLossPct: opt(l.settings.maxLossPct) } : {}),
+    },
+    positions,
+    series,
+    summary: { invested: need[0]!, value: need[1]!, gain: need[2]!, gainPct: num(s.gainPct), positions: need[3]!, liquidated: need[4]!, stopped: need[5]!, topUps: need[6]!, funding: need[7]!, fees: need[8]! },
+  };
+}
+
 /**
  * Validates and rebuilds a share payload from untrusted input. Nothing is copied through
  * as-is, so the stored JSON has exactly the fields the read-only page expects.
@@ -98,7 +165,11 @@ export function parseShare(x: unknown): SharePayload | string {
     if (MONTH.test(month) && n !== null) overrides[month] = n;
   }
 
+  const leverage = p.leverage === undefined ? null : cleanLeverage(p.leverage);
+  if (p.leverage !== undefined && !leverage) return "The leveraged result is invalid";
+
   return {
+    ...(leverage ? { leverage } : {}),
     unit: p.unit === "shares" ? "shares" : "tokens",
     ...(isPlan(p.plan) && p.plan !== "monthly" ? { plan: p.plan } : {}),
     ...(p.sold === true ? { sold: true } : {}),

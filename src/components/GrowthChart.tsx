@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DOWN, LineChart, UP, type ChartSeries } from "@/components/LineChart";
 import { growthSeries, moneyShort } from "@/lib/charts.ts";
 import { fmtPrice, fmtUsd } from "@/lib/format.ts";
+import type { LeverageSeriesPoint } from "@/lib/leverage.ts";
 import type { BuyRow } from "@/lib/math.ts";
 import { formatUsdPrice } from "@/lib/priceAt.ts";
 import { cn } from "@/lib/utils";
@@ -17,8 +18,10 @@ const FRAMES = [1, 3, 5] as const;
 const YEAR_MS = 365.25 * 86_400_000;
 
 /** The backtest as a picture: what you put in against what it was worth, and the price against your average cost. */
-export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "Replay" }: { buys: BuyRow[]; priceToday: number | null; priceTodayDate: string | null; unit: "shares" | "tokens"; title?: string }) {
-  const [view, setView] = useState<View>("growth");
+export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "Replay", leverage }: { buys: BuyRow[]; priceToday: number | null; priceTodayDate: string | null; unit: "shares" | "tokens"; title?: string; leverage?: { times: number; series: LeverageSeriesPoint[] } }) {
+  const [viewPick, setView] = useState<View>("growth");
+  // A leveraged run only has the growth picture: there is no single average cost to compare the price with.
+  const view: View = leverage ? "growth" : viewPick;
   const [frame, setFrame] = useState<number | "all">("all");
   // Replay: how far along the history the line has been drawn, in points and fractions of a point (null shows it all), whether it is running, and how fast.
   const [step, setStep] = useState<number | null>(null);
@@ -29,7 +32,10 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const [dots, setDots] = useDotsPref();
-  const allPoints = useMemo(() => growthSeries(buys, priceToday, priceTodayDate), [buys, priceToday, priceTodayDate]);
+  const allPoints = useMemo(
+    () => (leverage ? leverage.series.map((p) => ({ t: Date.parse(`${p.date}T00:00:00Z`), date: p.date, invested: p.invested, value: p.value, price: p.price, avgCost: 0 })) : growthSeries(buys, priceToday, priceTodayDate)),
+    [buys, priceToday, priceTodayDate, leverage],
+  );
   const spanYears = allPoints.length > 1 ? (allPoints[allPoints.length - 1].t - allPoints[0].t) / YEAR_MS : 0;
   const frames = FRAMES.filter((y) => spanYears > y + 0.1);
   // A timeframe that no longer fits (new result, shorter span) falls back to everything.
@@ -113,7 +119,7 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
   return (
     <section className="flex flex-col gap-4 border border-border bg-card p-4 sm:p-6" aria-label="Charts">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-base font-bold">{view === "growth" ? "How it grew" : "Price against your average cost"}</h3>
+        <h3 className="text-base font-bold">{leverage ? `How it grew with ${leverage.times}x leverage` : view === "growth" ? "How it grew" : "Price against your average cost"}</h3>
         <div role="group" aria-label="Chart" className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
           {/* Timeframe, like a trading terminal: small pills, the active one lit. */}
           <div role="group" aria-label="Timeframe" className="flex gap-1">
@@ -133,19 +139,26 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
             ))}
             <DotsToggle on={dots} onChange={setDots} className="ml-1" />
           </div>
-          {(
-            [
-              ["growth", "Growth"],
-              ["price", "Price vs your cost"],
-            ] as const
-          ).map(([v, label]) => (
-            <button key={v} type="button" aria-pressed={view === v} onClick={() => {
-                setView(v);
-                stopReplay();
-              }} className={cn("underline-offset-4", view === v ? "font-bold underline decoration-2" : "text-muted-foreground hover:text-foreground hover:underline")}>
-              {label}
-            </button>
-          ))}
+          {!leverage &&
+            (
+              [
+                ["growth", "Growth"],
+                ["price", "Price vs your cost"],
+              ] as const
+            ).map(([v, label]) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => {
+                  setView(v);
+                  stopReplay();
+                }}
+                className={cn("underline-offset-4", view === v ? "font-bold underline decoration-2" : "text-muted-foreground hover:text-foreground hover:underline")}
+              >
+                {label}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -213,7 +226,11 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
       </div>
 
       <p className="text-sm text-muted-foreground">
-        {view === "growth" ? (
+        {leverage ? (
+          <>
+            The solid line is what all the leveraged positions were worth each day, with funding and fees taken out, so it swings harder than the plain line. A liquidated position drops out at zero. It ends at <b className="text-foreground">{fmtUsd(last.value)}</b> against <b className="text-foreground">{fmtUsd(last.invested)}</b> put in.
+          </>
+        ) : view === "growth" ? (
           <>
             Each purchase adds to the dashed line. The solid line is what everything held so far was worth on that day, so it dips and climbs with the market. It ends at <b className="text-foreground">{fmtUsd(last.value)}</b> against <b className="text-foreground">{fmtUsd(last.invested)}</b> put in.
           </>
