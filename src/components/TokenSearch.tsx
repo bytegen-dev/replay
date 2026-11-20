@@ -220,7 +220,7 @@ export function TokenSearchInput({ id, value, onChange, chain, onPick, invalid, 
                       <span className="truncate font-bold">{h.name}</span>
                       <span className={cn("shrink-0 text-xs", i === active ? "text-primary-foreground" : "text-muted-foreground")}>{h.symbol}</span>
                       <Badge variant="outline" className={cn("shrink-0 gap-1 rounded-none px-1.5 py-0 text-[0.65rem] font-normal", i === active && "border-primary-foreground text-primary-foreground")}>
-                        <ChainLogo chain={h.chain} mono className="size-3 shrink-0" />
+                        <ChainLogo chain={h.chain} className="size-3.5 shrink-0" />
                         {CHAIN_LABELS[h.chain]}
                       </Badge>
                     </span>

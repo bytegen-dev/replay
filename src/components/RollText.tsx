@@ -37,9 +37,10 @@ function startRoll(text: string, set: (s: string | null) => void): () => void {
  * Text that rolls when it changes: each character flickers through random ones of the same kind, then locks in from left to
  * right (about half a second for a month and year). The first render is plain, and people who prefer reduced motion get the plain text
  * straight away. Spaces and punctuation never move, and the page font is monospaced, so nothing jitters sideways.
- * With `introDelay` the text is hidden at first, then rolls in once that many milliseconds have passed.
+ * With `introDelay` the text is hidden at first, then rolls in once that many milliseconds have passed. `wide` lists the positions of
+ * characters to draw twice as wide (a letter of a heading); they stay wide while the text rolls.
  */
-export function RollText({ text, className, introDelay }: { text: string; className?: string; introDelay?: number }) {
+export function RollText({ text, className, introDelay, wide }: { text: string; className?: string; introDelay?: number; wide?: number[] }) {
   const [rolling, setRolling] = useState<string | null>(null);
   const [hidden, setHidden] = useState(introDelay !== undefined);
   const before = useRef(text);
@@ -74,7 +75,7 @@ export function RollText({ text, className, introDelay }: { text: string; classN
     <span className={className}>
       <span className="sr-only">{text}</span>
       <span aria-hidden style={hidden ? { opacity: 0 } : undefined}>
-        {rolling ?? text}
+        {wide?.length ? [...(rolling ?? text)].map((ch, i) => (wide.includes(i) ? <span key={i} className="wide-letter">{ch}</span> : ch)) : (rolling ?? text)}
       </span>
     </span>
   );

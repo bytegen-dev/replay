@@ -3,7 +3,7 @@ import { Bot, FlaskConical, Wallet } from "lucide-react";
 import Link from "next/link";
 import { BandDots } from "@/components/landing/BandDots";
 import { Faq } from "@/components/landing/Faq";
-import { HindsightVisual, LeverageVisual, ShareVisual, WaybackVisual } from "@/components/landing/FeatureVisuals";
+import { HindsightVisual, LeverageVisual, ShareVisual } from "@/components/landing/FeatureVisuals";
 import { HeroChart } from "@/components/landing/HeroChart";
 import { LandingDemo } from "@/components/landing/LandingDemo";
 import { LineCard } from "@/components/landing/LineCard";
@@ -46,7 +46,7 @@ const faqs = (anon: number, user: number) => [
   {
     q: "Where do the prices come from?",
     topic: "Data",
-    a: "Daily closing prices come from Yahoo Finance for stocks and ETFs, with Nasdaq as a backup, from Bitstamp and CoinGecko for coins, from GeckoTerminal and DexHunter for newer tokens, and from the Federal Reserve, the European Central Bank and the IMF for currencies. Every result names the source it used.",
+    a: "Daily closing prices come from Yahoo Finance for stocks and ETFs, with Nasdaq as a backup, from Bitstamp and CoinGecko for coins, from GeckoTerminal and DexHunter for newer tokens, from Yahoo Finance futures prices for commodities like gold, silver and oil, and from the Federal Reserve, the European Central Bank and the IMF for currencies. Every result names the source it used.",
   },
   {
     q: "How accurate are the results?",
@@ -120,7 +120,7 @@ export default function LandingPage() {
             <SpotlightText
               className="enter-up max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
               style={{ "--base": "650ms", "--i": 1 } as React.CSSProperties}
-              text="Pick a stock, a coin or a currency and a date. Replay uses real daily prices to show what one buy, or a monthly habit, would have turned into."
+              text="Pick a stock, a coin, a commodity or a currency and a date. Replay uses real daily prices to show what one buy, or a monthly habit, would have turned into."
             />
             <div className="enter-up flex flex-wrap items-center gap-x-6 gap-y-3" style={{ "--base": "650ms", "--i": 2 } as React.CSSProperties}>
               <WaitlistButton />
@@ -143,7 +143,7 @@ export default function LandingPage() {
           <div className={section}>
             <div className="mb-6 flex max-w-2xl flex-col gap-2 sm:mb-8" data-reveal-on-scroll style={later()}>
               <h2 className={h2}>What if you had bought it back then?</h2>
-              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Hindsight answers from saved results, so they appear at once. Wayback runs a live lookup, which takes a second or two." />
+              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Pick a kind of asset and an example. Each answers from a saved result, so it appears at once." />
             </div>
             <div data-reveal-on-scroll style={later(120)}>
               <LandingDemo checks={checks} />
@@ -175,19 +175,18 @@ export default function LandingPage() {
         {/* What is in it. */}
         <section className={`${section} py-10 sm:py-16`}>
           <h2 className={`${h2} mb-8 max-w-2xl sm:mb-10`} data-reveal-on-scroll style={later()}>
-            Four ways to look at the past.
+            Three ways to look at the past.
           </h2>
           {/* Uneven on purpose: a wide card beside a narrow one, then the other way round. A big outlined 4 stands behind the first card, half out
               of the column on wide screens. */}
           <div className="relative isolate grid gap-4 sm:gap-6 lg:grid-cols-6">
             <span aria-hidden className="big-four absolute bottom-full -left-6 -z-10 select-none font-heading leading-none sm:-left-[5.5rem]" data-reveal-on-scroll style={later(80)}>
-              4
+              3
             </span>
             {[
-              { Visual: HindsightVisual, t: "Hindsight", d: "What a single buy or a monthly habit would be worth today, for stocks, coins and currencies, with dividends and currency conversion.", href: "/hindsight", cta: "Open Hindsight", span: "lg:col-span-4" },
-              { Visual: WaybackVisual, t: "Wayback", d: "The price and market cap of a token or stock at a past moment, to the minute for recent dates.", href: "/wayback", cta: "Open Wayback", span: "lg:col-span-2" },
-              { Visual: LeverageVisual, t: "Leverage", d: "The same buys as futures-style positions, long or short, up to 100x, with funding, fees and liquidation.", href: "/hindsight", cta: "Try it in Hindsight", span: "lg:col-span-2" },
-              { Visual: ShareVisual, t: "Share and build", d: "Save a result as a link anyone can open, or call the same data from your own code with the public API.", href: "/docs", cta: "Read the docs", span: "lg:col-span-4" },
+              { Visual: HindsightVisual, t: "Wayback", d: "What a single buy or a monthly habit would be worth today, or the price on any past day, for stocks, coins, commodities and currencies, with dividends and currency conversion.", href: "/wayback", cta: "Open Wayback", span: "lg:col-span-4" },
+              { Visual: LeverageVisual, t: "Leverage", d: "The same buys as futures-style positions, long or short, up to 100x, with funding, fees and liquidation.", href: "/wayback", cta: "Try it in Wayback", span: "lg:col-span-2" },
+              { Visual: ShareVisual, t: "Share and build", d: "Save a result as a link anyone can open, or call the same data from your own code with the public API.", href: "/docs", cta: "Read the docs", span: "lg:col-span-6" },
             ].map(({ Visual, t, d, href, cta, span }, i) => (
               <Link key={t} href={href} className={`cut-card pulse-hover group flex flex-col gap-4 border border-border bg-card p-4 transition-transform duration-200 hover:-translate-y-0.5 sm:p-5 ${span}`} data-reveal-on-scroll style={later((i % 2) * 120)}>
                 <Visual />

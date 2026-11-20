@@ -5,7 +5,7 @@ description: Answers "what would $X a month into <stock, ETF or token> since <da
 
 # Replay
 
-Backtests a fixed purchase: invest a set amount on a schedule (every month by default), then see what the holding is worth today. On the website this is the **What if I had bought** tab of **Wayback**, and the price-at-a-moment lookup is its **Price on a day** tab. The API does all the math with real historical prices. Your job is to turn the question into one API call, then report the result faithfully.
+Backtests a fixed purchase: invest a set amount on a schedule (every month by default), then see what the holding is worth today. On the website this is the **What if I had bought** tab of **Wayback**, and the price-at-a-moment lookup is its **Timestamp** tab. The API does all the math with real historical prices. Your job is to turn the question into one API call, then report the result faithfully.
 
 **Base URL:** `https://dca-checker-neon.vercel.app` (use `$REPLAY_URL` instead if the environment sets it; the address will change if the site is moved to its own domain).
 **Auth:** none by default. If the server was set up with keys, send `Authorization: Bearer <key>` (or `x-api-key`); a `401` means a key is needed.

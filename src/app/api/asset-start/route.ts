@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   if (!rate.ok) return NextResponse.json({ firstDate: null }, { status: 429 });
 
   const symbol = (new URL(request.url).searchParams.get("symbol") ?? "").trim().toUpperCase();
-  if (!/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(symbol)) return NextResponse.json({ firstDate: null }, { status: 400 });
+  if (!/^[A-Z0-9][A-Z0-9.=-]{0,14}$/.test(symbol)) return NextResponse.json({ firstDate: null }, { status: 400 });
   try {
     const { meta, days } = await getStockHistory(symbol);
     // The Nasdaq backup only reaches back about ten years, so its first day is the real start only for a listing newer than that.

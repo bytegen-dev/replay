@@ -17,8 +17,8 @@ export default function WaybackPage() {
       <SiteHeader />
 
       <main className="stagger-in mx-auto w-full max-w-6xl flex-1 px-[max(1rem,env(safe-area-inset-left))] py-6 pr-[max(1rem,env(safe-area-inset-right))] sm:px-6 sm:py-10">
-        <h1 className="font-heading text-2xl font-medium tracking-tight sm:text-3xl"><RollText text="Wayback" introDelay={60} /></h1>
-        <SpotlightText className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Go back to any day. See what a buy from then would be worth today, with a monthly habit and leverage if you like, or what a stock, coin, commodity or currency cost at that moment." />
+        <h1 className="font-heading text-4xl font-medium tracking-tight sm:text-6xl"><RollText text="Wayback Machine" introDelay={60} wide={[14]} /></h1>
+        <SpotlightText className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Go back to any day. See what a stock, coin, commodity or currency buy would be worth today, or what it cost at a past moment." />
         <WaybackTools />
       </main>
 

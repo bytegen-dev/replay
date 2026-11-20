@@ -8,6 +8,8 @@ import { MarkLoader } from "@/components/MarkLoader";
 import { DatePickerButton } from "@/components/DatePicker";
 import { TimePickerButton } from "@/components/TimePicker";
 import { TimezonePicker } from "@/components/TimezonePicker";
+import { CoinPicker } from "@/components/CoinPicker";
+import { CommodityPicker } from "@/components/CommodityPicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
 import { DOWN, LineChart, UP } from "@/components/LineChart";
 import { TokenSearchInput } from "@/components/TokenSearch";
@@ -18,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PRICE_EXAMPLES, type PriceExample } from "@/lib/examples.ts";
+import { commodityFor } from "@/lib/commodities.ts";
+import { majorFor } from "@/lib/majors.ts";
 import type { HistoricalPriceResult } from "@/lib/historicalPrice.ts";
 import { fmtBig } from "@/lib/format.ts";
 import { formatAge, formatUsdPrice } from "@/lib/priceAt.ts";
@@ -84,14 +88,33 @@ const asOf = (iso: string) => iso.replace("T", " ").replace(/:\d{2}Z$/, " UTC");
 
 /** Look up the price of a token or stock at a past moment, typed the way people say it. */
 export function PricePanel() {
-  const [market, setMarket] = useState<Market>("ethereum");
-  const [asset, setAsset] = useState("");
+  // Opens on Crypto's Majors, with Bitcoin: a major is a stock-style lookup of its USD pair, so its market is "equity".
+  const [market, setMarket] = useState<Market>("equity");
+  const [asset, setAsset] = useState("BTC-USD");
   const [assetName, setAssetName] = useState("");
   // The chain last used under Crypto, so switching Stocks and back returns to it.
   const lastChain = useRef<Market>("ethereum");
   useEffect(() => {
     if (market !== "equity") lastChain.current = market;
   }, [market]);
+  // Under Crypto: a major coin picked from a short list (Bitcoin, Ethereum...: priced like a stock, with years of history), or any token
+  // on a chain by name or address. A major runs as a "stock" lookup under the hood (its USD pair), so it is a mode of market "equity".
+  const [majorMode, setMajorMode] = useState(true);
+  const lastMajor = useRef("BTC-USD");
+  const lastKind = useRef<"major" | "token">("major");
+  useEffect(() => {
+    lastKind.current = majorMode ? "major" : market !== "equity" ? "token" : lastKind.current;
+  }, [majorMode, market]);
+  useEffect(() => {
+    if (majorMode && majorFor(asset)) lastMajor.current = asset.trim().toUpperCase();
+  }, [majorMode, asset]);
+  // Commodities (gold, oil, wheat...) are a tab of their own and, like a major, a stock-style lookup of a futures symbol.
+  const [commodityMode, setCommodityMode] = useState(false);
+  const lastCommodity = useRef("GC=F");
+  useEffect(() => {
+    if (commodityMode && commodityFor(asset)) lastCommodity.current = asset.trim().toUpperCase();
+  }, [commodityMode, asset]);
+  const cryptoTab = !commodityMode && (market !== "equity" || majorMode);
   const [date, setDate] = useState("yesterday");
   const [time, setTime] = useState("");
   const [tz, setTz] = useState("");
@@ -104,6 +127,11 @@ export function PricePanel() {
       if (m && MARKETS.some((x) => x.value === m)) setMarket(m as Market);
       const a = q.get("asset");
       if (a && /^[A-Za-z0-9.=-]{1,100}$/.test(a)) setAsset(a);
+      // A link to a major coin is a stock-style lookup of its USD pair, so it opens on the Crypto tab's Majors; any other link leaves them.
+      if (m && MARKETS.some((x) => x.value === m)) {
+        setMajorMode(m === "equity" && !!a && !!majorFor(a));
+        setCommodityMode(m === "equity" && !!a && !!commodityFor(a));
+      }
       const d = q.get("date");
       if (d && d.length <= 60) setDate(d);
       const t = q.get("time");
@@ -121,7 +149,7 @@ export function PricePanel() {
   const [firstDay, setFirstDay] = useState<{ symbol: string; date: string } | null>(null);
   const tickerNow = market === "equity" ? asset.trim().toUpperCase() : "";
   useEffect(() => {
-    if (!/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(tickerNow)) return;
+    if (!/^[A-Z0-9][A-Z0-9.=-]{0,14}$/.test(tickerNow)) return;
     const controller = new AbortController();
     const id = setTimeout(async () => {
       try {
@@ -235,7 +263,7 @@ export function PricePanel() {
   const command = `/historical-price ${line}`;
   const apiUrl = () => `${window.location.origin}/api/v1/historical-price?format=text&q=${encodeURIComponent(line)}`;
   // Inside the open list only the ticked item keeps its colour; the others go grey. The value shown on the closed select is coloured.
-  const selectContent = "rounded-none border border-border bg-popover ring-0 [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:grayscale [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:opacity-70";
+  const selectContent = "rounded-none border border-border bg-popover ring-0";
 
   // What the result shows beside the price: the candle when there is one, and the split figure for a stock that has split.
   const details: { k: string; v: string }[] = result
@@ -262,27 +290,47 @@ export function PricePanel() {
             type="single"
             variant="outline"
             spacing={0}
-            value={market === "equity" ? "equity" : "token"}
+            value={commodityMode ? "commodity" : cryptoTab ? "token" : "equity"}
             onValueChange={(v) => {
-              if (!v || (v === "equity") === (market === "equity")) return;
-              setMarket(v === "equity" ? "equity" : lastChain.current);
-              setAsset("");
+              if (!v || v === (commodityMode ? "commodity" : cryptoTab ? "token" : "equity")) return;
+              if (v === "commodity") {
+                setCommodityMode(true);
+                setMajorMode(false);
+                setMarket("equity");
+                setAsset(lastCommodity.current);
+              } else if (v === "equity") {
+                setCommodityMode(false);
+                setMajorMode(false);
+                setMarket("equity");
+                setAsset("");
+              } else if (lastChain.current !== "equity" && lastKind.current === "token") {
+                setCommodityMode(false);
+                setMajorMode(false);
+                setMarket(lastChain.current);
+                setAsset("");
+              } else {
+                setCommodityMode(false);
+                setMajorMode(true);
+                setMarket("equity");
+                setAsset(lastMajor.current);
+              }
               setAssetName("");
               setFieldErrors({});
               // A lookup belongs to the tab it was made on.
               setResult(null);
               setError(null);
             }}
-            className="form-control-h w-full sm:w-72"
+            className="form-control-h w-full sm:w-[27rem]"
             aria-label="What to look up"
           >
             {(
               [
                 ["equity", "Stocks"],
                 ["token", "Crypto"],
+                ["commodity", "Commodities"],
               ] as const
             ).map(([v, label]) => (
-              <ToggleGroupItem key={v} value={v} className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "token" && "cut-tab-last")}>
+              <ToggleGroupItem key={v} value={v} className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "commodity" && "cut-tab-last")}>
                 {label}
               </ToggleGroupItem>
             ))}
@@ -291,7 +339,45 @@ export function PricePanel() {
         <div className="flex flex-col gap-5 p-4 pb-7 sm:p-6 sm:pb-9">
         <div className="stagger-in grid grid-cols-1 gap-4 [--stagger-base:200ms] min-[480px]:grid-cols-2 lg:grid-cols-4">
           <div className="min-[480px]:col-span-2 lg:col-span-4 lg:grid lg:grid-cols-4 lg:gap-4">
-            {market !== "equity" && (
+            {cryptoTab && (
+              <div role="group" aria-label="Kind of crypto" className="mb-4 flex gap-4 text-sm lg:col-span-4">
+                {(
+                  [
+                    ["major", "Majors"],
+                    ["token", "Other tokens"],
+                  ] as const
+                ).map(([k, label]) => {
+                  const on = (k === "major") === majorMode;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => {
+                        if (on) return;
+                        setFieldErrors({});
+                        setResult(null);
+                        setError(null);
+                        setAssetName("");
+                        if (k === "major") {
+                          setMajorMode(true);
+                          setMarket("equity");
+                          setAsset(lastMajor.current);
+                        } else {
+                          setMajorMode(false);
+                          setMarket(lastChain.current === "equity" ? "ethereum" : lastChain.current);
+                          setAsset("");
+                        }
+                      }}
+                      className={cn("underline-offset-4", on ? "font-bold underline decoration-2" : "text-muted-foreground hover:text-foreground hover:underline")}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {cryptoTab && !majorMode && (
             <div className="mb-4 lg:mb-0">
               <Field id="market" label="Chain" error={fieldErrors.market}>
                 <Select
@@ -318,8 +404,30 @@ export function PricePanel() {
               </Field>
             </div>
             )}
-            <div className={market === "equity" ? "lg:col-span-4" : "lg:col-span-3"}>
-              {market === "equity" ? (
+            <div className={majorMode || commodityMode ? "max-w-sm lg:col-span-2 lg:max-w-none" : cryptoTab ? "lg:col-span-3" : "lg:col-span-4"}>
+              {majorMode ? (
+                <Field id="asset" label="Coin" error={fieldErrors.asset}>
+                  <CoinPicker
+                    id="asset"
+                    value={majorFor(asset) ? asset.trim().toUpperCase() : "BTC-USD"}
+                    onChange={(v) => {
+                      setAsset(v);
+                      setFieldErrors((e) => ({ ...e, asset: undefined }));
+                    }}
+                  />
+                </Field>
+              ) : commodityMode ? (
+                <Field id="asset" label="Commodity" error={fieldErrors.asset}>
+                  <CommodityPicker
+                    id="asset"
+                    value={commodityFor(asset) ? asset.trim().toUpperCase() : "GC=F"}
+                    onChange={(v) => {
+                      setAsset(v);
+                      setFieldErrors((e) => ({ ...e, asset: undefined }));
+                    }}
+                  />
+                </Field>
+              ) : market === "equity" ? (
                 <Field id="asset" label="Search or enter a ticker" error={fieldErrors.asset}>
                   <EquitySearchInput
                     id="asset"
@@ -496,7 +604,7 @@ export function PricePanel() {
           {/* The same asset as regular buys: opens the buy form with it already chosen. */}
           <p className="text-sm text-muted-foreground">
             What would a buy back then be worth today?{" "}
-            <Link href={market === "equity" ? `/wayback?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/wayback?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
+            <Link href={market === "equity" ? (majorFor(asset) ? `/wayback?tab=crypto&coin=${encodeURIComponent(asset.trim().toUpperCase())}` : commodityFor(asset) ? `/wayback?tab=commodities&s=${encodeURIComponent(asset.trim().toUpperCase())}` : `/wayback?tab=stocks&s=${encodeURIComponent(asset.trim().toUpperCase())}`) : `/wayback?tab=crypto&kind=token&chain=${market}&a=${encodeURIComponent(asset.trim())}`} className="underline underline-offset-4 hover:text-foreground">
               See what a buy then would be worth
             </Link>
           </p>

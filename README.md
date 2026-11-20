@@ -4,7 +4,7 @@ Replay looks back at money. It has two pages and a public API:
 
 - **Landing page** (`/`): what Replay is, a live demo of both tools, the waitlist, and a FAQ.
 - **Wayback** (`/wayback`), first tab, **What if I had bought** (it used to be called Hindsight, and `/hindsight` still redirects): see what a buy from the past would be worth today. Pick a US stock or ETF (decades of history), a crypto coin or token, or a currency pair, buy once or on a schedule (with or without leverage), and it shows what the buys would have bought and what they are worth now.
-- **Wayback**, second tab, **Price on a day** (`/wayback?view=price`): the price of a token or stock at any past date and time, typed the way people say it.
+- **Wayback**, second tab, **Timestamp** (`/wayback?view=price`): the price of a token or stock at any past date and time, typed the way people say it.
 - A **public API** and an **AI agent skill** for both.
 
 Next.js (App Router), TypeScript, Tailwind. Dark by default, with light and system themes, a reduced-motion switch and a high-contrast mode.

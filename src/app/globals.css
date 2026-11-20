@@ -1630,3 +1630,36 @@ html[data-motion="reduce"] .tex-hover:hover::before {
     animation: none;
   }
 }
+
+/* The same dotted texture as .tex-hover, for a card that wears it all the time (the chosen option on Wayback). It is a real element, not a
+   pseudo-element, because a cut card already uses both of those for its edge and fill, and it is clipped to the card's cut corners. */
+.tex-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--primary) 80%, transparent) 1.1px, transparent 1.7px);
+  background-size: 12px 12px;
+  -webkit-mask-image: linear-gradient(155deg, #000 0%, rgb(0 0 0 / 0.5) 60%, rgb(0 0 0 / 0.18) 100%);
+  mask-image: linear-gradient(155deg, #000 0%, rgb(0 0 0 / 0.5) 60%, rgb(0 0 0 / 0.18) 100%);
+  clip-path: polygon(0 0, calc(100% - var(--cut, 18px)) 0, 100% var(--cut, 18px), 100% 100%, var(--cut, 18px) 100%, 0 calc(100% - var(--cut, 18px)));
+  animation: tex-drift 6s linear infinite;
+}
+html[data-motion="reduce"] .tex-layer {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tex-layer {
+    animation: none;
+  }
+}
+
+/* A letter of a heading drawn twice as wide (see RollText's `wide`): scaled sideways from its left edge, with room made for the extra
+   half so what follows does not overlap it. The room is one letter's width, about half an em for an e. */
+.wide-letter {
+  display: inline-block;
+  transform: scaleX(2);
+  transform-origin: 0 50%;
+  margin-right: 0.49em;
+}

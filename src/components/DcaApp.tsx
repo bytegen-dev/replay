@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
 import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
 import { MonthPicker, formatMonth } from "@/components/MonthPicker";
+import { CommodityPicker } from "@/components/CommodityPicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
 import { GrowthChart } from "@/components/GrowthChart";
 import { InsightsCard } from "@/components/InsightsCard";
@@ -49,6 +50,7 @@ import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts
 import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } from "@/lib/math.ts";
 import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel, isMonth, monthsBetween } from "@/lib/months.ts";
 import { CHAINS, CHAIN_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
+import { commodityFor, isFuturesSymbol } from "@/lib/commodities.ts";
 import { MAJORS, isMajorSymbol, marketLabel } from "@/lib/majors.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
 
@@ -155,6 +157,9 @@ export function DcaApp() {
   const [major, setMajor] = useState("BTC-USD");
   const isMajor = mode === "token" && cryptoKind === "major";
   const usesYahoo = mode === "equity" || isMajor;
+  // Commodities are a tab of their own, but they run as an "equity" lookup under the hood (a futures symbol such as GC=F).
+  const [commodity, setCommodity] = useState(false);
+  const commodityTab = mode === "equity" && commodity;
   const [ticker, setTicker] = useState("");
   const [tickerName, setTickerName] = useState("");
   const [reinvest, setReinvest] = useState(false);
@@ -189,7 +194,7 @@ export function DcaApp() {
   // What the user is typing in a price cell. Kept apart from `overrides` so half-typed
   // text such as "0." survives; only a valid price (> 0) becomes an override.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [pendingMode, setPendingMode] = useState<"token" | "equity" | "fx" | null>(null);
+  const [pendingMode, setPendingMode] = useState<"token" | "equity" | "fx" | "commodity" | null>(null);
   // The currency the monthly amount is in. Each buy is converted to dollars at that day's rate.
   const [currency, setCurrency] = useState("USD");
   // Defaults depend on the current date, so set them after mount (not during prerender).
@@ -239,10 +244,14 @@ export function DcaApp() {
         if (ch && (CHAINS as readonly string[]).includes(ch)) setChain(ch as Chain);
         const addr = q.get("a");
         if (addr && /^[A-Za-z0-9]{20,100}$/.test(addr)) setAddress(addr);
-      } else if (tab === "stocks") {
+      } else if (tab === "stocks" || tab === "commodities") {
         const t = q.get("s")?.toUpperCase();
-        if (t && /^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(t)) setTicker(t);
-        if (q.get("drip") === "1") setReinvest(true);
+        // A commodity link (tab=commodities, or a stock link whose symbol is a commodity) opens on the Commodities tab.
+        if (tab === "commodities" || (t && commodityFor(t))) {
+          setCommodity(true);
+          setTicker(t && commodityFor(t) ? t : "GC=F");
+        } else if (t && /^[A-Z0-9][A-Z0-9.=-]{0,14}$/.test(t)) setTicker(t);
+        if (q.get("drip") === "1" && !(t && commodityFor(t))) setReinvest(true);
       }
       if (q.get("run") === "1") autoRun.current = true;
       if (q.get("sell") === "1") setSellAtEnd(true);
@@ -294,7 +303,7 @@ export function DcaApp() {
   // Stocks and major coins: ask when this ticker first traded, once it has stopped changing.
   const yahooSymbol = isMajor ? major : mode === "equity" ? ticker.trim().toUpperCase() : "";
   useEffect(() => {
-    if (!/^[A-Z0-9][A-Z0-9.-]{0,14}$/.test(yahooSymbol)) {
+    if (!/^[A-Z0-9][A-Z0-9.=-]{0,14}$/.test(yahooSymbol)) {
       const id = setTimeout(() => setYahooLaunch(null), 0);
       return () => clearTimeout(id);
     }
@@ -322,7 +331,7 @@ export function DcaApp() {
     if (!formReady || mode === "fx") return;
     const last = shiftMonth(currentMonth(), -1);
     writeQuery({
-      tab: mode === "equity" ? "stocks" : "crypto",
+      tab: mode === "equity" ? (commodity ? "commodities" : "stocks") : "crypto",
       ...(mode === "equity"
         ? { s: ticker.trim().toUpperCase(), drip: reinvest && !leveraged && "1" }
         : cryptoKind === "major"
@@ -344,7 +353,7 @@ export function DcaApp() {
       maxloss: leveraged && stopUnit === "$" && cleanAmount(maxLoss),
       maxlosspct: leveraged && stopUnit === "%" && cleanAmount(maxLoss),
     });
-  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, topUpBudget, maxLoss, stopUnit, side]);
+  }, [formReady, mode, commodity, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, topUpBudget, maxLoss, stopUnit, side]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -359,7 +368,7 @@ export function DcaApp() {
   const [copied, setCopied] = useState(false);
 
   // A sentence describing exactly what pressing the button will run, so the form can be checked at a glance.
-  const assetName = isMajor ? (MAJORS.find((m) => m.symbol === major)?.name ?? major) : mode === "equity" ? ticker.trim().toUpperCase() : address.trim() ? "this token" : "";
+  const assetName = isMajor ? (MAJORS.find((m) => m.symbol === major)?.name ?? major) : mode === "equity" ? (commodity ? (commodityFor(ticker)?.name ?? ticker.trim().toUpperCase()) : ticker.trim().toUpperCase()) : address.trim() ? "this token" : "";
   const amountNum = parseAmount(amount);
   // Whole dollars (fmtUsd always shows cents and throws if asked for none).
   // In the currency picked beside the amount (naira shows ₦, euros €), not always dollars.
@@ -367,7 +376,9 @@ export function DcaApp() {
   const runMonths = isMonth(startMonth) && isMonth(endMonth) && startMonth <= endMonth ? monthsBetween(startMonth, endMonth).length : 0;
   const runSummary = !assetName
     ? mode === "equity"
-      ? "Choose a stock or ETF to check."
+      ? commodity
+        ? "Choose a commodity to check."
+        : "Choose a stock or ETF to check."
       : "Choose a coin or paste a token address to check."
     : !(amountNum > 0)
       ? "Enter how much you buy each month."
@@ -379,7 +390,17 @@ export function DcaApp() {
 
   // The Stocks / Crypto / Currencies switch (and the Majors / Other tokens filter under Crypto). Shared by the form and the Currencies tab.
   /** Moves to another tab and clears the results, which belong to the tab they were made on. */
-  function switchMode(next: "token" | "equity" | "fx") {
+  function switchMode(target: "token" | "equity" | "fx" | "commodity") {
+    const next: "token" | "equity" | "fx" = target === "commodity" ? "equity" : target;
+    // Commodities are a tab of Stocks' machinery: a futures symbol in the ticker. Moving between the two swaps the ticker.
+    setCommodity(target === "commodity");
+    if (target === "commodity" && !isFuturesSymbol(ticker)) {
+      setTicker("GC=F");
+      setTickerName("");
+    } else if (target === "equity" && isFuturesSymbol(ticker)) {
+      setTicker("");
+      setTickerName("");
+    }
     const end = endMonth || shiftMonth(currentMonth(), -1);
     const longHistory = next === "equity" || cryptoKind === "major";
     // Stocks have decades of history, tokens at most six years: move the start so the range stays valid.
@@ -408,11 +429,11 @@ export function DcaApp() {
                   type="single"
                   variant="outline"
                   spacing={0}
-                  value={mode}
+                  value={commodityTab ? "commodity" : mode}
                   onValueChange={(v) => {
                     if (!v) return;
-                    const next = v as "token" | "equity" | "fx";
-                    if (next === mode) return;
+                    const next = v as "token" | "equity" | "fx" | "commodity";
+                    if (next === (commodityTab ? "commodity" : mode)) return;
                     // Results that have been neither exported nor shared would be lost: ask first.
                     if ((data !== null && !exported && !share) || (mode === "fx" && fxHasResult)) {
                       setPendingMode(next);
@@ -420,7 +441,7 @@ export function DcaApp() {
                     }
                     switchMode(next);
                   }}
-                  className="form-control-h w-full sm:w-96"
+                  className="form-control-h w-full sm:w-[34rem]"
                   aria-label="What to check"
                 >
                   {(
@@ -428,12 +449,13 @@ export function DcaApp() {
                       ["equity", "Stocks"],
                       ["token", "Crypto"],
                       ["fx", "Currencies"],
+                      ["commodity", "Commodities"],
                     ] as const
                   ).map(([v, label]) => (
                     <ToggleGroupItem
                       key={v}
                       value={v}
-                      className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "fx" && "cut-tab-last")}
+                      className={cn("form-control-h flex-1 rounded-none border border-border px-2 text-sm data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground", v === "equity" && "cut-tab-first", v === "commodity" && "cut-tab-last")}
                     >
                       {label}
                     </ToggleGroupItem>
@@ -514,6 +536,7 @@ export function DcaApp() {
       setMajor(ex.address);
     } else if (ex.market === "equity") {
       setMode("equity");
+      setCommodity(isFuturesSymbol(ex.address));
       setTicker(ex.address);
       setTickerName(ex.label);
       setReinvest(!!ex.reinvest);
@@ -751,7 +774,7 @@ export function DcaApp() {
   // The months the list shows after filtering and ordering. Totals, charts and exports still use every month.
   const shownBuys = useMemo(() => (computed ? applyMonthFilters(computed.buys, monthFilter) : []), [computed, monthFilter]);
   // Inside the open list only the ticked item keeps its colour; the others go grey. The value shown on the closed select is coloured.
-  const selectContent = "rounded-none border border-border bg-popover ring-0 [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:grayscale [&_[data-slot=select-item]:not([data-state=checked])_.chain-logo]:opacity-70";
+  const selectContent = "rounded-none border border-border bg-popover ring-0";
 
   const statTiles: { key: string; value: string; highlight?: boolean }[] = computed
     ? [
@@ -899,6 +922,18 @@ export function DcaApp() {
                   <Field id="major" label="Coin">
                     <CoinPicker id="major" value={major} onChange={setMajor} />
                   </Field>
+                ) : commodityTab ? (
+                  <Field id="ticker" label="Commodity" error={errors.address}>
+                    <CommodityPicker
+                      id="ticker"
+                      value={ticker}
+                      onChange={(v) => {
+                        setTicker(v);
+                        setTickerName("");
+                        setErrors((e) => ({ ...e, address: undefined }));
+                      }}
+                    />
+                  </Field>
                 ) : mode === "equity" ? (
                   <Field id="ticker" label="Search or enter a ticker" error={errors.address}>
                     <EquitySearchInput
@@ -935,7 +970,7 @@ export function DcaApp() {
                   </Field>
                 )}
               </div>
-              {isMajor ? null : mode === "equity" ? (
+              {isMajor || commodityTab ? null : mode === "equity" ? (
                 <Field id="reinvest" label={leveraged ? "Dividends (doesn't apply)" : "Dividends"} className={cn("min-[480px]:col-span-2", place(3, 1))}>
                   <ToggleGroup
                     type="single"
