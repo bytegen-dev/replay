@@ -1,6 +1,6 @@
 import { growthSeries } from "./charts.ts";
 import { prepare } from "./exportData.ts";
-import { EXAMPLES } from "./examples.ts";
+import { EXAMPLES, HERO_CHECKS, type Example } from "./examples.ts";
 import { exampleSnapshot } from "./exampleResults.ts";
 
 /**
@@ -25,6 +25,8 @@ export interface DemoCheck {
   /** How it was bought, for the sentence ("$200 a month", "$1,000 once"). */
   buying: string;
   since: string;
+  /** "since January 2020" for a monthly habit, "in November 2021" for a single buy. */
+  timing: string;
   invested: number;
   value: number;
   gainPct: number;
@@ -39,9 +41,9 @@ const FRIENDLY: Record<string, string> = { SPY: "the S&P 500 (SPY)", QQQ: "the N
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-export function demoChecks(): DemoCheck[] {
+function build(list: Example[]): DemoCheck[] {
   const out: DemoCheck[] = [];
-  for (const ex of EXAMPLES) {
+  for (const ex of list) {
     const snap = exampleSnapshot(ex.id);
     if (!snap) continue;
     const r = snap.response;
@@ -70,6 +72,7 @@ export function demoChecks(): DemoCheck[] {
       name: FRIENDLY[ex.address] ?? r.token.name ?? ex.address,
       buying: ex.plan === "once" ? `${money(ex.amount)} once` : `${money(ex.amount)} a month`,
       since: `${MONTHS[m - 1]} ${y}`,
+      timing: ex.plan === "once" ? `in ${MONTHS[m - 1]} ${y}` : `since ${MONTHS[m - 1]} ${y}`,
       invested: s.invested,
       value: s.valueToday,
       gainPct: s.gainPct,
@@ -79,3 +82,9 @@ export function demoChecks(): DemoCheck[] {
   }
   return out;
 }
+
+/** The ready-made checks shown in the landing page's live demo. */
+export const demoChecks = (): DemoCheck[] => build(EXAMPLES);
+
+/** The five the hero card turns through: three that gained and two that lost. */
+export const heroChecks = (): DemoCheck[] => build(HERO_CHECKS);

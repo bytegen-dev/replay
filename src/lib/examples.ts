@@ -102,6 +102,67 @@ export const EXAMPLES: Example[] = [
   },
 ];
 
+/**
+ * The five checks the landing page's hero card turns through, one each time the light pulse completes a lap. Two of them lost
+ * money on purpose (Cardano, and Ethereum bought near its 2021 peak): a card that only ever shows winners reads as a pitch.
+ * They are worked out ahead of time like the examples above (scripts/update-examples.mjs).
+ */
+export const HERO_CHECKS: Example[] = [
+  {
+    id: "hero-btc",
+    label: "Bitcoin, $200 a month since 2020",
+    question: "$200 a month into Bitcoin since January 2020: what is it worth today?",
+    market: "equity",
+    address: "BTC-USD",
+    amount: 200,
+    startMonth: "2020-01",
+    basis: "month-end",
+  },
+  {
+    id: "hero-ada",
+    label: "Cardano, $200 a month since 2022",
+    question: "$200 a month into Cardano since January 2022: what is it worth today?",
+    market: "equity",
+    address: "ADA-USD",
+    amount: 200,
+    startMonth: "2022-01",
+    basis: "month-end",
+  },
+  {
+    id: "hero-aapl",
+    label: "Apple, $5,000 once in 2017",
+    question: "$5,000 into Apple stock in a single buy in January 2017: what is it worth today?",
+    market: "equity",
+    address: "AAPL",
+    amount: 5000,
+    startMonth: "2017-01",
+    basis: "month-end",
+    plan: "once",
+  },
+  {
+    id: "hero-eth",
+    label: "Ethereum, $1,000 once at the 2021 peak",
+    question: "$1,000 into Ethereum in a single buy in November 2021: what is it worth today?",
+    market: "equity",
+    address: "ETH-USD",
+    amount: 1000,
+    startMonth: "2021-11",
+    basis: "month-end",
+    plan: "once",
+  },
+  {
+    id: "hero-spy",
+    label: "S&P 500, $500 a month since 2017",
+    question: "$500 a month into the S&P 500 since January 2017: what is it worth today?",
+    market: "equity",
+    address: "SPY",
+    amount: 500,
+    startMonth: "2017-01",
+    basis: "month-end",
+    reinvest: true,
+  },
+];
+
 /** The month before the one containing `now` (YYYY-MM). */
 export function lastFullMonth(now: number = Date.now()): string {
   const [y, m] = todayUtc(now).slice(0, 7).split("-").map(Number);

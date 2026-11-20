@@ -4,11 +4,12 @@ import Link from "next/link";
 import { HeroChart } from "@/components/landing/HeroChart";
 import { LandingDemo } from "@/components/landing/LandingDemo";
 import { SignInLink } from "@/components/landing/SignInLink";
+import { SmoothScroll } from "@/components/landing/SmoothScroll";
 import { WaitlistButton } from "@/components/landing/WaitlistButton";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CURRENCIES } from "@/lib/fxCurrencies.ts";
-import { demoChecks } from "@/lib/landingData.ts";
+import { demoChecks, heroChecks } from "@/lib/landingData.ts";
 import { limitsFor } from "@/lib/limits.ts";
 
 const TITLE = "Replay: see what a past buy would be worth today";
@@ -58,7 +59,7 @@ const faqs = (anon: number, user: number) => [
 
 export default function LandingPage() {
   const checks = demoChecks();
-  const hero = checks.find((c) => c.id === "bitcoin-monthly") ?? checks[0];
+  const hero = heroChecks();
   const anon = limitsFor("anonymous").day;
   const user = limitsFor("user").day;
   const questions = faqs(anon, user);
@@ -67,13 +68,14 @@ export default function LandingPage() {
 
   return (
     <div className="flex min-h-dvh w-full flex-1 flex-col">
+      <SmoothScroll />
       <SiteHeader />
 
       <main className="flex-1">
         {/* The hero: one promise, one action, and a real result drawing itself. */}
         <section className={`${section} grid items-center gap-10 py-10 sm:py-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:py-24`}>
           <div className="stagger-in flex flex-col gap-6">
-            <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-6xl">See what a past buy would be worth today.</h1>
+            <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-6xl">What if you had bought it back then?</h1>
             <p className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg">Pick a stock, a coin or a currency and a date. Replay uses real daily prices to show what one buy, or a monthly habit, would have turned into.</p>
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <WaitlistButton />
@@ -83,7 +85,7 @@ export default function LandingPage() {
             </div>
             <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">Prices from Yahoo Finance, Bitstamp, CoinGecko, Nasdaq, the ECB and the Federal Reserve.</p>
           </div>
-          {hero && <HeroChart check={hero} />}
+          {hero.length > 0 && <HeroChart checks={hero} />}
         </section>
 
         {/* The live demo: both tools, with limits. */}
@@ -104,7 +106,7 @@ export default function LandingPage() {
               { n: "2", t: "Choose how you buy", d: "One buy at the start, or the same amount every month, quarter or year, on the day of the month you choose." },
               { n: "3", t: "Read what happened", d: "Money in, what it is worth now, a chart of the path, and a table with every month's price and source." },
             ].map((s) => (
-              <li key={s.n} className="cut-card flex flex-col gap-3 border border-border bg-card p-5 sm:p-6">
+              <li key={s.n} className="cut-card pulse-hover flex flex-col gap-3 border border-border bg-card p-5 sm:p-6">
                 <span className="font-heading text-3xl font-bold text-primary tabular-nums">{s.n}</span>
                 <h3 className="text-lg font-bold">{s.t}</h3>
                 <p className="text-sm leading-relaxed text-muted-foreground">{s.d}</p>
@@ -123,7 +125,7 @@ export default function LandingPage() {
               { Icon: TrendingUp, t: "Leverage", d: "The same buys as futures-style positions, long or short, up to 100x, with funding, fees and liquidation.", href: "/hindsight", cta: "Try it in Hindsight" },
               { Icon: Share2, t: "Share and build", d: "Save a result as a link anyone can open, or call the same data from your own code with the public API.", href: "/docs", cta: "Read the docs" },
             ].map(({ Icon, t, d, href, cta }) => (
-              <Link key={t} href={href} className="cut-card group flex flex-col gap-3 border border-border bg-card p-5 transition-transform duration-200 hover:-translate-y-0.5 sm:p-6">
+              <Link key={t} href={href} className="cut-card pulse-hover group flex flex-col gap-3 border border-border bg-card p-5 transition-transform duration-200 hover:-translate-y-0.5 sm:p-6">
                 <Icon className="size-6 text-primary" aria-hidden />
                 <h3 className="text-lg font-bold">{t}</h3>
                 <p className="text-sm leading-relaxed text-muted-foreground">{d}</p>
@@ -135,7 +137,7 @@ export default function LandingPage() {
 
         {/* Free now, more with an account. */}
         <section className={`${section} py-10 sm:py-16`}>
-          <div className="cut-card grid gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-12">
+          <div className="cut-card pulse-hover grid gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-12">
             <div className="flex flex-col gap-3">
               <h2 className={h2}>Free to try. More when you sign in.</h2>
               <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">Everything on this page works without an account. Sign in with your email, with no password to remember, and the daily limit goes up. Saved checks and exports are next.</p>

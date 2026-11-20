@@ -4,7 +4,7 @@
 // An example that can't be worked out right now (a source is refusing, or the history is too short) keeps its previous result.
 import { readFileSync, writeFileSync } from "node:fs";
 import { runDca } from "../src/lib/dca.ts";
-import { EXAMPLES, exampleRequest } from "../src/lib/examples.ts";
+import { EXAMPLES, HERO_CHECKS, exampleRequest } from "../src/lib/examples.ts";
 
 const file = new URL("../src/data/exampleResults.json", import.meta.url);
 let saved = {};
@@ -15,7 +15,8 @@ try {
 }
 const today = new Date().toISOString().slice(0, 10);
 
-for (const ex of EXAMPLES) {
+const ALL = [...EXAMPLES, ...HERO_CHECKS];
+for (const ex of ALL) {
   try {
     const response = await runDca(exampleRequest(ex));
     const priced = response.rows.filter((r) => r.price !== null).length;
@@ -27,6 +28,6 @@ for (const ex of EXAMPLES) {
     console.log(`skipped  ${ex.id}: ${e instanceof Error ? e.message : e}${saved[ex.id] ? " (kept the saved one)" : ""}`);
   }
 }
-for (const id of Object.keys(saved)) if (!EXAMPLES.some((e) => e.id === id)) delete saved[id];
+for (const id of Object.keys(saved)) if (!ALL.some((e) => e.id === id)) delete saved[id];
 writeFileSync(file, JSON.stringify(saved));
 console.log(`saved ${Object.keys(saved).length} results`);

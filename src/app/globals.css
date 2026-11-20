@@ -412,16 +412,81 @@
     transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translate3d(12.73px, 12.73px, 0);
+    transform: translate3d(13px, 13px, 0);
   }
 }
-/* People who ask for less motion (in the app's settings or in their system) get the lines standing still. */
-html[data-motion="reduce"] body::after {
-  animation: none;
+/* The glows wander on two slow, unrelated rhythms (23 seconds across, 17 up and down), so the path they trace never repeats in
+   any way you would notice. The two offsets are registered properties so each can be animated on its own. */
+@property --gx {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --gy {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+@property --ang {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes ring-turn {
+  to {
+    --ang: 360deg;
+  }
+}
+@keyframes glow-x {
+  from {
+    --gx: -3%;
+  }
+  to {
+    --gx: 3%;
+  }
+}
+@keyframes glow-y {
+  from {
+    --gy: 3%;
+  }
+  to {
+    --gy: -3%;
+  }
+}
+/* The button streaks: the light band crosses from right to left across the fill (cut buttons keep a colour layer beneath it). */
+@keyframes streak {
+  from {
+    background-position: 135% 0, 0 0;
+  }
+  to {
+    background-position: -35% 0, 0 0;
+  }
+}
+@keyframes streak-plain {
+  from {
+    background-position: 135% 0;
+  }
+  to {
+    background-position: -35% 0;
+  }
+}
+/* People who ask for less motion (in the app's settings or in their system) get everything standing still. */
+html[data-motion="reduce"] .pulse-ring::before,
+html[data-motion="reduce"] .pulse-hover:hover::before,
+html[data-motion="reduce"] body::before,
+html[data-motion="reduce"] body::after,
+html[data-motion="reduce"] [data-slot="button"]::after,
+html[data-motion="reduce"] [data-slot="button"] {
+  animation: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  body::after {
-    animation: none;
+  .pulse-ring::before,
+  .pulse-hover:hover::before,
+  body::before,
+  body::after,
+  [data-slot="button"]::after,
+  [data-slot="button"] {
+    animation: none !important;
   }
 }
 @keyframes nudge {
@@ -456,25 +521,31 @@ html[data-motion="reduce"] body::after {
   body::before {
     content: "";
     position: fixed;
-    inset: 0;
+    inset: -6%;
     z-index: 0;
     pointer-events: none;
+    transform: translate3d(var(--gx), var(--gy), 0);
+    animation:
+      glow-x 23s ease-in-out infinite alternate,
+      glow-y 17s ease-in-out infinite alternate;
+    will-change: transform;
     background-image:
       radial-gradient(60% 50% at calc(92% - var(--p, 0) * 22%) calc(-6% + var(--p, 0) * 16%), var(--glow-a), transparent 70%),
       radial-gradient(50% 40% at calc(0% + var(--p, 0) * 24%) calc(104% - var(--p, 0) * 18%), var(--glow-b), transparent 70%);
   }
-  /* The lines also flow on their own, slowly, toward the bottom right. The layer is a little bigger than the screen and slides
-     exactly one line spacing (18px along the slant, 12.73px across and down) each turn, so the loop has no seam. Moving the
-     layer, not repainting it, keeps this cheap. */
+  /* The lines also flow on their own, toward the bottom right, and never seem to restart. The line spacing is 18.385px along the
+     slant, which is exactly 26px across the screen (13px right and 13px down), so each turn of the animation slides the layer a
+     whole number of pixels onto an identical picture: there is no pop, no change in sharpness and no seam where it loops.
+     Moving the layer, not repainting it, keeps this cheap. */
   body::after {
     content: "";
     position: fixed;
-    inset: -24px;
+    inset: -26px;
     z-index: 0;
     pointer-events: none;
-    animation: hatch-flow 5s linear infinite;
+    animation: hatch-flow 3.6s linear infinite;
     will-change: transform;
-    background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 18px);
+    background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 18.385px);
     background-position: calc(var(--p, 0) * 60px) calc(var(--p, 0) * -60px);
     /* Fades out toward the bottom and into the top-left corner (the two masks are intersected); both fades shift a little with --p. */
     -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent calc(50% + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
@@ -589,6 +660,59 @@ html[data-motion="reduce"] body::after {
     inset: 0;
     background: var(--fill);
     clip-path: polygon(0 0, calc(100% - var(--cut-in)) 0, 100% var(--cut-in), 100% 100%, var(--cut-in) 100%, 0 calc(100% - var(--cut-in)));
+  }
+
+  /* A pulse of light that circles a card's border, comet style: a bright head and a fading tail follow the card's cut outline.
+     It is drawn on the card's edge layer, so it takes the slanted corners with it. --ang is registered so the angle can animate. */
+  .cut-card.pulse-ring::before,
+  .cut-card.pulse-hover:hover::before {
+    background:
+      conic-gradient(from var(--ang), transparent 0deg 190deg, color-mix(in srgb, var(--pulse, var(--primary)) 30%, transparent) 250deg, color-mix(in srgb, var(--pulse, var(--primary)) 78%, transparent) 322deg, color-mix(in srgb, var(--pulse, var(--primary)) 55%, white) 356deg, transparent 360deg),
+      var(--edge);
+    animation: ring-turn 6s linear infinite;
+  }
+  /* .pulse-hover cards start the same light when the pointer is over them, a little faster, and let it go when it leaves. */
+  .cut-card.pulse-hover:hover::before {
+    animation-duration: 2.6s;
+  }
+
+  /* Hover on the cut buttons: a slanted streak of light crosses the fill (inside the cut shape, since it is part of the fill
+     layer), the button rises a pixel, and a glow in the brand colour follows its outline. --shine is the streak's colour. */
+  .cut-btn,
+  .cut-tr {
+    --shine: color-mix(in srgb, var(--primary) 34%, transparent);
+  }
+  .cut-btn.cut-btn-solid,
+  .cut-tr.cut-primary {
+    --shine: rgb(255 255 255 / 0.4);
+  }
+  .cut-btn::after,
+  .cut-tr::after {
+    background:
+      linear-gradient(110deg, transparent 38%, var(--shine) 50%, transparent 62%) 135% 0 / 260% 100% no-repeat,
+      var(--fill);
+  }
+  .cut-btn:not(:disabled):hover::after,
+  .cut-tr:not(:disabled):hover::after {
+    animation: streak 0.85s cubic-bezier(0.3, 0.6, 0.2, 1);
+  }
+  .cut-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--primary) 40%, transparent));
+  }
+  /* Ordinary buttons (outlined and filled): the same rise and glow, and the streak on the filled ones. */
+  [data-slot="button"]:not(.cut-btn):not(.cut-tr):not(.cut-both):not(.form-cta):not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--primary) 50%, transparent);
+  }
+  [data-slot="button"].bg-primary:not(.cut-tr):not(.form-cta) {
+    background-image: linear-gradient(110deg, transparent 38%, rgb(255 255 255 / 0.4) 50%, transparent 62%);
+    background-repeat: no-repeat;
+    background-size: 260% 100%;
+    background-position: 135% 0;
+  }
+  [data-slot="button"].bg-primary:not(.cut-tr):not(.form-cta):not(:disabled):hover {
+    animation: streak-plain 0.85s cubic-bezier(0.3, 0.6, 0.2, 1);
   }
 
   /* Two pieces that sit edge to edge: an input with its bottom-left corner cut, and a button with its top-right corner cut (.cut-bl,

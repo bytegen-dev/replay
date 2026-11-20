@@ -75,7 +75,7 @@ export function LandingDemo({ checks }: { checks: DemoCheck[] }) {
   const chip = (active: boolean) => cn("h-9 border px-3 text-xs transition-colors sm:text-sm", active ? "border-primary text-primary" : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground");
 
   return (
-    <div className="cut-card flex flex-col gap-5 border border-border bg-card p-4 sm:p-6">
+    <div className="cut-card pulse-hover flex flex-col gap-5 border border-border bg-card p-4 sm:p-6">
       <div role="tablist" aria-label="Pick a tool" className="flex max-w-md gap-0">
         {tab("hindsight", "Hindsight")}
         {tab("wayback", "Wayback")}
@@ -91,7 +91,7 @@ export function LandingDemo({ checks }: { checks: DemoCheck[] }) {
             ))}
           </div>
           <p className="border-l-2 border-primary pl-4 text-base leading-relaxed sm:text-lg">
-            {check.buying} into <b>{check.name}</b> since {check.since} put in <b>{usd(check.invested)}</b>. Today that is worth <b>{usd(check.value)}</b>, {check.gainPct >= 0 ? "a gain" : "a loss"} of <b>{Math.abs(check.gainPct).toFixed(1)}%</b>.
+            {check.buying} into <b>{check.name}</b> {check.timing} put in <b>{usd(check.invested)}</b>. Today that is worth <b>{usd(check.value)}</b>, {check.gainPct >= 0 ? "a gain" : "a loss"} of <b>{Math.abs(check.gainPct).toFixed(1)}%</b>.
           </p>
           <DrawChart points={check.points} runKey={check.id} height={280} ariaLabel={`${check.question} ${usd(check.invested)} put in, worth ${usd(check.value)} today.`} />
           <p className="text-sm text-muted-foreground">
