@@ -1473,30 +1473,36 @@ html[data-motion="reduce"] [data-slot="button"] {
   }
 }
 
-/* Hovering the 4 is like the switch on a failing bulb: it tries to light, gutters, catches once or twice, and goes out again. */
+/* The 4 is a bulb that keeps trying to come on and failing: every few seconds it flares, gutters, catches once or twice and
+   goes out again. Hovering it gives it power, and it stays lit for as long as the pointer is there. */
+.big-four {
+  animation: bulb-fail 7s steps(1, end) 1.6s infinite;
+  transition: filter 0.25s ease-out;
+}
 .big-four:hover {
-  animation: bulb-fail 1.9s steps(1, end) 1;
+  animation: none;
+  filter: brightness(2.4) drop-shadow(0 0 16px var(--primary));
 }
 @keyframes bulb-fail {
   0% { filter: none; }
-  6% { filter: brightness(2.6) drop-shadow(0 0 14px var(--primary)); }
+  3% { filter: brightness(2.6) drop-shadow(0 0 14px var(--primary)); }
+  5% { filter: brightness(0.6); }
+  9% { filter: brightness(2.2) drop-shadow(0 0 10px var(--primary)); }
   11% { filter: brightness(0.6); }
-  19% { filter: brightness(2.2) drop-shadow(0 0 10px var(--primary)); }
-  23% { filter: brightness(0.6); }
-  27% { filter: brightness(1.9) drop-shadow(0 0 8px var(--primary)); }
-  30% { filter: none; }
-  44% { filter: brightness(1.7) drop-shadow(0 0 6px var(--primary)); }
-  47% { filter: brightness(0.7); }
-  63% { filter: brightness(1.4) drop-shadow(0 0 4px var(--primary)); }
-  66% { filter: none; }
-  82% { filter: brightness(1.2); }
-  85%, 100% { filter: none; }
+  13% { filter: brightness(1.9) drop-shadow(0 0 8px var(--primary)); }
+  14.5% { filter: none; }
+  21% { filter: brightness(1.7) drop-shadow(0 0 6px var(--primary)); }
+  22.5% { filter: brightness(0.7); }
+  28% { filter: brightness(1.4) drop-shadow(0 0 4px var(--primary)); }
+  29.5% { filter: none; }
+  34% { filter: brightness(1.2); }
+  35.5%, 100% { filter: none; }
 }
-html[data-motion="reduce"] .big-four:hover {
+html[data-motion="reduce"] .big-four {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .big-four:hover {
+  .big-four {
     animation: none;
   }
 }
