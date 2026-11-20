@@ -30,6 +30,7 @@ export async function POST(request: Request) {
           ...(lv.topUp === true ? { topUp: true } : {}),
           ...(lv.topUpMax !== undefined ? { topUpMax: Number(lv.topUpMax) } : {}),
           ...(lv.maxLoss !== undefined ? { maxLoss: Number(lv.maxLoss) } : {}),
+          ...(lv.maxLossPct !== undefined ? { maxLossPct: Number(lv.maxLossPct) } : {}),
         }
       : undefined;
 

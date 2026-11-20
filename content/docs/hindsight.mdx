@@ -40,7 +40,7 @@ Under the quick range there is a **Leverage** row (1x to 100x). At 1x you are bu
 - There is a **0.045% fee** on the way in and on the way out.
 - A position is **liquidated** when its margin falls to a maintenance level: 1% of its value up to 50x, and 0.5 divided by the leverage above that (0.5% at 100x), like exchanges that lower it as leverage rises. The margin is lost, and the loss stops there. The form shows how far the price has to fall below a buy for that to happen.
 - **Add margin to avoid liquidation** puts margin back in when a position gets close, up to a limit you can set, to keep it at its starting leverage. Margin added counts as money you put in.
-- **Max loss per buy** closes a position once it has lost that many dollars.
+- **Stop loss per buy** closes a position once it has lost that share of its money (%) or that many dollars ($). Without one, or with one at 100% or more, a buy is liquidated at -100% unless you add margin.
 
 The result adds a **With Nx leverage** card above the table: what the leveraged buys put in, what they were worth, the gain next to the unleveraged gain, how many positions were liquidated, funding and fees paid, and every position with its liquidation price and status.
 

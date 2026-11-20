@@ -22,6 +22,8 @@ export interface LeverageSettings {
   topUpMax?: number;
   /** Close a position when it has lost this many dollars (margin plus top-ups, less what is left). Blank means never. */
   maxLoss?: number;
+  /** The same stop as a percent of the buy's margin (100 is all of it). If both are given, whichever is hit first applies. */
+  maxLossPct?: number;
 }
 
 export interface LeverageBuy {
@@ -79,7 +81,7 @@ export interface LeverageSummary {
 }
 
 export interface LeverageResult {
-  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "maxLoss">;
+  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "maxLoss" | "maxLossPct">;
   positions: Position[];
   summary: LeverageSummary;
 }
@@ -94,6 +96,8 @@ export const FEE_RATE = 0.00045;
 export const maintenanceRate = (leverage: number): number => Math.min(0.01, 0.5 / leverage);
 export const DEFAULT_FUNDING_APR = 10.95;
 export const MAX_LEVERAGE = 100;
+/** Where the leverage slider starts when someone turns leverage on. */
+export const DEFAULT_LEVERAGE = 25;
 
 const DAY_MS = 86_400_000;
 const dayMs = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
@@ -126,6 +130,8 @@ function simulateOne(buy: LeverageBuy, daily: DailyClose[], endDate: string, s: 
   let lastPrice = buy.price;
   let lastDate = buy.date;
   let exitFee = 0;
+  const stops = [s.maxLoss, s.maxLossPct === undefined ? undefined : (buy.amount * s.maxLossPct) / 100].filter((x): x is number => x !== undefined);
+  const stop = stops.length ? Math.min(...stops) : undefined;
 
   for (const day of daily) {
     if (day.date <= buy.date) continue;
@@ -158,7 +164,7 @@ function simulateOne(buy: LeverageBuy, daily: DailyClose[], endDate: string, s: 
       equity = 0;
       break;
     }
-    if (s.maxLoss !== undefined && margin - equity >= s.maxLoss) {
+    if (stop !== undefined && margin - equity >= stop) {
       status = "stopped";
       closeDate = day.date;
       closePrice = day.price;
@@ -207,7 +213,7 @@ export function simulateLeverage(opts: { buys: LeverageBuy[]; daily: DailyClose[
   const value = positions.reduce((a, p) => a + p.value, 0);
   const gain = value - invested;
   return {
-    settings: { leverage, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}) },
+    settings: { leverage, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
     positions,
     summary: {
       invested,

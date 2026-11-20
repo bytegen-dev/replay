@@ -40,7 +40,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { downloadFile } from "@/lib/download.ts";
 import { EXAMPLES, exampleRequest, type Example } from "@/lib/examples.ts";
 import { exampleSnapshot } from "@/lib/exampleResults.ts";
-import { DEFAULT_FUNDING_APR, liquidationDropPct, MAX_LEVERAGE } from "@/lib/leverage.ts";
+import { DEFAULT_FUNDING_APR, DEFAULT_LEVERAGE, liquidationDropPct, MAX_LEVERAGE } from "@/lib/leverage.ts";
 import { LeverageCard } from "@/components/LeverageCard";
 import { xlsxFileName, type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
@@ -170,6 +170,7 @@ export function DcaApp() {
   const [topUp, setTopUp] = useState(false);
   const [topUpMax, setTopUpMax] = useState("");
   const [maxLoss, setMaxLoss] = useState("");
+  const [stopUnit, setStopUnit] = useState<"%" | "$">("%");
   // The funding, top-up and max-loss settings are details: shown when asked for (or when a link already changed them).
   const [levMore, setLevMore] = useState(false);
   const levNum = Number(lev);
@@ -246,11 +247,18 @@ export function DcaApp() {
         const fa = q.get("fund");
         if (fa !== null && Number.isFinite(Number(fa)) && Number(fa) >= 0 && Number(fa) <= 500) setFundingApr(fa);
         if (q.get("topup") === "1") setTopUp(true);
-        if (fa !== null || q.get("topup") === "1" || q.get("topmax") || q.get("maxloss")) setLevMore(true);
+        if (fa !== null || q.get("topup") === "1" || q.get("topmax") || q.get("maxloss") || q.get("maxlosspct")) setLevMore(true);
         const tm = cleanAmount(q.get("topmax"));
         if (tm) setTopUpMax(tm);
         const ml = cleanAmount(q.get("maxloss"));
-        if (ml) setMaxLoss(ml);
+        const mp = cleanAmount(q.get("maxlosspct"));
+        if (mp) {
+          setMaxLoss(mp);
+          setStopUnit("%");
+        } else if (ml) {
+          setMaxLoss(ml);
+          setStopUnit("$");
+        }
       }
       const a = cleanAmount(q.get("amt"));
       if (a) setAmount(formatAmountInput(a));
@@ -319,9 +327,10 @@ export function DcaApp() {
       fund: leveraged && fundingApr !== String(DEFAULT_FUNDING_APR) && fundingApr,
       topup: leveraged && topUp && "1",
       topmax: leveraged && topUp && cleanAmount(topUpMax),
-      maxloss: leveraged && cleanAmount(maxLoss),
+      maxloss: leveraged && stopUnit === "$" && cleanAmount(maxLoss),
+      maxlosspct: leveraged && stopUnit === "%" && cleanAmount(maxLoss),
     });
-  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, maxLoss]);
+  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, maxLoss, stopUnit]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -467,7 +476,7 @@ export function DcaApp() {
   /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(parseAmount(maxLoss) > 0 ? { maxLoss: parseAmount(maxLoss) } : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
         ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
@@ -954,33 +963,41 @@ export function DcaApp() {
                 {/* Leverage, futures style: each buy opens its own position. 1x is plain buying. */}
                 <div className="flex flex-col gap-3">
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <label htmlFor="leverage" className="text-sm text-muted-foreground">
-                        Leverage
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                        <input type="checkbox" checked={leveraged} onChange={(e) => setLev(e.target.checked ? String(DEFAULT_LEVERAGE) : "1")} className="size-4 shrink-0 cursor-pointer accent-primary" />
+                        Use leverage
                       </label>
-                      <span className="text-lg font-bold tabular-nums" aria-hidden>
-                        {leveraged ? `${Math.min(levNum, MAX_LEVERAGE)}x` : "Off"}
-                      </span>
+                      {leveraged && (
+                        <span className="text-lg font-bold tabular-nums" aria-hidden>
+                          {Math.min(levNum, MAX_LEVERAGE)}x
+                        </span>
+                      )}
                     </div>
-                    <input
-                      id="leverage"
-                      type="range"
-                      min={1}
-                      max={MAX_LEVERAGE}
-                      step={1}
-                      value={Math.min(MAX_LEVERAGE, Math.max(1, Number.isFinite(levNum) ? levNum : 1))}
-                      onChange={(e) => setLev(e.target.value)}
-                      aria-valuetext={leveraged ? `${levNum} times` : "off"}
-                      className="h-2 w-full cursor-pointer accent-primary"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground tabular-nums" aria-hidden>
-                      {["1x", "25x", "50x", "75x", "100x"].map((t) => (
-                        <span key={t}>{t}</span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {leveraged ? `Liquidated if the price falls about ${liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy.` : "Move the slider to borrow more than you put in."}
-                    </p>
+                    {leveraged ? (
+                      <>
+                        <input
+                          id="leverage"
+                          type="range"
+                          aria-label="Leverage"
+                          min={2}
+                          max={MAX_LEVERAGE}
+                          step={1}
+                          value={Math.min(MAX_LEVERAGE, Math.max(2, Number.isFinite(levNum) ? levNum : DEFAULT_LEVERAGE))}
+                          onChange={(e) => setLev(e.target.value)}
+                          aria-valuetext={`${levNum} times`}
+                          className="h-2 w-full cursor-pointer accent-primary"
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground tabular-nums" aria-hidden>
+                          {["2x", "25x", "50x", "75x", "100x"].map((t) => (
+                            <span key={t}>{t}</span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Liquidated if the price falls about {liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy.</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">Off: plain buying. Turn it on to borrow more than you put in, starting at {DEFAULT_LEVERAGE}x.</p>
+                    )}
                   </div>
                   {(errors.leverage || (Number.isFinite(levNum) && levNum > MAX_LEVERAGE)) && (
                     <p role="alert" className="text-sm font-bold">
@@ -1008,10 +1025,23 @@ export function DcaApp() {
                               </label>
                               {topUp && <AmountInput aria-label="Most margin to add per buy, in dollars" placeholder="Up to $ per buy (optional)" value={topUpMax} onValueChange={setTopUpMax} className="form-control-h text-sm" />}
                             </div>
-                            <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                              Max loss per buy ($, optional)
-                              <AmountInput placeholder="No limit" value={maxLoss} onValueChange={setMaxLoss} className="form-control-h text-sm" />
-                            </label>
+                            <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                              <label htmlFor="stop-loss">Stop loss per buy (optional)</label>
+                              <div className="flex gap-2">
+                                <AmountInput id="stop-loss" placeholder="No stop loss" value={maxLoss} onValueChange={setMaxLoss} className="form-control-h min-w-0 flex-1 text-sm" />
+                                <div role="group" aria-label="Stop loss unit" className="flex shrink-0 border border-input">
+                                  {(["%", "$"] as const).map((u) => (
+                                    <button key={u} type="button" aria-pressed={stopUnit === u} onClick={() => setStopUnit(u)} className={cn("form-control-h w-10 text-sm transition-colors", stopUnit === u ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary")}>
+                                      {u}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <span className="text-xs">{stopUnit === "%" ? "Closes a buy once it has lost this share of its money." : "Closes a buy once it has lost this many dollars."}</span>
+                              {!topUp && (maxLoss === "" || (stopUnit === "%" ? parseAmount(maxLoss) >= 100 : parseAmount(maxLoss) >= parseAmount(amount))) && (
+                                <span className="text-xs text-destructive">A buy is liquidated at -100% unless you add margin or set a stop loss below 100%.</span>
+                              )}
+                            </div>
                             <p className="text-xs leading-relaxed text-muted-foreground">Each buy opens its own position, as on a futures exchange. Fees are 0.045% each way. It uses daily closes, so real trading can be harsher.</p>
                           </div>
                         </div>
