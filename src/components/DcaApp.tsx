@@ -780,6 +780,11 @@ export function DcaApp() {
       </AlertDescription>
     </Alert>
     ) : null;
+  // With leverage on, a wide screen splits the form into two columns: ticker, amount and leverage on the left;
+  // dividends, buy on and the month pickers on the right. Only for stocks and majors, whose fields are the same few.
+  const split = leveraged && (mode === "equity" || isMajor);
+  const ROWS = ["", "lg:row-start-1", "lg:row-start-2", "lg:row-start-3", "lg:row-start-4"];
+  const place = (col: 1 | 3, row: number) => (split ? `${col === 1 ? "lg:col-start-1" : "lg:col-start-3"} ${ROWS[row]}` : "");
   const buyOnEl = (
     <div className="flex flex-col gap-2">
       <Field id="basis" label="Buy on" error={errors.basis ?? errors.basisDay}>
@@ -871,7 +876,7 @@ export function DcaApp() {
           <form onSubmit={submit} noValidate className="stagger-in flex flex-col gap-4 [--stagger-base:140ms]">
             <div className="stagger-in grid grid-cols-1 gap-4 [--stagger-base:200ms] min-[480px]:grid-cols-2 lg:grid-cols-4">
               {kindRow}
-              <div className="min-[480px]:col-span-2">
+              <div className={cn("min-[480px]:col-span-2", place(1, isMajor ? 2 : 1))}>
                 {isMajor ? (
                   <Field id="major" label="Coin">
                     <CoinPicker id="major" value={major} onChange={setMajor} />
@@ -913,7 +918,7 @@ export function DcaApp() {
                 )}
               </div>
               {isMajor ? null : mode === "equity" ? (
-                <Field id="reinvest" label="Dividends" className="min-[480px]:col-span-2">
+                <Field id="reinvest" label={leveraged ? "Dividends (doesn't apply)" : "Dividends"} className={cn("min-[480px]:col-span-2", place(3, 1))}>
                   <ToggleGroup
                     type="single"
                     variant="outline"
@@ -960,7 +965,7 @@ export function DcaApp() {
                   </Select>
                 </Field>
               )}
-              <Field id="amount" className="min-[480px]:col-span-2" label={plan === "monthly" ? "Monthly amount" : plan === "once" ? "Amount" : "Amount each buy"} error={errors.amount ?? errors.currency}>
+              <Field id="amount" className={cn("min-[480px]:col-span-2", place(1, isMajor ? 3 : 2))} label={plan === "monthly" ? "Monthly amount" : plan === "once" ? "Amount" : "Amount each buy"} error={errors.amount ?? errors.currency}>
                 {/* The currency sits in front of the number. Anything other than USD is converted at each month's own rate. */}
                 <div className="joined-row">
                   <CurrencyPicker id="currency" ariaLabel="Currency" variant="compact" value={currency} onChange={setCurrency} className="h-auto! max-h-none! min-h-0! w-[6.5rem]! shrink-0 self-stretch border-r-0" />
@@ -990,7 +995,7 @@ export function DcaApp() {
                 </div>
               </Field>
               {leveraged && (
-                <div className="grid gap-4 min-[480px]:col-span-2 lg:col-span-4 lg:grid-cols-2">
+                <div className={cn("grid gap-4 min-[480px]:col-span-2", split ? cn("lg:col-span-2", place(1, isMajor ? 4 : 3)) : "lg:col-span-4 lg:grid-cols-2")}>
                 
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-col gap-3.5">
@@ -1095,11 +1100,12 @@ export function DcaApp() {
                   )}
                 </div>
 
-                {buyOnEl}
+                {!split && buyOnEl}
                 </div>
               )}
+              {split && <div className={cn("min-[480px]:col-span-2", place(3, 2))}>{buyOnEl}</div>}
               {/* Start and end always sit side by side, at every width. */}
-              <div className="grid grid-cols-2 gap-4 min-[480px]:col-span-2">
+              <div className={cn("grid grid-cols-2 gap-4 min-[480px]:col-span-2", place(3, 3))}>
                 <Field id="startMonth" label="Start month" error={errors.startMonth}>
                   <MonthPicker id="startMonth" value={startMonth} minYear={mode === "equity" ? 1980 : isMajor ? 2014 : undefined} min={launchMonth} max={endMonth || undefined} invalid={!!errors.startMonth} onChange={setStartMonth} />
                   {launchDate && <p className="text-xs text-muted-foreground">First price: {formatMonth(launchMonth!)}</p>}
