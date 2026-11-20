@@ -20,6 +20,8 @@ export interface LeverageSettings {
   topUp?: boolean;
   /** The most extra margin one position may be given, in dollars. Blank means no limit. */
   topUpMax?: number;
+  /** The most extra margin all the positions together may be given, in dollars. Blank means no limit. */
+  topUpBudget?: number;
   /** Close a position when it has lost this many dollars (margin plus top-ups, less what is left). Blank means never. */
   maxLoss?: number;
   /** The same stop as a percent of the buy's margin (100 is all of it). If both are given, whichever is hit first applies. */
@@ -81,7 +83,7 @@ export interface LeverageSummary {
 }
 
 export interface LeverageResult {
-  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "maxLoss" | "maxLossPct">;
+  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "topUpBudget" | "maxLoss" | "maxLossPct">;
   positions: Position[];
   summary: LeverageSummary;
 }
@@ -113,89 +115,117 @@ export function liquidationDropPct(leverage: number): number {
   return (1 - liquidationPrice(1, leverage)) * 100;
 }
 
-function simulateOne(buy: LeverageBuy, daily: DailyClose[], endDate: string, s: Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & LeverageSettings): Position {
-  const L = s.leverage;
-  const notional = buy.amount * L;
-  const size = notional / buy.price;
+type Full = Required<Pick<LeverageSettings, "leverage" | "fundingApr">> & LeverageSettings;
+
+/** One position while the run is under way. */
+interface Live {
+  buy: LeverageBuy;
+  size: number;
+  notional: number;
+  entryFee: number;
+  margin: number;
+  topUps: number;
+  topUpCount: number;
+  funding: number;
+  status: PositionStatus;
+  closeDate: string | null;
+  closePrice: number | null;
+  equity: number;
+  prevMs: number;
+  lastPrice: number;
+  lastDate: string;
+  exitFee: number;
+  stop: number | undefined;
+}
+
+function openPosition(buy: LeverageBuy, s: Full): Live {
+  const notional = buy.amount * s.leverage;
   const entryFee = FEE_RATE * notional;
-  let margin = buy.amount;
-  let topUps = 0;
-  let topUpCount = 0;
-  let funding = 0;
-  let status: PositionStatus = "open";
-  let closeDate: string | null = null;
-  let closePrice: number | null = null;
-  let equity = margin - entryFee;
-  let prevMs = dayMs(buy.date);
-  let lastPrice = buy.price;
-  let lastDate = buy.date;
-  let exitFee = 0;
   const stops = [s.maxLoss, s.maxLossPct === undefined ? undefined : (buy.amount * s.maxLossPct) / 100].filter((x): x is number => x !== undefined);
-  const stop = stops.length ? Math.min(...stops) : undefined;
-
-  for (const day of daily) {
-    if (day.date <= buy.date) continue;
-    if (day.date > endDate) break;
-    const ms = dayMs(day.date);
-    // Funding builds up through the days since the last price, on the position's value at this close.
-    funding += size * day.price * (s.fundingApr / 100) * ((ms - prevMs) / DAY_MS / 365);
-    prevMs = ms;
-    lastPrice = day.price;
-    lastDate = day.date;
-    equity = margin + size * (day.price - buy.price) - entryFee - funding;
-    const maintenance = maintenanceRate(L) * size * day.price;
-
-    // Close to liquidation: put margin back in, enough to return to the starting leverage, if there is room for it.
-    if (s.topUp && equity <= 2 * maintenance) {
-      const room = s.topUpMax === undefined ? Infinity : Math.max(0, s.topUpMax - topUps);
-      const want = (size * day.price) / L - equity;
-      const add = Math.min(room, Math.max(0, want));
-      if (add > 0) {
-        margin += add;
-        topUps += add;
-        topUpCount += 1;
-        equity += add;
-      }
-    }
-    if (equity <= maintenance) {
-      status = "liquidated";
-      closeDate = day.date;
-      closePrice = day.price;
-      equity = 0;
-      break;
-    }
-    if (stop !== undefined && margin - equity >= stop) {
-      status = "stopped";
-      closeDate = day.date;
-      closePrice = day.price;
-      exitFee = FEE_RATE * size * day.price;
-      equity -= exitFee;
-      break;
-    }
-  }
-
-  if (status === "open") {
-    exitFee = FEE_RATE * size * lastPrice;
-    equity -= exitFee;
-    closePrice = lastPrice;
-    closeDate = lastDate;
-  }
-  const value = Math.max(0, equity);
   return {
-    month: buy.month,
-    openDate: buy.date,
-    openPrice: buy.price,
-    margin: buy.amount,
-    topUps,
-    topUpCount,
+    buy,
+    size: notional / buy.price,
     notional,
-    liquidationPrice: liquidationPrice(buy.price, L),
-    status,
-    closeDate: status === "open" ? null : closeDate,
-    closePrice,
-    funding,
-    fees: entryFee + exitFee,
-    value,
+    entryFee,
+    margin: buy.amount,
+    topUps: 0,
+    topUpCount: 0,
+    funding: 0,
+    status: "open",
+    closeDate: null,
+    closePrice: null,
+    equity: buy.amount - entryFee,
+    prevMs: dayMs(buy.date),
+    lastPrice: buy.price,
+    lastDate: buy.date,
+    exitFee: 0,
+    stop: stops.length ? Math.min(...stops) : undefined,
+  };
+}
+
+/** Moves one open position through one day's close. `budgetLeft` is what the shared top-up budget still has (Infinity if none). Returns the margin added. */
+function stepDay(p: Live, day: DailyClose, s: Full, budgetLeft: number): number {
+  const L = s.leverage;
+  const ms = dayMs(day.date);
+  // Funding builds up through the days since the last price, on the position's value at this close.
+  p.funding += p.size * day.price * (s.fundingApr / 100) * ((ms - p.prevMs) / DAY_MS / 365);
+  p.prevMs = ms;
+  p.lastPrice = day.price;
+  p.lastDate = day.date;
+  p.equity = p.margin + p.size * (day.price - p.buy.price) - p.entryFee - p.funding;
+  const maintenance = maintenanceRate(L) * p.size * day.price;
+  let added = 0;
+
+  // Close to liquidation: put margin back in, enough to return to the starting leverage, if there is room for it.
+  if (s.topUp && p.equity <= 2 * maintenance) {
+    const room = Math.min(s.topUpMax === undefined ? Infinity : Math.max(0, s.topUpMax - p.topUps), budgetLeft);
+    const want = (p.size * day.price) / L - p.equity;
+    const add = Math.min(room, Math.max(0, want));
+    if (add > 0) {
+      p.margin += add;
+      p.topUps += add;
+      p.topUpCount += 1;
+      p.equity += add;
+      added = add;
+    }
+  }
+  if (p.equity <= maintenance) {
+    p.status = "liquidated";
+    p.closeDate = day.date;
+    p.closePrice = day.price;
+    p.equity = 0;
+  } else if (p.stop !== undefined && p.margin - p.equity >= p.stop) {
+    p.status = "stopped";
+    p.closeDate = day.date;
+    p.closePrice = day.price;
+    p.exitFee = FEE_RATE * p.size * day.price;
+    p.equity -= p.exitFee;
+  }
+  return added;
+}
+
+function finish(p: Live, s: Full): Position {
+  if (p.status === "open") {
+    p.exitFee = FEE_RATE * p.size * p.lastPrice;
+    p.equity -= p.exitFee;
+    p.closePrice = p.lastPrice;
+    p.closeDate = p.lastDate;
+  }
+  return {
+    month: p.buy.month,
+    openDate: p.buy.date,
+    openPrice: p.buy.price,
+    margin: p.buy.amount,
+    topUps: p.topUps,
+    topUpCount: p.topUpCount,
+    notional: p.notional,
+    liquidationPrice: liquidationPrice(p.buy.price, s.leverage),
+    status: p.status,
+    closeDate: p.status === "open" ? null : p.closeDate,
+    closePrice: p.closePrice,
+    funding: p.funding,
+    fees: p.entryFee + p.exitFee,
+    value: Math.max(0, p.equity),
   };
 }
 
@@ -206,14 +236,25 @@ function simulateOne(buy: LeverageBuy, daily: DailyClose[], endDate: string, s: 
 export function simulateLeverage(opts: { buys: LeverageBuy[]; daily: DailyClose[]; endDate: string; settings: LeverageSettings }): LeverageResult {
   const leverage = Math.min(MAX_LEVERAGE, Math.max(1, opts.settings.leverage));
   const settings = { ...opts.settings, leverage, fundingApr: opts.settings.fundingApr ?? DEFAULT_FUNDING_APR };
-  const positions = opts.buys.map((b) => simulateOne(b, opts.daily, opts.endDate, settings));
+  // The positions run side by side, day by day, so a top-up budget shared by all of them is spent in the order things happened.
+  const live = opts.buys.map((b) => openPosition(b, settings));
+  let spent = 0;
+  const budgetLeft = () => (settings.topUpBudget === undefined ? Infinity : Math.max(0, settings.topUpBudget - spent));
+  for (const day of opts.daily) {
+    if (day.date > opts.endDate) break;
+    for (const p of live) {
+      if (p.status !== "open" || day.date <= p.buy.date) continue;
+      spent += stepDay(p, day, settings, budgetLeft());
+    }
+  }
+  const positions = live.map((p) => finish(p, settings));
   const margin = positions.reduce((a, p) => a + p.margin, 0);
   const topUps = positions.reduce((a, p) => a + p.topUps, 0);
   const invested = margin + topUps;
   const value = positions.reduce((a, p) => a + p.value, 0);
   const gain = value - invested;
   return {
-    settings: { leverage, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
+    settings: { leverage, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.topUpBudget !== undefined ? { topUpBudget: settings.topUpBudget } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
     positions,
     summary: {
       invested,

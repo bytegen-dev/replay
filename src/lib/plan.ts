@@ -7,11 +7,11 @@
 export type Plan = "monthly" | "quarterly" | "semiannual" | "yearly" | "once";
 
 export const PLANS: { value: Plan; label: string; /** Short form, for the closed picker. */ short: string; every: number; phrase: string }[] = [
-  { value: "monthly", label: "Every month", short: "Monthly", every: 1, phrase: "a month" },
-  { value: "quarterly", label: "Every 3 months", short: "3 months", every: 3, phrase: "every 3 months" },
-  { value: "semiannual", label: "Every 6 months", short: "6 months", every: 6, phrase: "every 6 months" },
-  { value: "yearly", label: "Every year", short: "Yearly", every: 12, phrase: "a year" },
-  { value: "once", label: "Once, at the start", short: "Once", every: Infinity, phrase: "once" },
+  { value: "monthly", label: "DCA: every month", short: "DCA monthly", every: 1, phrase: "a month" },
+  { value: "quarterly", label: "DCA: every 3 months", short: "DCA 3 mo", every: 3, phrase: "every 3 months" },
+  { value: "semiannual", label: "DCA: every 6 months", short: "DCA 6 mo", every: 6, phrase: "every 6 months" },
+  { value: "yearly", label: "DCA: every year", short: "DCA yearly", every: 12, phrase: "a year" },
+  { value: "once", label: "Spot: one buy at the start", short: "Spot", every: Infinity, phrase: "once" },
 ];
 
 export const DEFAULT_PLAN: Plan = "monthly";

@@ -169,6 +169,7 @@ export function DcaApp() {
   const [fundingApr, setFundingApr] = useState(String(DEFAULT_FUNDING_APR));
   const [topUp, setTopUp] = useState(false);
   const [topUpMax, setTopUpMax] = useState("");
+  const [topUpBudget, setTopUpBudget] = useState("");
   const [maxLoss, setMaxLoss] = useState("");
   const [stopUnit, setStopUnit] = useState<"%" | "$">("%");
   // The funding, top-up and max-loss settings are details: shown when asked for (or when a link already changed them).
@@ -247,7 +248,9 @@ export function DcaApp() {
         const fa = q.get("fund");
         if (fa !== null && Number.isFinite(Number(fa)) && Number(fa) >= 0 && Number(fa) <= 500) setFundingApr(fa);
         if (q.get("topup") === "1") setTopUp(true);
-        if (fa !== null || q.get("topup") === "1" || q.get("topmax") || q.get("maxloss") || q.get("maxlosspct")) setLevMore(true);
+        if (fa !== null || q.get("topup") === "1" || q.get("topmax") || q.get("topbudget") || q.get("maxloss") || q.get("maxlosspct")) setLevMore(true);
+        const tb = cleanAmount(q.get("topbudget"));
+        if (tb) setTopUpBudget(tb);
         const tm = cleanAmount(q.get("topmax"));
         if (tm) setTopUpMax(tm);
         const ml = cleanAmount(q.get("maxloss"));
@@ -327,10 +330,11 @@ export function DcaApp() {
       fund: leveraged && fundingApr !== String(DEFAULT_FUNDING_APR) && fundingApr,
       topup: leveraged && topUp && "1",
       topmax: leveraged && topUp && cleanAmount(topUpMax),
+      topbudget: leveraged && topUp && cleanAmount(topUpBudget),
       maxloss: leveraged && stopUnit === "$" && cleanAmount(maxLoss),
       maxlosspct: leveraged && stopUnit === "%" && cleanAmount(maxLoss),
     });
-  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, maxLoss, stopUnit]);
+  }, [formReady, mode, ticker, reinvest, cryptoKind, major, chain, address, amount, currency, startMonth, endMonth, basis, basisDay, sellAtEnd, plan, leveraged, levNum, fundingApr, topUp, topUpMax, topUpBudget, maxLoss, stopUnit]);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -476,7 +480,7 @@ export function DcaApp() {
   /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(topUp && parseAmount(topUpBudget) > 0 ? { topUpBudget: parseAmount(topUpBudget) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
         ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor ? { reinvest: true } : {}) }
@@ -851,9 +855,9 @@ export function DcaApp() {
                     aria-invalid={!!errors.amount}
                   />
                   {/* How often it is bought, on the same row as the amount. Every month by default; the others buy only in some months, counted from the start month. */}
-                  <Select value={plan} onValueChange={(v) => setPlan(v as Plan)}>
-                    <SelectTrigger id="plan" aria-label="How often you buy" className="form-control-h w-[8.5rem]! shrink-0 rounded-none border-l-0 px-2 text-sm">
-                      <SelectValue>{PLANS.find((p) => p.value === plan)?.short}</SelectValue>
+                  <Select value={leveraged ? "leverage" : plan} onValueChange={(v) => (v === "leverage" ? (setLev(String(DEFAULT_LEVERAGE)), setPlan("once")) : (setLev("1"), setPlan(v as Plan)))}>
+                    <SelectTrigger id="plan" aria-label="How often you buy, or leverage" className="form-control-h w-[8.5rem]! shrink-0 rounded-none border-l-0 px-2 text-sm">
+                      <SelectValue>{leveraged ? "Leverage" : PLANS.find((p) => p.value === plan)?.short}</SelectValue>
                     </SelectTrigger>
                     <SelectContent className={selectContent}>
                       {PLANS.map((p) => (
@@ -861,10 +865,112 @@ export function DcaApp() {
                           {p.label}
                         </SelectItem>
                       ))}
+                      <SelectItem value="leverage" className="rounded-none">
+                        Leverage
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </Field>
+              {leveraged && (
+                <div className="min-[480px]:col-span-2">
+                
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted-foreground">Leverage</span>
+                      <span className="text-lg font-bold tabular-nums" aria-hidden>
+                        {Math.min(levNum, MAX_LEVERAGE)}x
+                      </span>
+                    </div>
+                    {leveraged && (
+                      <>
+                        <input
+                          id="leverage"
+                          type="range"
+                          aria-label="Leverage"
+                          min={2}
+                          max={MAX_LEVERAGE}
+                          step={1}
+                          value={Math.min(MAX_LEVERAGE, Math.max(2, Number.isFinite(levNum) ? levNum : DEFAULT_LEVERAGE))}
+                          onChange={(e) => setLev(e.target.value)}
+                          aria-valuetext={`${levNum} times`}
+                          className="h-2 w-full cursor-pointer accent-primary"
+                        />
+                        <div className="flex justify-between text-xs text-muted-foreground tabular-nums" aria-hidden>
+                          {["2x", "25x", "50x", "75x", "100x"].map((t) => (
+                            <span key={t}>{t}</span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Liquidated if the price falls about {liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy.</p>
+                      </>
+                    )}
+                  </div>
+                  {(errors.leverage || (Number.isFinite(levNum) && levNum > MAX_LEVERAGE)) && (
+                    <p role="alert" className="text-sm font-bold">
+                      {errors.leverage ?? `Leverage goes up to ${MAX_LEVERAGE}x`}
+                    </p>
+                  )}
+                  {leveraged && (
+                    <div className="flex flex-col gap-3">
+                      <button type="button" aria-expanded={levMore} aria-controls="leverage-more" onClick={() => setLevMore((o) => !o)} className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+                        <ChevronDown className={cn("size-4 transition-transform", levMore && "rotate-180")} aria-hidden />
+                        {levMore ? "Hide advanced settings" : "Advanced settings: funding, margin, stop loss"}
+                      </button>
+                      {levMore && (
+                        <div id="leverage-more">
+                    <div className="grid gap-4 border border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                              Funding (% a year)
+                              <input inputMode="decimal" value={fundingApr} onChange={(e) => setFundingApr(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))} className="form-control-h border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                              <span className="text-xs">{DEFAULT_FUNDING_APR}% is the usual exchange rate</span>
+                            </label>
+                            <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                              <label className="flex cursor-pointer items-center gap-2 transition-colors hover:text-foreground">
+                                <input type="checkbox" checked={topUp} onChange={(e) => setTopUp(e.target.checked)} className="size-4 shrink-0 cursor-pointer accent-primary" />
+                                Add margin to avoid liquidation
+                              </label>
+                              {topUp && (
+                                <>
+                                  <AmountInput aria-label="Most margin to add per buy, in dollars" placeholder="Up to $ per buy (optional)" value={topUpMax} onValueChange={setTopUpMax} className="form-control-h text-sm" />
+                                  <AmountInput aria-label="Total margin budget across all buys, in dollars" placeholder="Budget in all, $ (optional)" value={topUpBudget} onValueChange={setTopUpBudget} className="form-control-h text-sm" />
+                                </>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+                              <label htmlFor="stop-loss">Stop loss per buy (optional)</label>
+                              <div className="flex gap-2">
+                                <div className="relative min-w-0 flex-1">
+                                  {maxLoss !== "" && (
+                                    <span aria-hidden className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-foreground">
+                                      -
+                                    </span>
+                                  )}
+                                  <AmountInput id="stop-loss" placeholder="No stop loss" value={maxLoss} onValueChange={setMaxLoss} className={cn("form-control-h w-full text-sm", maxLoss !== "" && "pl-5")} />
+                                </div>
+                                <div role="group" aria-label="Stop loss unit" className="flex shrink-0 border border-input">
+                                  {(["%", "$"] as const).map((u) => (
+                                    <button key={u} type="button" aria-pressed={stopUnit === u} onClick={() => setStopUnit(u)} className={cn("form-control-h w-12 justify-center text-sm font-bold transition-colors", stopUnit === u ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary")}>
+                                      {u}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <span className="text-xs">{stopUnit === "%" ? "Closes a buy once it has lost this share of its money." : "Closes a buy once it has lost this many dollars."}</span>
+                              {!topUp && (maxLoss === "" || (stopUnit === "%" ? parseAmount(maxLoss) >= 100 : parseAmount(maxLoss) >= parseAmount(amount))) && (
+                                <span className="text-xs text-destructive">A buy is liquidated at -100% unless you add margin or set a stop loss below 100%.</span>
+                              )}
+                            </div>
+                            <p className="text-xs leading-relaxed text-muted-foreground">Each buy opens its own position, as on a futures exchange. Fees are 0.045% each way. It uses daily closes, so real trading can be harsher.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                </div>
+              )}
               {/* Start and end always sit side by side, at every width. */}
               <div className="grid grid-cols-2 gap-4 min-[480px]:col-span-2">
                 <Field id="startMonth" label="Start month" error={errors.startMonth}>
@@ -958,96 +1064,6 @@ export function DcaApp() {
                     </button>
                   ))}
                   <span className="text-xs text-muted-foreground">up to last month</span>
-                </div>
-
-                {/* Leverage, futures style: each buy opens its own position. 1x is plain buying. */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
-                        <input type="checkbox" checked={leveraged} onChange={(e) => setLev(e.target.checked ? String(DEFAULT_LEVERAGE) : "1")} className="size-4 shrink-0 cursor-pointer accent-primary" />
-                        Use leverage
-                      </label>
-                      {leveraged && (
-                        <span className="text-lg font-bold tabular-nums" aria-hidden>
-                          {Math.min(levNum, MAX_LEVERAGE)}x
-                        </span>
-                      )}
-                    </div>
-                    {leveraged ? (
-                      <>
-                        <input
-                          id="leverage"
-                          type="range"
-                          aria-label="Leverage"
-                          min={2}
-                          max={MAX_LEVERAGE}
-                          step={1}
-                          value={Math.min(MAX_LEVERAGE, Math.max(2, Number.isFinite(levNum) ? levNum : DEFAULT_LEVERAGE))}
-                          onChange={(e) => setLev(e.target.value)}
-                          aria-valuetext={`${levNum} times`}
-                          className="h-2 w-full cursor-pointer accent-primary"
-                        />
-                        <div className="flex justify-between text-xs text-muted-foreground tabular-nums" aria-hidden>
-                          {["2x", "25x", "50x", "75x", "100x"].map((t) => (
-                            <span key={t}>{t}</span>
-                          ))}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Liquidated if the price falls about {liquidationDropPct(Math.min(levNum, MAX_LEVERAGE)).toFixed(1)}% below a buy.</p>
-                      </>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Off: plain buying. Turn it on to borrow more than you put in, starting at {DEFAULT_LEVERAGE}x.</p>
-                    )}
-                  </div>
-                  {(errors.leverage || (Number.isFinite(levNum) && levNum > MAX_LEVERAGE)) && (
-                    <p role="alert" className="text-sm font-bold">
-                      {errors.leverage ?? `Leverage goes up to ${MAX_LEVERAGE}x`}
-                    </p>
-                  )}
-                  {leveraged && (
-                    <div className="flex flex-col gap-3">
-                      <button type="button" aria-expanded={levMore} aria-controls="leverage-more" onClick={() => setLevMore((o) => !o)} className="flex w-fit items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
-                        <ChevronDown className={cn("size-4 transition-transform", levMore && "rotate-180")} aria-hidden />
-                        {levMore ? "Hide details" : "More settings: funding, margin top-ups, max loss"}
-                      </button>
-                      {levMore && (
-                        <div id="leverage-more">
-                    <div className="grid gap-4 border border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
-                            <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                              Funding (% a year)
-                              <input inputMode="decimal" value={fundingApr} onChange={(e) => setFundingApr(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))} className="form-control-h border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                              <span className="text-xs">{DEFAULT_FUNDING_APR}% is the usual exchange rate</span>
-                            </label>
-                            <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                              <label className="flex cursor-pointer items-center gap-2 transition-colors hover:text-foreground">
-                                <input type="checkbox" checked={topUp} onChange={(e) => setTopUp(e.target.checked)} className="size-4 shrink-0 cursor-pointer accent-primary" />
-                                Add margin to avoid liquidation
-                              </label>
-                              {topUp && <AmountInput aria-label="Most margin to add per buy, in dollars" placeholder="Up to $ per buy (optional)" value={topUpMax} onValueChange={setTopUpMax} className="form-control-h text-sm" />}
-                            </div>
-                            <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                              <label htmlFor="stop-loss">Stop loss per buy (optional)</label>
-                              <div className="flex gap-2">
-                                <AmountInput id="stop-loss" placeholder="No stop loss" value={maxLoss} onValueChange={setMaxLoss} className="form-control-h min-w-0 flex-1 text-sm" />
-                                <div role="group" aria-label="Stop loss unit" className="flex shrink-0 border border-input">
-                                  {(["%", "$"] as const).map((u) => (
-                                    <button key={u} type="button" aria-pressed={stopUnit === u} onClick={() => setStopUnit(u)} className={cn("form-control-h w-10 text-sm transition-colors", stopUnit === u ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-secondary")}>
-                                      {u}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                              <span className="text-xs">{stopUnit === "%" ? "Closes a buy once it has lost this share of its money." : "Closes a buy once it has lost this many dollars."}</span>
-                              {!topUp && (maxLoss === "" || (stopUnit === "%" ? parseAmount(maxLoss) >= 100 : parseAmount(maxLoss) >= parseAmount(amount))) && (
-                                <span className="text-xs text-destructive">A buy is liquidated at -100% unless you add margin or set a stop loss below 100%.</span>
-                              )}
-                            </div>
-                            <p className="text-xs leading-relaxed text-muted-foreground">Each buy opens its own position, as on a futures exchange. Fees are 0.045% each way. It uses daily closes, so real trading can be harsher.</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 {/* The action: what you are about to run, in a sentence, and a button that is only as wide as its words. */}

@@ -29,6 +29,7 @@ export async function POST(request: Request) {
           ...(lv.fundingApr !== undefined ? { fundingApr: Number(lv.fundingApr) } : {}),
           ...(lv.topUp === true ? { topUp: true } : {}),
           ...(lv.topUpMax !== undefined ? { topUpMax: Number(lv.topUpMax) } : {}),
+          ...(lv.topUpBudget !== undefined ? { topUpBudget: Number(lv.topUpBudget) } : {}),
           ...(lv.maxLoss !== undefined ? { maxLoss: Number(lv.maxLoss) } : {}),
           ...(lv.maxLossPct !== undefined ? { maxLossPct: Number(lv.maxLossPct) } : {}),
         }

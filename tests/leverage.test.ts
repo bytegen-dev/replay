@@ -66,6 +66,15 @@ test("a stop loss in percent is a share of the buy's margin", () => {
   assert.equal(r.positions[0].closeDate, "2024-01-03");
 });
 
+test("a shared top-up budget runs out across positions", () => {
+  const buys = [buy(1000, 100, "2024-01-01"), { ...buy(1000, 100, "2024-01-01"), month: "2024-02" }];
+  const daily = px(["2024-01-02", 85], ["2024-01-03", 100]);
+  const free = simulateLeverage({ buys, daily, endDate: "2024-01-03", settings: { leverage: 10, fundingApr: 0, topUp: true } });
+  const capped = simulateLeverage({ buys, daily, endDate: "2024-01-03", settings: { leverage: 10, fundingApr: 0, topUp: true, topUpBudget: 50 } });
+  assert.ok(free.summary.topUps > 50);
+  close(capped.summary.topUps, 50, 1e-9);
+});
+
 test("funding is charged on the position's value, by the day", () => {
   const year = simulateLeverage({ buys: [buy(1000, 100, "2023-01-01")], daily: px(["2024-01-01", 100]), endDate: "2024-01-01", settings: { leverage: 2, fundingApr: 10.95 } });
   // 2,000 of position for a year at 10.95%

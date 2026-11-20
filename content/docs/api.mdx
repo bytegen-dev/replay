@@ -53,6 +53,7 @@ A versioned JSON API under `/api/v1`. The machine-readable description is at `/a
 | `funding` | no | With `leverage`: yearly funding in percent (default 10.95) |
 | `topup` | no | With `leverage`: `true` adds margin when a position nears liquidation |
 | `topupMax` | no | With `topup`: the most margin, in dollars, one position may be given |
+| `topupBudget` | no | With `topup`: the most margin, in dollars, all the positions together may be given |
 | `maxLoss` | no | With `leverage`: stop loss. Close a position once it has lost this many dollars |
 | `maxLossPct` | no | With `leverage`: stop loss as a percent of each buy (100 is all of it) |
 | `basis` | no | `month-end` (default), `first-of-month`, or `day-of-month` with `day` |

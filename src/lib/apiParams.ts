@@ -7,7 +7,7 @@ import { cardanoUnit, normalizeAddress, validateRequest } from "./validate.ts";
  *   market   "stock" or a chain: cardano, ethereum, solana, base, bsc, arbitrum, hyperevm
  *   asset    the ticker (stocks) or the contract / mint / Cardano policy id (tokens)
  *   amount   invested each month, in `currency` (US dollars unless currency is given)
- *   leverage optional 1 to 100: buy like a perpetual futures long, with `funding` (yearly percent, default 10.95), `topup` (true adds margin near liquidation), `topupMax` and `maxLoss` (dollars per buy) or `maxLossPct` (percent of each buy)
+ *   leverage optional 1 to 100: buy like a perpetual futures long, with `funding` (yearly percent, default 10.95), `topup` (true adds margin near liquidation), `topupMax` (dollars per buy), `topupBudget` (dollars across all buys) and `maxLoss` (dollars per buy) or `maxLossPct` (percent of each buy)
  *   plan     optional how often to buy: monthly (default), quarterly, semiannual, yearly or once (a single buy at `from`)
  *   currency optional ISO code the amount is in (NGN, EUR, GBP ...); each buy is converted at that day's rate
  *   from     first month, YYYY-MM         to  last month, YYYY-MM (default: last full month)
@@ -75,6 +75,7 @@ export function parseApiParams(input: Record<string, unknown>, now: number = Dat
             ...(str(input.funding) !== undefined && str(input.funding) !== "" ? { fundingApr: Number(str(input.funding)) } : {}),
             ...(truthy(input.topup) ? { topUp: true } : {}),
             ...(str(input.topupMax) ? { topUpMax: Number(str(input.topupMax)) } : {}),
+            ...(str(input.topupBudget) ? { topUpBudget: Number(str(input.topupBudget)) } : {}),
             ...(str(input.maxLoss) ? { maxLoss: Number(str(input.maxLoss)) } : {}),
             ...(str(input.maxLossPct) ? { maxLossPct: Number(str(input.maxLossPct)) } : {}),
           },
