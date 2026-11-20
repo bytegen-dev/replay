@@ -40,6 +40,7 @@ export function resolveTheme(pref: ThemePref, systemPrefersLight: boolean): "lig
 /** Sets the attributes the stylesheet reads. */
 export function applySettings(s: Settings, systemPrefersLight: boolean, root: HTMLElement): void {
   root.dataset.theme = resolveTheme(s.theme, systemPrefersLight);
+  setTabIcon(root.dataset.theme === "light");
   if (s.reduceMotion) root.dataset.motion = "reduce";
   else delete root.dataset.motion;
   if (s.highContrast) root.dataset.contrast = "high";
@@ -47,10 +48,28 @@ export function applySettings(s: Settings, systemPrefersLight: boolean, root: HT
 }
 
 /**
+ * The tab's icon follows the site's theme: the mark drawn for a light page when the theme is light, the other one otherwise. Browsers
+ * often ignore a changed href on an icon link that is already there, so the link is replaced with a new one.
+ */
+export const TAB_ICON = { dark: "/replay-logo.png", light: "/replay-logo-light.png" } as const;
+export function setTabIcon(light: boolean): void {
+  if (typeof document === "undefined") return;
+  const href = light ? TAB_ICON.light : TAB_ICON.dark;
+  const old = document.head.querySelectorAll('link[rel="icon"]');
+  if (old.length === 1 && (old[0] as HTMLLinkElement).getAttribute("href") === href) return;
+  old.forEach((l) => l.remove());
+  const link = document.createElement("link");
+  link.rel = "icon";
+  link.type = "image/png";
+  link.href = href;
+  document.head.appendChild(link);
+}
+
+/**
  * Runs in <head> before the page paints, so the right theme is there from the first frame (no flash of dark on a light
  * device). It does the same thing as applySettings, written out as plain JavaScript.
  */
-export const HEAD_SCRIPT = `(function(){var r=document.documentElement;try{var s=JSON.parse(localStorage.getItem("${STORAGE_KEY}")||"{}");var t=s.theme==="light"||s.theme==="dark"?s.theme:"system";var l=t==="light"||(t==="system"&&window.matchMedia("(prefers-color-scheme: light)").matches);r.dataset.theme=l?"light":"dark";if(s.reduceMotion===true)r.dataset.motion="reduce";if(s.highContrast===true)r.dataset.contrast="high"}catch(e){r.dataset.theme="dark"}})();`;
+export const HEAD_SCRIPT = `(function(){var r=document.documentElement;try{var s=JSON.parse(localStorage.getItem("${STORAGE_KEY}")||"{}");var t=s.theme==="light"||s.theme==="dark"?s.theme:"system";var l=t==="light"||(t==="system"&&window.matchMedia("(prefers-color-scheme: light)").matches);r.dataset.theme=l?"light":"dark";var h=l?"/replay-logo-light.png":"/replay-logo.png";document.querySelectorAll('link[rel="icon"]').forEach(function(e){e.remove()});var k=document.createElement("link");k.rel="icon";k.type="image/png";k.href=h;document.head.appendChild(k);if(s.reduceMotion===true)r.dataset.motion="reduce";if(s.highContrast===true)r.dataset.contrast="high"}catch(e){r.dataset.theme="dark"}})();`;
 
 /** True when animation should be skipped: the viewer's own toggle, or the system setting. */
 export function motionReduced(): boolean {

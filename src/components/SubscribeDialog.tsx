@@ -51,7 +51,7 @@ export function SubscribeDialog() {
           <span className="hidden sm:inline">Join the waitlist</span>
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="pulse-ring">
         {state === "done" ? (
           <div className="flex flex-col gap-2 pt-2">
             <DialogTitle className="flex items-center gap-2">

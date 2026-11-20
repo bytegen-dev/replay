@@ -6,7 +6,6 @@ import { HeroChart } from "@/components/landing/HeroChart";
 import { LandingDemo } from "@/components/landing/LandingDemo";
 import { LineCard } from "@/components/landing/LineCard";
 import { RevealObserver } from "@/components/landing/RevealObserver";
-import { SignInLink } from "@/components/landing/SignInLink";
 import { SmoothScroll } from "@/components/landing/SmoothScroll";
 import { StepVisual } from "@/components/landing/StepVisuals";
 import { WaitlistButton } from "@/components/landing/WaitlistButton";
@@ -98,7 +97,7 @@ export default function LandingPage() {
       <RevealObserver />
       <SiteHeader />
 
-      <main className="flex-1">
+      <main className="flex-1 overflow-x-clip">
         {/* The hero: one promise, one action, and a real result drawing itself. */}
         <section className={`${section} grid items-center gap-10 py-10 sm:py-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:py-24`}>
           <div className="flex flex-col gap-6">
@@ -169,8 +168,12 @@ export default function LandingPage() {
           <h2 className={`${h2} mb-8 max-w-2xl sm:mb-10`} data-reveal-on-scroll style={later()}>
             Four ways to look at the past.
           </h2>
-          {/* Uneven on purpose: a wide card beside a narrow one, then the other way round. */}
-          <div className="grid gap-4 sm:gap-6 lg:grid-cols-6">
+          {/* Uneven on purpose: a wide card beside a narrow one, then the other way round. A big outlined 4 stands behind the first card, half out
+              of the column on wide screens. */}
+          <div className="relative isolate grid gap-4 sm:gap-6 lg:grid-cols-6">
+            <span aria-hidden className="big-four absolute bottom-full -left-6 -z-10 select-none font-heading leading-none sm:-left-[5.5rem]" data-reveal-on-scroll style={later(80)}>
+              4
+            </span>
             {[
               { Visual: HindsightVisual, t: "Hindsight", d: "What a single buy or a monthly habit would be worth today, for stocks, coins and currencies, with dividends and currency conversion.", href: "/hindsight", cta: "Open Hindsight", span: "lg:col-span-4" },
               { Visual: WaybackVisual, t: "Wayback", d: "The price and market cap of a token or stock at a past moment, to the minute for recent dates.", href: "/wayback", cta: "Open Wayback", span: "lg:col-span-2" },
@@ -194,9 +197,9 @@ export default function LandingPage() {
           {/* A line runs through this card from edge to edge, behind it; hovering sends a pulse along it, round the card and out the far side. */}
           <LineCard className="grid gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[1fr_1.1fr] lg:gap-12" data-reveal-on-scroll style={later()}>
             <div className="flex flex-col gap-3">
-              <h2 className={h2}>Free to try. More when you sign in.</h2>
-              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Everything on this page works without an account. Sign in with your email, with no password to remember, and the daily limit goes up. Saved checks and exports are next." />
-              <SignInLink />
+              <h2 className={h2}>Free to try. More when Replay opens up.</h2>
+              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Everything on this page works without an account. Join the waitlist and we will email you when accounts open, with a higher daily limit, saved checks and exports." />
+              <WaitlistButton />
             </div>
             <div className="grid gap-px border border-border bg-border sm:grid-cols-2">
               <div className="flex flex-col gap-3 bg-card p-5">
@@ -239,14 +242,6 @@ export default function LandingPage() {
           />
         </section>
 
-        {/* The last ask. */}
-        <section className={`${section} py-10 sm:py-16`}>
-          <div className="flex flex-col items-start gap-5 border-l-2 border-primary pl-5 sm:pl-8" data-reveal-on-scroll style={later()}>
-            <h2 className={`${h2} max-w-2xl`}>Be first when Replay opens up.</h2>
-            <SpotlightText className="max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Join the waitlist and we will email you when there is something new to try." />
-            <WaitlistButton />
-          </div>
-        </section>
         {/* What the site is, for search engines: a free web app for finance. */}
         <script
           type="application/ld+json"

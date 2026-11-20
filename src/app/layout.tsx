@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   keywords: KEYWORDS,
   category: "finance",
   manifest: "/manifest.webmanifest",
-  // The tab icon is the pair of <link rel="icon"> tags in the head below, which follow the browser's colour scheme. Only the home-screen icon is set here.
+  // The tab icon is set by the script in the head below and follows the site's theme. Only the home-screen icon is set here.
   icons: {
     apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
@@ -62,11 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning: the script in <head> sets data-theme and friends on <html> before React starts, by design.
     <html lang="en" suppressHydrationWarning className={`h-full font-sans ${display.variable} ${data.variable}`}>
       <head>
-        {/* The tab icon follows the browser's own light or dark tab strip (not the site's theme, which the strip never shows):
-            the mark drawn for a light surface when the browser is light, the other one when it is dark. */}
-        <link rel="icon" type="image/png" href="/replay-logo-light.png" media="(prefers-color-scheme: light)" />
-        <link rel="icon" type="image/png" href="/replay-logo.png" media="(prefers-color-scheme: dark)" />
-        {/* Applies the saved theme before the first paint, so a light-mode visitor never sees a dark flash. */}
+        {/* The tab icon follows the site's theme: the script below sets it before the first paint, and settings.ts keeps it in step. */}
         <script dangerouslySetInnerHTML={{ __html: HEAD_SCRIPT }} />
       </head>
       <body className="flex min-h-dvh flex-col bg-background text-foreground antialiased">
