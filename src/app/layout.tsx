@@ -40,13 +40,11 @@ export const metadata: Metadata = {
     siteName: "Replay",
     title: "Replay",
     description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
-    images: [{ url: "/og-image.png", width: 512, height: 512, alt: "Replay" }],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Replay",
     description: "See what a buy from the past would be worth today: a stock, a coin or a currency, bought once or on a schedule.",
-    images: ["/og-image.png"],
   },
   formatDetection: { telephone: false },
 };

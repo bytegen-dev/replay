@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { DOWN, LineChart, UP, type ChartSeries } from "@/components/LineChart";
 import { moneyShort } from "@/lib/charts.ts";
 import type { DemoPoint } from "@/lib/landingData.ts";
@@ -10,28 +10,37 @@ import { motionReduced } from "@/lib/settings.ts";
  * A saved result's growth chart that draws itself: the line runs left to right while the axes stay put. It draws again
  * whenever `runKey` changes (a different check picked), and shows complete straight away for people who prefer reduced motion.
  */
-export function DrawChart({ points, runKey, height = 280, ariaLabel, durationMs = 1700 }: { points: DemoPoint[]; runKey: string; height?: number; ariaLabel: string; durationMs?: number }) {
+export function DrawChart({ points, runKey, height = 280, ariaLabel, durationMs = 1700, firstDelayMs = 0 }: { points: DemoPoint[]; runKey: string; height?: number; ariaLabel: string; durationMs?: number; firstDelayMs?: number }) {
   // The progress belongs to the check it was made for, so picking another starts at zero with no frame of the old line.
   const [drawn, setDrawn] = useState<{ key: string; p: number }>({ key: "", p: 0 });
   const progress = drawn.key === runKey ? drawn.p : 0;
+  // Only the very first draw waits (for the card around it to arrive); later ones start at once.
+  const first = useRef(true);
 
   useEffect(() => {
     if (motionReduced()) {
       const id = setTimeout(() => setDrawn({ key: runKey, p: 1 }), 0);
       return () => clearTimeout(id);
     }
+    const wait = first.current ? firstDelayMs : 0;
+    first.current = false;
     let raf = 0;
     let start = 0;
     const tick = (now: number) => {
       if (!start) start = now;
       const t = Math.min(1, (now - start) / durationMs);
-      // Eases out: quick off the mark, settling at the end.
-      setDrawn({ key: runKey, p: 1 - Math.pow(1 - t, 3) });
+      // Eases out: quick off the mark, settling softly (an exponential curve, like something coming to rest).
+      setDrawn({ key: runKey, p: 1 - Math.pow(2, -9 * t) * (1 - t) });
       if (t < 1) raf = requestAnimationFrame(tick);
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [runKey, durationMs]);
+    const id = setTimeout(() => {
+      raf = requestAnimationFrame(tick);
+    }, wait);
+    return () => {
+      clearTimeout(id);
+      cancelAnimationFrame(raf);
+    };
+  }, [runKey, durationMs, firstDelayMs]);
 
   const range = useMemo(() => {
     const ys = points.flatMap((p) => [p.value, p.invested]);
