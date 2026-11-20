@@ -5,6 +5,7 @@ import { HindsightVisual, LeverageVisual, ShareVisual, WaybackVisual } from "@/c
 import { HeroChart } from "@/components/landing/HeroChart";
 import { LandingDemo } from "@/components/landing/LandingDemo";
 import { LineCard } from "@/components/landing/LineCard";
+import { RotatingWord } from "@/components/landing/RotatingWord";
 import { RevealObserver } from "@/components/landing/RevealObserver";
 import { SmoothScroll } from "@/components/landing/SmoothScroll";
 import { StepVisual } from "@/components/landing/StepVisuals";
@@ -102,7 +103,7 @@ export default function LandingPage() {
         <section className={`${section} grid items-center gap-10 py-10 sm:py-16 lg:grid-cols-[1.05fr_1fr] lg:gap-14 lg:py-24`}>
           <div className="flex flex-col gap-6">
             <h1 className="font-heading text-4xl leading-[1.05] font-bold tracking-tight sm:text-6xl">
-              <WordRise text="A time machine for your money." />
+              <WordRise text="A time machine for your" /> <RotatingWord index={5} />
             </h1>
             <p className="enter-up max-w-xl font-heading text-xl leading-snug text-primary sm:text-2xl" style={{ "--base": "650ms", "--i": 0 } as React.CSSProperties}>
               You can&rsquo;t change the past. You can learn from it.

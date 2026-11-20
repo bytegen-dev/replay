@@ -472,6 +472,47 @@
   animation: word-rise 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: calc(var(--w, 0) * 75ms + 100ms);
 }
+/* The caret that types the headline's last word: a thin bar in the brand colour, there while letters come and go. It takes no room
+   when idle (it is not removed, so the full stop does not jump). */
+.type-caret {
+  display: inline-block;
+  width: 0.07em;
+  height: 0.82em;
+  margin-left: 0.03em;
+  margin-right: 0.03em;
+  vertical-align: -0.06em;
+  background: var(--primary);
+  animation: caret-blink 0.9s steps(1, end) infinite;
+}
+/* "money" coming back: the same failing bulb as the big 4, played once and shorter, ending lit normally. */
+.word-flicker {
+  animation:
+    word-rise 1.1s cubic-bezier(0.16, 1, 0.3, 1) both,
+    word-bulb 1.7s steps(1, end) 1;
+  animation-delay: calc(var(--w, 0) * 75ms + 100ms), 0s;
+}
+@keyframes word-bulb {
+  0% { filter: brightness(2.6) drop-shadow(0 0 12px var(--primary)); }
+  8% { filter: brightness(0.5); }
+  18% { filter: brightness(2.2) drop-shadow(0 0 9px var(--primary)); }
+  24% { filter: brightness(0.55); }
+  32% { filter: brightness(1.9) drop-shadow(0 0 7px var(--primary)); }
+  38% { filter: none; }
+  52% { filter: brightness(1.7) drop-shadow(0 0 6px var(--primary)); }
+  56% { filter: brightness(0.7); }
+  72% { filter: brightness(1.4) drop-shadow(0 0 4px var(--primary)); }
+  77% { filter: none; }
+  100% { filter: none; }
+}
+.type-caret-idle {
+  opacity: 0;
+  animation: none;
+}
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
 .reveal-armed [data-reveal="hidden"] {
   opacity: 0;
   transform: translate3d(0, 22px, 0);
