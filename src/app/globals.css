@@ -1107,10 +1107,18 @@ html[data-motion="reduce"] [data-slot="button"] {
     background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 18.385px);
     background-position: calc(var(--p, 0) * 60px) calc(var(--p, 0) * -60px);
     /* Fades out toward the bottom and into the top-left corner (the two masks are intersected); both fades shift a little with --p. */
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent calc(50% + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent calc(var(--hatch-fade, 50%) + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
     -webkit-mask-composite: source-in;
-    mask-image: linear-gradient(to bottom, #000 0%, transparent calc(50% + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
+    mask-image: linear-gradient(to bottom, #000 0%, transparent calc(var(--hatch-fade, 50%) + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
     mask-composite: intersect;
+  }
+  /* On a wide screen the lines are much quieter: fainter, and fading out sooner down the page, so they hint at texture up at the
+     top instead of hatching the whole width. Phones keep the fuller version, where there is less else to look at. */
+  @media (min-width: 1024px) {
+    body::after {
+      --hatch-fade: 30%;
+      opacity: 0.38;
+    }
   }
   /* The display face is for things you read as labels or press: headings, the nav, buttons and tab switches. Data stays in the mono. */
   h1,
