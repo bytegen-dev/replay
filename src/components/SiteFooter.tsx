@@ -6,6 +6,7 @@ import { ThemeSelector } from "@/components/ThemeSelector";
 
 const PAGES = [
   { label: "Wayback", href: "/wayback" },
+  { label: "Play", href: "/play" },
   { label: "Docs", href: "/docs" },
 ];
 const LINKS = [
