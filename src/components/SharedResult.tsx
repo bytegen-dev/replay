@@ -11,6 +11,7 @@ import { prepare } from "@/lib/exportData.ts";
 import { compressMonths } from "@/lib/months.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
 import type { SharePayload } from "@/lib/share.ts";
+import { videoInfo } from "@/lib/videoInfo.ts";
 
 const WARN_CODES = new Set(["nearest-day", "low-volume", "outlier"]);
 
@@ -18,6 +19,16 @@ const WARN_CODES = new Set(["nearest-day", "low-volume", "outlier"]);
 export function SharedResult({ data }: { data: SharePayload }) {
   const { buys, summary, decimals } = prepare(data);
   const symbol = data.tokenLabel.replace(/^\$/, "") || "tokens";
+  // What the replay video says about this trade, and what its file is called.
+  const trade = videoInfo({
+    asset: data.tokenName || symbol,
+    amount: data.amount,
+    symbol: data.currency?.symbol,
+    plan: data.plan,
+    leverage: data.leverage ? { times: data.leverage.settings.leverage, side: data.leverage.settings.side } : undefined,
+    startMonth: buys[0]?.month,
+    endMonth: buys[buys.length - 1]?.month,
+  });
   const unitWord = data.plan && data.plan !== "monthly" ? "buy" : "month";
   const total = data.plan && data.plan !== "monthly" ? buys.filter((b) => b.buy !== false).length : buys.length;
   const months =
@@ -102,7 +113,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
         ))}
       </div>
 
-      <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} />
+      <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} title={trade.title} videoSubtitle={trade.subtitle} videoFile={trade.fileName} />
 
       <InsightsCard buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} amount={data.amount} />
 
@@ -181,7 +192,7 @@ export function SharedResult({ data }: { data: SharePayload }) {
               </div>
             }
           />
-          <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} leverage={{ times: data.leverage.settings.leverage, side: data.leverage.settings.side, series: data.leverage.series }} />
+          <GrowthChart buys={buys} priceToday={data.currentPrice} priceTodayDate={data.currentPriceDate || null} unit={data.unit === "shares" ? "shares" : "tokens"} title={trade.title} videoSubtitle={trade.subtitle} videoFile={trade.fileName} leverage={{ times: data.leverage.settings.leverage, side: data.leverage.settings.side, series: data.leverage.series }} />
         </>
       )}
       {data.leverage ? (

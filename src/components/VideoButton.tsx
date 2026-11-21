@@ -7,7 +7,7 @@ import type { GrowthPoint } from "@/lib/charts.ts";
 import { pickVideoFormat, recordReplay, type ReplayView } from "@/lib/replayVideo.ts";
 
 /** "Download video": draws the replay onto a canvas and saves it as a video. Hidden in browsers that can't record canvas video. */
-export function VideoButton({ points, view, title, symbol, onStart }: { points: GrowthPoint[]; view: ReplayView; title: string; symbol?: string; onStart?: () => void }) {
+export function VideoButton({ points, view, title, subtitle, fileName, symbol, onStart }: { points: GrowthPoint[]; view: ReplayView; title: string; /** The kind of trade, drawn as a tag on the video. */ subtitle?: string; /** The saved file's name without its extension. */ fileName?: string; symbol?: string; onStart?: () => void }) {
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [can, setCan] = useState(false);
@@ -22,11 +22,11 @@ export function VideoButton({ points, view, title, symbol, onStart }: { points: 
     onStart?.();
     setProgress(0);
     try {
-      const { blob, ext } = await recordReplay({ points, view, title, symbol, onProgress: setProgress });
+      const { blob, ext } = await recordReplay({ points, view, title, subtitle, symbol, onProgress: setProgress });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "replay"}.${ext}`;
+      a.download = `${fileName || title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "replay"}.${ext}`;
       document.body.appendChild(a);
       a.click();
       a.remove();

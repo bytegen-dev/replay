@@ -51,6 +51,7 @@ import { buildBuys, chooseDecimals, summarize, type Overrides, type Summary } fr
 import { basisBadgeLabel, compressMonths, currentMonth, formatBasisLabel, isMonth, monthsBetween } from "@/lib/months.ts";
 import { CHAINS, CHAIN_LABELS, type Basis, type Chain, type DcaRequest, type DcaResponse } from "@/lib/types.ts";
 import { commodityFor, isFuturesSymbol } from "@/lib/commodities.ts";
+import { videoInfo } from "@/lib/videoInfo.ts";
 import { MAJORS, isMajorSymbol, marketLabel } from "@/lib/majors.ts";
 import { validateRequest, type FieldErrors } from "@/lib/validate.ts";
 
@@ -897,9 +898,22 @@ export function DcaApp() {
       </Field>
     </div>
   );
+  // What the replay video says about this trade, and what its file is called.
+  const trade = data
+    ? videoInfo({
+        asset: commodityFor(data.address)?.name ?? MAJORS.find((m) => m.symbol === data.address.toUpperCase())?.name ?? tokenSymbol(data.token),
+        amount: data.amount,
+        symbol: data.currency?.symbol,
+        plan: data.plan,
+        leverage: data.leverage ? { times: data.leverage.settings.leverage, side: data.leverage.settings.side } : undefined,
+        reinvest: data.reinvest,
+        startMonth: data.rows[0]?.month,
+        endMonth: data.rows[data.rows.length - 1]?.month,
+      })
+    : null;
   const chartEl =
     data && computed ? (
-      <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} leverage={data.leverage ? { times: data.leverage.settings.leverage, side: data.leverage.settings.side, series: data.leverage.series } : undefined} title={`${tokenSymbol(data.token)}, ${data.currency ? data.currency.symbol : "$"}${data.amount.toLocaleString("en-US")} a month`} />
+      <GrowthChart buys={computed.buys} priceToday={val ? val.price : data.currentPrice} priceTodayDate={val ? val.date : data.currentPriceDate} unit={isEquity ? "shares" : "tokens"} leverage={data.leverage ? { times: data.leverage.settings.leverage, side: data.leverage.settings.side, series: data.leverage.series } : undefined} title={trade?.title} videoSubtitle={trade?.subtitle} videoFile={trade?.fileName} />
     ) : null;
 
   return (

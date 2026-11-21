@@ -71,7 +71,7 @@ const faqs = (anon: number, user: number) => [
   {
     q: "What is coming next?",
     topic: "Coming",
-    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. None of them is open yet. Join the waitlist to hear when each one is.",
+    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. Wallet analysis, for reading what a wallet has bought and held, is coming too. None of them is open yet. Join the waitlist to hear when each one is.",
   },
   {
     q: "Do you keep my searches?",
@@ -226,7 +226,7 @@ export default function LandingPage() {
             </ul>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <WaitlistButton />
-              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with up to thousands of checks daily, saved checks and exports.</p>
+              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with up to thousands of checks daily, saved checks and exports, and wallet analysis.</p>
             </div>
           </LineCard>
         </section>

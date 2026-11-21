@@ -13,6 +13,8 @@ export interface ReplayVideoOptions {
   view: ReplayView;
   /** The big line at the top left, e.g. "Bitcoin, $500 a month". */
   title: string;
+  /** The tag at the top right saying what kind of trade it is, e.g. "5x long, leveraged" or "Spot, monthly buys". */
+  subtitle?: string;
   /** The currency symbol for money (default "$"). */
   symbol?: string;
   /** Called with 0 to 1 as the recording goes. */
@@ -96,6 +98,21 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
   ctx.fillStyle = c.fg;
   ctx.font = `600 38px ${c.head}`;
   ctx.fillText(o.title, 64, 78);
+  if (o.subtitle) {
+    // The kind of trade, as a tag at the top right: outlined in the brand colour so it is the first thing after the title.
+    ctx.font = `600 22px ${c.body}`;
+    const tw = ctx.measureText(o.subtitle).width;
+    const pad = 16;
+    const boxW = tw + pad * 2;
+    const boxX = W - 64 - boxW;
+    ctx.strokeStyle = c.primary;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, 46, boxW, 42);
+    ctx.fillStyle = c.primary;
+    ctx.fillText(o.subtitle, boxX + pad, 74);
+    ctx.fillStyle = c.fg;
+    ctx.font = `600 38px ${c.head}`;
+  }
   ctx.fillStyle = c.muted;
   ctx.font = `400 22px ${c.body}`;
   const gain = reading.invested > 0 ? ((reading.value - reading.invested) / reading.invested) * 100 : 0;

@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRightLeft, ArrowUpDown, History } from "lucide-reac
 import { useEffect, useRef, useState } from "react";
 import { DotsToggle, useDotsPref } from "@/components/DotsToggle";
 import { VideoButton } from "@/components/VideoButton";
+import { videoInfo } from "@/lib/videoInfo.ts";
 import type { GrowthPoint } from "@/lib/charts.ts";
 import { MarkLoader } from "@/components/MarkLoader";
 import { AmountInput } from "@/components/AmountInput";
@@ -136,7 +137,7 @@ export function FxPanel({ onHasResult }: { onHasResult?: (has: boolean) => void 
       videoPoints.push({ t: Date.parse(`${row.date}T00:00:00Z`), date: row.date, invested: spent, value: held * row.rate, price: row.rate, avgCost: spent / held });
     }
   }
-  const videoTitle = data ? `${data.from.code} to ${data.to.code}, ${data.from.symbol}${data.amount.toLocaleString("en-US")} a month` : "";
+  const videoMeta = data ? videoInfo({ asset: `${data.from.code} to ${data.to.code}`, amount: data.amount, symbol: data.from.symbol, currency: true, startMonth: data.startMonth, endMonth: data.endMonth }) : null;
   const up = !!r && r.rateToday !== null && r.averageRate !== null && r.rateToday >= r.averageRate;
   const points = r ? r.rows.filter((row) => row.rate !== null).map((row) => ({ x: Date.parse(`${row.date}T00:00:00Z`), y: row.rate! })) : [];
   const summary = !(parseAmount(amount) > 0) ? "Enter how much you spend each month." : `${CURRENCIES.find((c) => c.code === from)?.symbol}${parseAmount(amount).toLocaleString("en-US")} a month into ${to}, ${formatMonth(startMonth)} to ${formatMonth(endMonth)}.`;
@@ -271,7 +272,7 @@ export function FxPanel({ onHasResult }: { onHasResult?: (has: boolean) => void 
                 </h3>
                 <div className="flex flex-wrap items-center gap-2">
                   <DotsToggle on={dots} onChange={setDots} />
-                  <VideoButton points={videoPoints} view="growth" title={videoTitle} symbol={data.from.symbol} />
+                  <VideoButton points={videoPoints} view="growth" title={videoMeta?.title ?? ""} subtitle={videoMeta?.subtitle} fileName={videoMeta?.fileName} symbol={data.from.symbol} />
                 </div>
               </div>
               <LineChart

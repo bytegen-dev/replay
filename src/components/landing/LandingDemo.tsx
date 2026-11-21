@@ -29,19 +29,24 @@ export function LandingDemo({ checks }: { checks: DemoCheck[] }) {
 
   return (
     <div className="cut-card pulse-hover flex flex-col gap-5 border border-border bg-card p-4 sm:p-6">
-      <div role="tablist" aria-label="What to look at" className="grid max-w-xl grid-cols-2 gap-0 sm:grid-cols-4">
-        {TABS.map((t) => (
+      {/* The tabs sit in a header with a line under it, edge to edge, like the header of the Wayback form. */}
+      <div className="-mx-4 border-b border-border px-4 pb-5 sm:-mx-6 sm:px-6">
+      <div role="tablist" aria-label="What to look at" className="flex max-w-xl flex-nowrap">
+        {TABS.map((t, i) => (
           <button
             key={t.group}
             type="button"
             role="tab"
             aria-selected={group === t.group}
+            data-state={group === t.group ? "on" : "off"}
             onClick={() => setGroup(t.group)}
-            className={cn("form-control-h border border-border px-3 text-sm font-bold transition-colors max-sm:-mt-px", group === t.group ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
+            // One row on every screen: on a phone the tabs are a little smaller and share the row by the length of their words.
+            className={cn("form-control-h flex min-w-0 flex-auto items-center justify-center border border-border px-2 text-center text-xs font-bold whitespace-nowrap transition-colors sm:flex-1 sm:px-3 sm:text-sm", i > 0 && "-ml-px", i === 0 && "cut-tab-first", i === TABS.length - 1 && "cut-tab-last", group === t.group ? "border-primary bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}
           >
             {t.label}
           </button>
         ))}
+      </div>
       </div>
 
       {check ? (

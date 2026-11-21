@@ -18,7 +18,7 @@ const FRAMES = [1, 3, 5] as const;
 const YEAR_MS = 365.25 * 86_400_000;
 
 /** The backtest as a picture: what you put in against what it was worth, and the price against your average cost. */
-export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "Replay", leverage }: { buys: BuyRow[]; priceToday: number | null; priceTodayDate: string | null; unit: "shares" | "tokens"; title?: string; leverage?: { times: number; side?: "long" | "short"; series: LeverageSeriesPoint[] } }) {
+export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "Replay", videoSubtitle, videoFile, leverage }: { buys: BuyRow[]; priceToday: number | null; priceTodayDate: string | null; unit: "shares" | "tokens"; title?: string; videoSubtitle?: string; videoFile?: string; leverage?: { times: number; side?: "long" | "short"; series: LeverageSeriesPoint[] } }) {
   const [viewPick, setView] = useState<View>("growth");
   // A leveraged run only has the growth picture: there is no single average cost to compare the price with.
   const view: View = leverage ? "growth" : viewPick;
@@ -211,7 +211,7 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
             </button>
           ))}
         </div>
-        <VideoButton points={points} view={view} title={title} onStart={() => setPlaying(false)} />
+        <VideoButton points={points} view={view} title={title} subtitle={videoSubtitle} fileName={videoFile} onStart={() => setPlaying(false)} />
         {step !== null && (
           <button type="button" onClick={stopReplay} className="flex items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" aria-label="Show the whole history again">
             <RotateCcw className="size-3.5" aria-hidden />
