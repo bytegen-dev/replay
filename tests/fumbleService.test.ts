@@ -1,0 +1,224 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { test } from "node:test";
+import { solPriceAt } from "../src/lib/fumble/prices.ts";
+import { scanWallet, type ScanResult } from "../src/lib/fumble/scan.ts";
+import { BusyError, createScanner, toApiResult, toApiTrades, type ScanEvent } from "../src/lib/fumble/service.ts";
+import type { HeliusTx } from "../src/lib/fumble/trades.ts";
+import type { Candle } from "../src/lib/fumble/types.ts";
+
+const WALLET = "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj";
+const OTHER = "4cXnf2z85UiZ5cyKsPMEULq1yufAtpkatmX4j4DBZqj2";
+const WIN = "9msk9ehERMECbvsp3mvNabSXy2k7GNcrxJgdWfh7pump";
+const read = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/fumble/${name}`, import.meta.url), "utf8"));
+const txs = read("euris-txs.json") as HeliusTx[];
+const winPrices = read("win-candles-hourly.json") as { solUsdAtSale: number; candles: Candle[] };
+
+const history = async () => ({ txs, pages: 1, complete: true, oldest: txs[txs.length - 1].timestamp });
+/** A real scan of the frozen wallet, with only the win token priced. */
+const realScan = (wallet = WALLET, extra: Partial<Parameters<typeof scanWallet>[1]> = {}) =>
+  scanWallet(wallet, { history, prices: async (m) => (m === WIN ? { candles: winPrices.candles, source: "fake" } : null), solUsd: async () => winPrices.solUsdAtSale, now: () => 1_795_300_000, ...extra });
+
+/** A promise whose end the test controls. */
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
+const empty = (wallet: string): ScanResult => ({
+  wallet,
+  history: { transactions: 0, pages: 1, complete: true, oldest: null },
+  dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 },
+  trades: 0,
+  tradeList: [],
+  sells: [],
+  unpriced: 0,
+  totalFumbleUsd: 0,
+  worst: null,
+  ranOutOfTime: false,
+});
+
+/* ------------------------------- the response shape ------------------------------- */
+
+test("the response puts measured sells first, biggest fumble first, then the unknown ones oldest first", async () => {
+  const api = toApiResult(await realScan(), 1_795_300_000);
+  assert.equal(api.measured, 1);
+  assert.equal(api.unknown, 2);
+  assert.deepEqual(api.sells.map((s) => s.status), ["ok", "unknown", "unknown"]);
+  assert.equal(api.sells[0].token, WIN);
+  assert.ok(api.sells[1].soldAt < api.sells[2].soldAt);
+  assert.equal(api.sells[1].reason, "no price history for this token");
+  assert.ok(api.totalFumbleUsd > 3250 && api.totalFumbleUsd < 3450);
+  assert.equal(api.tradeCount, 28);
+  assert.deepEqual(api.coverage, { transactions: 100, pages: 1, complete: true, oldest: txs[txs.length - 1].timestamp });
+});
+
+test("a measured sell carries what the page needs, and an unknown one does not pretend to have a fumble", async () => {
+  const api = toApiResult(await realScan(), 1_795_300_000);
+  const [ok, unknown] = api.sells;
+  assert.ok(ok.soldUsd! > 400 && ok.peakMultiple! > 7 && ok.fumbleUsd! > 3000 && ok.peakAt! > ok.soldAt);
+  assert.equal(ok.source, "fake");
+  assert.ok(ok.costSol > 20 && ok.matchedTokens > 0);
+  assert.equal(unknown.fumbleUsd, undefined);
+  assert.equal(unknown.peakMultiple, undefined);
+});
+
+test("the response is plain JSON: it survives a round trip unchanged", async () => {
+  const api = toApiResult(await realScan(), 1_795_300_000);
+  assert.deepEqual(JSON.parse(JSON.stringify(api)), api);
+});
+
+/* ------------------------------- the scanner's guard rails ------------------------------- */
+
+test("a finished scan is reused until it is too old, then it is run again", async () => {
+  let t = 1000;
+  let runs = 0;
+  const s = createScanner({ run: async (w) => (runs++, empty(w)), now: () => t, ttlSeconds: 600 });
+  assert.equal((await s.scan(WALLET)).cached, false);
+  assert.equal((await s.scan(WALLET)).cached, true);
+  assert.equal(runs, 1);
+  assert.ok(s.peek(WALLET));
+  t += 601;
+  assert.equal(s.peek(WALLET), null);
+  assert.equal((await s.scan(WALLET)).cached, false);
+  assert.equal(runs, 2);
+});
+
+test("two people scanning the same wallet at once share one run, and both see its progress", async () => {
+  const gate = deferred<void>();
+  let runs = 0;
+  const s = createScanner({
+    run: async (w, emit) => {
+      runs++;
+      emit({ type: "progress", stage: "history", done: 0, total: 0 });
+      await gate.promise;
+      emit({ type: "progress", stage: "done", done: 1, total: 1 });
+      return empty(w);
+    },
+  });
+  const stage = (e: ScanEvent) => (e.type === "progress" ? e.stage : e.type);
+  const a: string[] = [];
+  const b: string[] = [];
+  const first = s.scan(WALLET, (e) => a.push(stage(e)));
+  await Promise.resolve();
+  const second = s.scan(WALLET, (e) => b.push(stage(e)));
+  assert.equal(s.active(), 1);
+  gate.resolve();
+  const [r1, r2] = await Promise.all([first, second]);
+  assert.equal(runs, 1);
+  assert.equal(r1.result, r2.result);
+  assert.deepEqual(a, ["history", "done"]);
+  assert.deepEqual(b, ["done"], "the second joined after the first event");
+});
+
+test("when too many different scans are running, the next is turned away, and works once there is room", async () => {
+  const gate = deferred<void>();
+  const s = createScanner({ run: async (w) => (await gate.promise, empty(w)), maxActive: 1 });
+  const first = s.scan(WALLET);
+  await Promise.resolve();
+  await assert.rejects(s.scan(OTHER), BusyError);
+  gate.resolve();
+  await first;
+  assert.equal(s.active(), 0);
+  assert.equal((await s.scan(OTHER)).cached, false);
+});
+
+test("a scan that fails is not kept: the next try runs again, and the slot is freed", async () => {
+  let runs = 0;
+  const s = createScanner({
+    run: async (w) => {
+      if (++runs === 1) throw new Error("helius down");
+      return empty(w);
+    },
+    maxActive: 1,
+  });
+  await assert.rejects(s.scan(WALLET), /helius down/);
+  assert.equal(s.active(), 0);
+  assert.equal(s.peek(WALLET), null);
+  assert.equal((await s.scan(WALLET)).cached, false);
+  assert.equal(runs, 2);
+});
+
+test("the cache is bounded: the oldest scan goes when it is full", async () => {
+  const s = createScanner({ run: async (w) => empty(w), maxCached: 2 });
+  await s.scan("w1");
+  await s.scan("w2");
+  await s.scan("w3");
+  assert.equal(s.peek("w1"), null);
+  assert.ok(s.peek("w2") && s.peek("w3"));
+});
+
+/* ------------------------------- the scan's time limit ------------------------------- */
+
+test("when time runs out the tokens not yet priced are reported unknown, and the biggest sells are priced first", async () => {
+  const order: string[] = [];
+  let calls = 0;
+  const result = await realScan(WALLET, {
+    prices: async (mint) => (order.push(mint), { candles: winPrices.candles, source: "fake" }),
+    outOfTime: () => calls++ >= 1, // time is up after the first token
+  });
+  assert.equal(order.length, 1);
+  assert.equal(result.ranOutOfTime, true);
+  const sellsByMint = new Map(result.sells.map((s) => [s.lot.sell.mint, s]));
+  const priced = sellsByMint.get(order[0])!;
+  assert.ok(priced.lot.sell.sol >= Math.max(...result.sells.map((s) => s.lot.sell.sol)) - 1e-9, "the first token priced has the biggest sell");
+  const late = result.sells.filter((s) => s.lot.sell.mint !== order[0]);
+  assert.equal(late.length, 2);
+  assert.ok(late.every((s) => s.fumble.status === "no-price" && /ran out of time/.test((s.fumble as { reason: string }).reason)));
+  assert.equal(toApiResult(result, 1).ranOutOfTime, true);
+});
+
+test("a scan that finishes in time says so", async () => {
+  assert.equal((await realScan()).ranOutOfTime, false);
+});
+
+/* ------------------------------- the SOL price helper ------------------------------- */
+
+test("a failed SOL price lookup is not remembered, so a hiccup does not poison the hour", async () => {
+  let calls = 0;
+  const sol = solPriceAt(async (_m, from) => (calls++ === 0 ? null : { candles: [{ t: from, h: 71, l: 69, c: 70 }], source: "x" }));
+  assert.equal(await sol(3700), null);
+  assert.equal(await sol(3800), 70);
+  assert.equal(calls, 2);
+  assert.equal(await sol(3900), 70);
+  assert.equal(calls, 2, "a good answer is kept");
+});
+
+/* ------------------------------- the trade list ------------------------------- */
+
+test("the trade list is newest first, buys and sells of a meaningful size, and goes out before any price lookup", async () => {
+  const order: string[] = [];
+  const got: { list?: ReturnType<typeof toApiTrades> } = {};
+  const result = await realScan(WALLET, {
+    onTrades: (t) => (order.push("trades"), (got.list = toApiTrades(WALLET, t))),
+    prices: async (m) => (order.push("price"), m === WIN ? { candles: winPrices.candles, source: "fake" } : null),
+  });
+  assert.equal(order[0], "trades", "the list is sent before prices are looked up");
+  assert.ok(got.list);
+  const list = got.list!;
+  assert.ok(list.trades.length > 3 && list.trades.length <= 28, `${list.trades.length} trades of 0.1 SOL or more`);
+  assert.ok(list.trades.every((t) => t.sol >= 0.1));
+  assert.ok(list.trades.every((t, i) => i === 0 || list.trades[i - 1].time >= t.time), "newest first");
+  assert.ok(list.trades.some((t) => t.side === "buy") && list.trades.some((t) => t.side === "sell"));
+  assert.equal(list.tradeCount, 28);
+  assert.deepEqual(toApiResult(result, 1).trades, list.trades);
+});
+
+test("someone who joins a scan that already sent its trade list is sent it straight away", async () => {
+  const gate = deferred<void>();
+  const list = toApiTrades(WALLET, { history: { transactions: 1, pages: 1, complete: true, oldest: 1 }, dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 }, tradeCount: 0, trades: [] });
+  const s = createScanner({
+    run: async (w, emit) => {
+      emit({ type: "trades", data: list });
+      await gate.promise;
+      return empty(w);
+    },
+  });
+  const first = s.scan(WALLET);
+  await Promise.resolve();
+  const seen: string[] = [];
+  const second = s.scan(WALLET, (e) => seen.push(e.type));
+  assert.deepEqual(seen, ["trades"]);
+  gate.resolve();
+  await Promise.all([first, second]);
+});

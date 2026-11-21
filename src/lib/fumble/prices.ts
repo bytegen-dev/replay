@@ -176,6 +176,8 @@ export function solPriceAt(prices: (mint: string, from: number, now: number) => 
     const hour = Math.floor(time / 3600) * 3600;
     if (!byHour.has(hour)) byHour.set(hour, prices(SOL_MINT, hour, hour + 3600).then((s) => s?.candles ?? null));
     const candles = await byHour.get(hour)!;
+    // A failed lookup is not remembered, so a hiccup does not poison that hour for everyone after.
+    if (!candles) byHour.delete(hour);
     return candles ? priceAt(candles, time) : null;
   };
 }

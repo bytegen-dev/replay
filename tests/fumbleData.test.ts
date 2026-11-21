@@ -81,37 +81,90 @@ test("other statuses come straight back, not retried", async () => {
 
 /* ----------------------------------- history ----------------------------------- */
 
-const tx = (i: number): HeliusTx => ({ signature: `sig${i}`, timestamp: 10_000 - i, feePayer: WALLET, fee: 5000 });
-const page = (from: number, n: number) => Array.from({ length: n }, (_, k) => tx(from + k));
+const tx = (sig: string, timestamp: number): HeliusTx => ({ signature: sig, timestamp, feePayer: WALLET, fee: 5000 });
+/** `n` transactions, newest first, named `<prefix>0`, `<prefix>1`... and one second apart starting at `start`. */
+const page = (prefix: string, from: number, n: number, start = 10_000) => Array.from({ length: n }, (_, k) => tx(`${prefix}${from + k}`, start - (from + k)));
+const typeOf = (url: string) => new URL(url).searchParams.get("type");
+const noSleep = async () => {};
 
-test("history is read page by page, each page continuing from the last signature, until a short page ends it", async () => {
+/** Serves each type's pages in turn, then empty pages: the way Helius ends a list. */
+function lists(byType: Record<string, ReturnType<typeof page>[]>, urls: string[] = []): Fetch {
+  return async (u) => (urls.push(u), reply(200, byType[typeOf(u)!]?.shift() ?? []));
+}
+
+test("history is two lists, swaps and transfers, each read page by page from the last signature until an empty page ends it", async () => {
   const urls: string[] = [];
-  const pages = [page(0, 100), page(100, 100), page(200, 37)];
-  const fetchImpl: Fetch = async (u) => (urls.push(u), reply(200, pages.shift()));
-  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: async () => {} });
-  assert.equal(h.txs.length, 237);
+  const fetchImpl = lists({ SWAP: [page("s", 0, 100), page("s", 100, 100), page("s", 200, 37)], TRANSFER: [page("t", 0, 12, 9_990)] }, urls);
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, types: ["SWAP", "TRANSFER"] });
+  assert.equal(h.txs.length, 237 + 12);
+  assert.equal(h.pages, 6); // SWAP: three pages and the empty one; TRANSFER: one page and the empty one
+  assert.equal(h.complete, true);
+  assert.deepEqual(urls.map(typeOf), ["SWAP", "SWAP", "SWAP", "SWAP", "TRANSFER", "TRANSFER"]);
+  assert.ok(!urls[0].includes("before=") && urls[1].includes("before=s99") && urls[2].includes("before=s199") && urls[3].includes("before=s236") && !urls[4].includes("before="));
+  assert.ok(urls[0].includes(`api-key=${KEY}`) && urls[0].includes("limit=100"));
+  assert.ok(h.txs.every((t, i) => i === 0 || h.txs[i - 1].timestamp >= t.timestamp), "newest first");
+  assert.equal(h.oldest, 10_000 - 236);
+});
+
+test("a short page does not end a list: older transactions after it are still read", async () => {
+  // The real behaviour: 25 swaps, then 11 older ones, then none.
+  const fetchImpl = lists({ SWAP: [page("s", 0, 25), page("s", 25, 11)] });
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, types: ["SWAP"] });
+  assert.equal(h.txs.length, 36);
   assert.equal(h.pages, 3);
   assert.equal(h.complete, true);
-  assert.equal(h.oldest, 10_000 - 236);
-  assert.ok(!urls[0].includes("before="));
-  assert.ok(urls[1].includes("before=sig99"));
-  assert.ok(urls[2].includes("before=sig199"));
-  assert.ok(urls[0].includes(`api-key=${KEY}`) && urls[0].includes("limit=100") && !urls[0].includes("type="), "everything is asked for, not just swaps");
 });
 
-test("the page cap stops a long history and says it was cut short", async () => {
-  const fetchImpl: Fetch = async () => reply(200, page(0, 100));
-  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: async () => {}, maxPages: 2 });
-  assert.equal(h.pages, 2);
+test("a transaction that is in both lists is kept once", async () => {
+  const shared = tx("both", 9_000);
+  const fetchImpl = lists({ SWAP: [[shared, tx("a", 8_000)]], TRANSFER: [[shared, tx("b", 7_000)]] });
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, types: ["SWAP", "TRANSFER"] });
+  assert.deepEqual(h.txs.map((t) => t.signature), ["both", "a", "b"]);
+});
+
+test("when the page cap cuts a list short, nothing older than that list reaches is kept, so a sell never shows without its earlier buys", async () => {
+  // SWAP has more than the cap allows (reaches back only to 9_800); TRANSFER ended on its own, much further back.
+  const fetchImpl = lists({ SWAP: [page("s", 0, 100), page("s", 100, 100), page("s", 200, 100)], TRANSFER: [[tx("recent", 9_900), tx("ancient", 100)]] });
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, maxPages: 2, types: ["SWAP", "TRANSFER"] });
   assert.equal(h.complete, false);
+  assert.equal(h.oldest, 10_000 - 199);
+  assert.ok(h.txs.some((t) => t.signature === "recent"));
+  assert.ok(!h.txs.some((t) => t.signature === "ancient"));
 });
 
-test("reading stops once a page reaches back far enough", async () => {
-  const pages = [page(0, 100), page(100, 100), page(200, 100)];
-  const fetchImpl: Fetch = async () => reply(200, pages.shift());
-  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: async () => {}, sinceTime: 10_000 - 150 });
-  assert.equal(h.pages, 2);
+test("reading a list stops once a page reaches back far enough", async () => {
+  const fetchImpl = lists({ SWAP: [page("s", 0, 100), page("s", 100, 100), page("s", 200, 100)], TRANSFER: [] });
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, sinceTime: 10_000 - 150, types: ["SWAP", "TRANSFER"] });
+  assert.equal(h.pages, 3); // two SWAP pages, and one empty TRANSFER page
   assert.equal(h.complete, true);
+});
+
+test("by default the history is fetched unfiltered, with no type in the request, page after page until an empty one", async () => {
+  const urls: string[] = [];
+  const pagesLeft = [page("x", 0, 100), page("x", 100, 100), page("x", 200, 40)];
+  const fetchImpl: Fetch = async (u) => (urls.push(u), reply(200, pagesLeft.shift() ?? []));
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep });
+  assert.equal(urls.length, 4);
+  assert.ok(urls.every((u) => typeOf(u) === null));
+  assert.equal(h.txs.length, 240);
+  assert.equal(h.complete, true);
+});
+
+test("reading stops when the time budget is spent, keeps what it has, and says the history is incomplete", async () => {
+  let t = 0;
+  const fetchImpl: Fetch = async () => ((t += 4000), reply(200, page("x", Math.round(t / 4000) * 100, 100)));
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, maxMs: 10_000, now: () => t });
+  assert.equal(h.pages, 3); // 0s, 4s and 8s start a page; at 12s the budget is gone
+  assert.equal(h.complete, false);
+  assert.equal(h.txs.length, 300);
+});
+
+test("a list the time budget never reached vouches for nothing, so nothing is kept and the history is incomplete", async () => {
+  let t = 0;
+  const fetchImpl: Fetch = async (u) => ((t += 6000), reply(200, typeOf(u) === "SWAP" ? [tx("s1", 9_000)] : [tx("t1", 8_000)]));
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, maxMs: 5000, now: () => t, types: ["SWAP", "TRANSFER"], maxPages: 1 });
+  assert.equal(h.complete, false);
+  assert.equal(h.txs.length, 0);
 });
 
 test("history rejects an address that is not a wallet, an error answer, and a reply that is not a list", async () => {
@@ -119,7 +172,6 @@ test("history rejects an address that is not a wallet, an error answer, and a re
   assert.equal(isWalletAddress("not a wallet"), false);
   assert.equal(isWalletAddress("../../etc"), false);
   await assert.rejects(fetchHistory("nope", { apiKey: KEY }), /not a Solana wallet/);
-  const noSleep = async () => {};
   await assert.rejects(fetchHistory(WALLET, { apiKey: KEY, sleep: noSleep, fetchImpl: async () => reply(401) }), (e: unknown) => e instanceof NetError && !(e as Error).message.includes(KEY));
   await assert.rejects(fetchHistory(WALLET, { apiKey: KEY, sleep: noSleep, fetchImpl: async () => reply(200, { error: "bad key" }) }), /other than a list/);
 });
