@@ -149,6 +149,8 @@ export interface EndlessSegment {
   times: number[];
   /** What it is called in the game ("Bitcoin (BTC)"). */
   label: string;
+  /** The address of its round logo. */
+  logo?: string;
 }
 
 export interface EndlessOptions {

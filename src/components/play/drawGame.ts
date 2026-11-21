@@ -20,7 +20,7 @@ export interface Frame {
   time: number;
   phase: "ready" | "running" | "crashed";
   bits: { x: number; y: number; age: number }[];
-  hud: { left: string; right: string; center: string };
+  hud: { left: string; right: string; center: string; logo?: string };
   /** Draw in the light theme's colours. */
   light: boolean;
   /** The leverage the run is flying at (1 to 10): the faster it is, the more streaks fly past. */
@@ -536,14 +536,14 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
     }
     ctx.globalAlpha = Math.min(1, a * 1.4);
     ctx.fillStyle = P.banner;
-    ctx.fillRect(W / 2 - 150, 46, 300, 30);
+    ctx.fillRect(W / 2 - 150, 66, 300, 30);
     ctx.strokeStyle = P.edge;
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(W / 2 - 150, 46, 300, 30);
+    ctx.strokeRect(W / 2 - 150, 66, 300, 30);
     ctx.fillStyle = P.ink;
     ctx.font = `700 13px ${f.fonts.head}`;
     ctx.textAlign = "center";
-    ctx.fillText(f.sync.label, W / 2, 66);
+    ctx.fillText(f.sync.label, W / 2, 86);
     ctx.textAlign = "left";
     ctx.globalAlpha = 1;
   }
@@ -560,12 +560,43 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
     ctx.fillStyle = P.edge;
     ctx.fillRect(0, 0, W * Math.min(1, f.progress), 3);
   }
-  ctx.textAlign = "center";
-  ctx.fillStyle = `rgba(${P.inkRgb},0.85)`;
+  // The asset under Tony on its own line: a round logo, its name and its price.
   ctx.font = `500 12px ${f.fonts.body}`;
-  ctx.fillText(f.hud.center, W / 2, 22);
+  const tw = ctx.measureText(f.hud.center).width;
+  const hasLogo = Boolean(f.hud.logo);
+  const total = (hasLogo ? 22 : 0) + tw;
+  const x0 = W / 2 - total / 2;
+  if (f.hud.logo) drawLogo(ctx, f.hud.logo, x0 + 8, 44, 8);
   ctx.textAlign = "left";
+  ctx.fillStyle = `rgba(${P.inkRgb},0.85)`;
+  ctx.fillText(f.hud.center, x0 + (hasLogo ? 22 : 0), 48);
   if (f.timeline) drawTimeline(ctx, f, W);
+}
+
+const logoImages = new Map<string, HTMLImageElement>();
+
+/** A round logo, drawn once its picture has arrived (the first call starts the download). */
+function drawLogo(ctx: CanvasRenderingContext2D, src: string, cx: number, cy: number, r: number) {
+  let img = logoImages.get(src);
+  if (!img) {
+    img = new Image();
+    img.src = src;
+    logoImages.set(src, img);
+  }
+  if (!img.complete || img.naturalWidth === 0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+  ctx.drawImage(img, cx - r, cy - r, r * 2, r * 2);
+  ctx.restore();
+  ctx.strokeStyle = `rgba(${P.inkRgb},0.25)`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
 }
 
 /** The strip along the bottom: a timeline of the years the asset covers, filling in as Tony flies, with the date under him ticking along. */
@@ -701,8 +732,9 @@ export interface MenuBuddy {
  * Tony floating about on his jetpack. He trails the cursor (or a finger) a little behind it on a soft spring, and wanders slowly when
  * nobody is pointing.
  */
-export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt: number; time: number; buddy: MenuBuddy; pointer: { x: number; y: number } | null; tony: boolean; unit: number; light: boolean }) {
+export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt: number; time: number; buddy: MenuBuddy; pointer: { x: number; y: number } | null; tony: boolean; unit: number; light: boolean; h: number }) {
   const { w: W, dt, time: t, buddy: b, pointer } = o;
+  const H = o.h;
   P = o.light ? LIGHT : DARK;
   // The glow in the middle holds steady (k is where it sits between its dimmest and brightest).
   const k = 0.5;

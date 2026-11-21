@@ -80,12 +80,15 @@
   /* The game's gold (scores, coins) and red (crashes), tuned per theme so they stay readable. */
   --game-gold: #f5c451;
   --game-red: #fb7185;
+  /* The colour of the tunnel's walls, which also fills the bars beside the game on a screen of the wrong shape. */
+  --game-wall: #08161a;
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
   --game-gold: #a16207;
   --game-red: #e11d48;
+  --game-wall: #a9cdc5;
   --background: #f2f7f7;
   --foreground: #0b171b;
   --card: #ffffff;

@@ -491,11 +491,16 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       const rect = box.current?.getBoundingClientRect();
       const bx = Math.max(1, rect?.width ?? 640);
       const by = Math.max(1, rect?.height ?? 360);
-      const W = Math.min(1100, Math.max(400, Math.round((H * bx) / by)));
+      // The title screen and menus fill the whole box, whatever its shape: the scene is drawn 640 wide at least and as tall as it needs to be.
+      const sceneScale = Math.min(bx / 640, by / H);
+      const W = demoMode ? bx / sceneScale : Math.min(1100, Math.max(400, Math.round((H * bx) / by)));
+      const Hs = demoMode ? by / sceneScale : H;
       let cw = bx;
       let ch = by;
-      if (cw / ch > W / H) cw = (ch * W) / H;
-      else ch = (cw * H) / W;
+      if (!demoMode) {
+        if (cw / ch > W / H) cw = (ch * W) / H;
+        else ch = (cw * H) / W;
+      }
       cv.style.width = `${cw}px`;
       cv.style.height = `${ch}px`;
       cv.style.left = `${(bx - cw) / 2}px`;
@@ -509,12 +514,12 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       }
       const ctx = cv.getContext("2d");
       if (!ctx) return;
-      ctx.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+      ctx.setTransform(cv.width / W, 0, 0, cv.height / Hs, 0, 0);
 
       if (demoMode) {
         const pt = pointer.current;
-        const gp = pt.on ? { x: ((pt.x - (bx - cw) / 2) / cw) * W, y: ((pt.y - (by - ch) / 2) / ch) * H } : null;
-        drawMenuScene(ctx, { w: W, dt, time: now / 1000, buddy: buddy.current, pointer: gp, tony: sc === "attract" || sc === "menu", unit: cw / W, light: lightRef.current });
+        const gp = pt.on ? { x: pt.x / sceneScale, y: pt.y / sceneScale } : null;
+        drawMenuScene(ctx, { w: W, h: Hs, dt, time: now / 1000, buddy: buddy.current, pointer: gp, tony: sc === "attract" || sc === "menu", unit: sceneScale, light: lightRef.current });
         return;
       }
       if (!r || !s) return;
@@ -643,14 +648,17 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       const idx = survival && r.endless ? r.endless.segmentAt(s.bird.x) : null;
       const lv = r.level;
       let center = "";
+      let logo: string | undefined;
       let timeline: Frame["timeline"];
       if (survival && r.endless && idx) {
         const seg = r.segments[idx.segment];
         center = `${seg.label}   ${gamePrice(seg.prices[idx.index])}`;
+        logo = seg.logo;
         timeline = { from: seg.times[0], to: seg.times[seg.times.length - 1], at: seg.times[idx.index] };
       } else if (lv && r.course) {
         const i = r.course.indexAt(s.bird.x);
         center = `${lv.asset}   ${gamePrice(lv.prices[i])}`;
+        logo = lv.logo;
         timeline = { from: lv.times[0], to: lv.times[lv.times.length - 1], at: lv.times[i] };
       }
       const frame: Frame = {
@@ -667,8 +675,8 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
         bits: s.bits,
         hud:
           survival
-            ? { left: `SURVIVAL  ${saveRef.current.username ?? ""}${levRef.current > 1 ? `  ${levRef.current}x` : ""}`, right: `${scoreFor(s.bird.x, s.gotCount)}`, center }
-            : { left: `${levelIdx + 1}  ${lv?.title ?? ""}`, right: `${s.gotCount} / ${r.coins.length}`, center },
+            ? { left: `${saveRef.current.username ?? "Guest"}${levRef.current > 1 ? `  ${levRef.current}x` : ""}`, right: `${scoreFor(s.bird.x, s.gotCount)}`, center, logo }
+            : { left: `${levelIdx + 1}  ${lv?.title ?? ""}`, right: `${s.gotCount} / ${r.coins.length}`, center, logo },
         sync: survival && s.syncUntil > s.time ? { amount: Math.min(1, (s.syncUntil - s.time) / 1.4), label: s.syncLabel } : undefined,
         w: W,
         light: lightRef.current,
@@ -704,8 +712,6 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
         e.preventDefault();
         if (!e.repeat) flapNow();
       } else if (e.code === "KeyP") togglePause();
-      else if (screenRef.current === "play" && (e.code === "BracketLeft" || e.code === "Minus")) setLev(levRef.current - 1);
-      else if (screenRef.current === "play" && (e.code === "BracketRight" || e.code === "Equal")) setLev(levRef.current + 1);
       else if (screenRef.current === "attract" && (e.code === "Enter" || e.code === "Space")) {
         e.preventDefault();
         pressStart();
@@ -713,7 +719,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [flapNow, togglePause, pressStart, setLev]);
+  }, [flapNow, togglePause, pressStart]);
 
   /* ----------------------------- the screens ----------------------------- */
 
@@ -742,7 +748,6 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
     );
 
   const canPauseNow = inRun && phase === "running";
-  const showLev = mode === "survival" && inRun;
   const barBtn = "grid size-8 place-items-center border border-primary/30 text-foreground/90 transition-colors hover:bg-primary/10 disabled:opacity-40";
 
   return (
@@ -765,15 +770,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
             Main menu
           </button>
         )}
-        <div className="flex min-w-0 flex-1 items-center justify-center">
-          {showLev && (
-            <label className="flex items-center gap-2 text-xs font-bold">
-              <span className="hidden tracking-widest text-muted-foreground uppercase sm:inline">Leverage</span>
-              <input type="range" min={1} max={10} step={1} value={leverage} onChange={(e) => setLev(Number(e.target.value))} aria-label="Leverage" className="h-1.5 w-24 cursor-pointer accent-primary sm:w-40" />
-              <span className={cn("w-9 tabular-nums", leverage >= 7 ? "text-[var(--game-red)]" : leverage > 1 ? "text-[var(--game-gold)]" : "text-foreground/90")}>{leverage}x</span>
-            </label>
-          )}
-        </div>
+        <div className="min-w-0 flex-1" />
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={togglePause} disabled={!canPauseNow} aria-label={paused ? "Resume" : "Pause"} className={barBtn}>
             {paused ? <Play className="size-4" aria-hidden /> : <Pause className="size-4" aria-hidden />}
@@ -795,7 +792,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-background">
+      <div className="relative min-h-0 flex-1 bg-[var(--game-wall)]">
       <div
         ref={box}
         onPointerMove={(e) => {
@@ -885,7 +882,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
               ) : (
                 <>
                   <p className="font-heading text-xs font-bold sm:text-sm">Survival</p>
-                  <p className="mt-1 text-[0.65rem] leading-snug text-foreground/90 sm:text-xs">One endless run since 2018. It starts with Bitcoin and hands over from asset to asset, getting faster and narrower, with red candles in the way. Leverage in the top bar multiplies the speed of the tunnel, and your score with it: 1x to 10x.</p>
+                  <p className="mt-1 text-[0.65rem] leading-snug text-foreground/90 sm:text-xs">One endless run since 2018. It starts with Bitcoin and hands over from asset to asset, getting faster and narrower, with red candles in the way.{leverage > 1 ? ` Leverage ${leverage}x.` : ""}</p>
                 </>
               )}
               <p className="mt-1.5 text-[0.65rem] font-bold text-primary sm:text-xs">Tap, click or press space to start</p>
@@ -947,6 +944,14 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
                   <Play className="size-4 fill-current" aria-hidden />
                   Play
                 </button>
+                <label className="flex flex-col gap-1.5 py-2 text-left">
+                  <span className="flex items-center justify-between text-xs font-bold">
+                    <span>Leverage</span>
+                    <span className={cn("tabular-nums", leverage >= 7 ? "text-[var(--game-red)]" : leverage > 1 ? "text-[var(--game-gold)]" : "text-muted-foreground")}>{leverage}x</span>
+                  </span>
+                  <input type="range" min={1} max={10} step={1} value={leverage} onChange={(e) => setLev(Number(e.target.value))} aria-label="Leverage" className="h-1.5 w-full cursor-pointer accent-primary" />
+                  <span className="text-[0.65rem] text-muted-foreground">Faster tunnel, higher score.</span>
+                </label>
                 <button type="button" className="cut-btn flex h-10 w-full items-center justify-center gap-2 text-sm font-bold text-primary" onClick={() => (sfx.select(), void fetchBoard(), setScreen("board"))}>
                   <Trophy className="size-4" aria-hidden />
                   Leaderboard

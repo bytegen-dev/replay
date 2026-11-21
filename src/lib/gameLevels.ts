@@ -31,6 +31,8 @@ export interface Level {
   outro: string;
   /** What the coach says while Tony flies. */
   hints: Hint[];
+  /** The address of the asset's round logo. */
+  logo: string;
   /** The real prices, oldest first, with their dates (ms since 1970). */
   times: number[];
   prices: number[];
@@ -124,6 +126,7 @@ export function getLevels(): Level[] {
       id: d.id,
       title: d.title,
       asset: d.asset,
+      logo: assetLogo(s.symbol),
       period: period(s.from, s.to),
       intro: d.intro,
       outro: d.outro,
@@ -141,6 +144,13 @@ export function getLevels(): Level[] {
 /* ------------------------------------------------------------------------------------------------------------------------ */
 /* Survival */
 
+/** Where an asset's round logo comes from: the coins' pictures are in /public, the companies' come through the site's logo route. */
+function assetLogo(symbol: string): string {
+  if (symbol === "BTC-USD") return "/logos/btc.png";
+  if (symbol === "ETH-USD") return "/logos/ethereum.png";
+  return `/api/stock-logo?s=${encodeURIComponent(symbol)}`;
+}
+
 const SURVIVAL_ORDER: { id: string; label: string }[] = [
   { id: "btc", label: "Bitcoin (BTC)" },
   { id: "eth", label: "Ethereum (ETH)" },
@@ -155,7 +165,7 @@ export function getSurvivalSegments(): EndlessSegment[] {
   for (const d of SURVIVAL_ORDER) {
     const s = saved.survival[d.id];
     if (!s || s.points.length < 2) continue;
-    out.push({ label: d.label, times: s.points.map((p) => p[0]), prices: s.points.map((p) => p[1]) });
+    out.push({ label: d.label, logo: assetLogo(s.symbol), times: s.points.map((p) => p[0]), prices: s.points.map((p) => p[1]) });
   }
   return out;
 }
