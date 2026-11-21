@@ -1725,3 +1725,15 @@ html[data-motion="reduce"] .tap-ripple {
   --ring: #69aac1;
   color: var(--foreground);
 }
+
+/* The gold flash over the whole game box when a run sets a new best. */
+.high-flash {
+  background: radial-gradient(circle at 50% 45%, color-mix(in oklab, var(--game-gold) 55%, transparent), color-mix(in oklab, var(--game-gold) 20%, transparent) 60%, transparent 100%);
+  animation: high-flash 1000ms ease-out forwards;
+}
+@keyframes high-flash {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  100% { opacity: 0; }
+}
+html[data-motion="reduce"] .high-flash { display: none; }

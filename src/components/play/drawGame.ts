@@ -775,10 +775,12 @@ export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt:
   const tx = pointer ? pointer.x : W / 2 + Math.sin(t * 0.5) * W * 0.3;
   const ty = (pointer ? pointer.y + 28 : H / 2 + Math.sin(t * 0.8) * H * 0.14) + Math.sin(t * 2.4) * 3;
   const step = Math.min(dt, 1 / 30);
+  // On a small screen one game unit is under a pixel, so Tony is drawn larger to stay about the size he is on a desktop.
+  const tk = Math.max(1, 1 / o.unit);
   b.vx += ((tx - b.x) * 5 - b.vx * 2.6) * step;
   b.vy += ((ty - b.y) * 5 - b.vy * 2.6) * step;
-  b.x = Math.min(W - 20, Math.max(20, b.x + b.vx * step));
-  b.y = Math.min(H - 30, Math.max(24, b.y + b.vy * step));
+  b.x = Math.min(W - 20 * tk, Math.max(20 * tk, b.x + b.vx * step));
+  b.y = Math.min(H - 30 * tk, Math.max(24 * tk, b.y + b.vy * step));
   const speed = Math.hypot(b.vx, b.vy);
   const burn = Math.min(1, 0.2 + speed / 240 + (b.vy < -40 ? 0.3 : 0));
 
@@ -787,6 +789,10 @@ export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt:
     b.acc = 0;
     b.smoke.push({ x: b.x - 10, y: b.y + 22, age: 0 });
   }
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.scale(tk, tk);
+  ctx.translate(-b.x, -b.y);
   for (const d of b.smoke) {
     d.age += step;
     ctx.globalAlpha = Math.max(0, 1 - d.age / 0.55) * 0.4;
@@ -798,4 +804,5 @@ export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt:
   ctx.globalAlpha = 1;
   b.smoke = b.smoke.filter((d) => d.age < 0.55);
   drawTony(ctx, b.x, b.y, Math.max(-0.4, Math.min(0.4, b.vx / 500)), t, false, burn);
+  ctx.restore();
 }

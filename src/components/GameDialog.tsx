@@ -46,6 +46,7 @@ export function GameDialog() {
         <DialogPrimitive.Content
           onOpenAutoFocus={(e) => e.preventDefault()}
           onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => data && e.preventDefault()}
           className="fixed top-1/2 left-1/2 z-[81] h-[min(94dvh,860px)] w-[min(96vw,1360px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden border border-border bg-background outline-none data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 data-[state=open]:duration-200"
         >
           <DialogPrimitive.Title className="sr-only">Tony Stonk</DialogPrimitive.Title>

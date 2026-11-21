@@ -84,7 +84,6 @@ interface Final {
 
 const SAVE_KEY = "replay-tony-stonk-v2";
 const PREF_KEY = "replay-tony-audio";
-const MINT = "#39d6a3";
 
 function makeToken(): string {
   const a = new Uint8Array(16);
@@ -139,6 +138,8 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
   const [board, setBoard] = useState<{ available: boolean; entries: BoardEntry[] } | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
   const [volume, setVolume] = useState(0.6);
   const [muted, setMutedState] = useState(false);
   const [sfxOn, setSfxOn] = useState(true);
@@ -167,6 +168,9 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
   const run = useRef<Run | null>(null);
   const sim = useRef<Sim | null>(null);
   const pausedRef = useRef(false);
+  const confirmRef = useRef(false);
+  const flashEl = useRef<HTMLDivElement | null>(null);
+  const [highFlash, setHighFlash] = useState(0);
   const fonts = useRef({ head: "sans-serif", body: "monospace" });
   /** The person asked for less motion: no shake or flashes. */
   const calm = useRef(false);
@@ -179,7 +183,8 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
   }, [save]);
   useEffect(() => {
     pausedRef.current = paused;
-  }, [paused]);
+    confirmRef.current = confirmLeave;
+  }, [paused, confirmLeave]);
 
   // On big screens the text and buttons over the game grow with the scene behind them (up to 1.8x), never below their normal size.
   useEffect(() => {
@@ -396,6 +401,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       const base: Final = { score, best: Math.max(cur.best, score), distance: Math.floor(s.bird.x / 10), asset, reached, rank: null, note: null, newBest };
       setFinal(base);
       setScreen("gameover");
+      if (newBest && score > 0 && !calm.current) setHighFlash((n) => n + 1);
       void fetchBoard();
       if (cur.username && !cur.offline && score > 0) {
         try {
@@ -451,6 +457,28 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
     if (screenRef.current !== "play" || sim.current?.phase !== "running") return;
     setPaused((p) => !p);
   }, []);
+
+  /** Forgets this device's name, best score and tutorial progress and starts fresh. */
+  const resetProgress = useCallback(() => {
+    keep({ tutorialDone: false, stars: {}, username: null, token: makeToken(), best: 0, offline: false });
+    setConfirmReset(false);
+    setFinal(null);
+    setScreen("attract");
+  }, [keep]);
+
+  /** Starts the current run over: the same level, or a fresh Survival run. */
+  const restart = useCallback(() => {
+    if (run.current?.mode === "survival") startSurvival();
+    else startTutorial(levelIdx);
+  }, [startSurvival, startTutorial, levelIdx]);
+
+  /** Closing the box mid-run asks first, and pauses the run while it asks. */
+  const requestClose = useCallback(() => {
+    if (screenRef.current === "play") {
+      if (sim.current?.phase === "running") setPaused(true);
+      setConfirmLeave(true);
+    } else onClose?.();
+  }, [onClose]);
 
   const goMenu = useCallback(() => {
     stopMusic();
@@ -560,6 +588,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
         const pt = pointer.current;
         const gp = pt.on ? { x: pt.x / sceneScale, y: pt.y / sceneScale } : null;
         drawMenuScene(ctx, { w: W, h: Hs, dt, time: now / 1000, buddy: buddy.current, pointer: gp, tony: sc === "attract" || sc === "menu", unit: sceneScale, light: lightRef.current });
+        if (flashEl.current) flashEl.current.style.opacity = "0";
         return;
       }
       if (!r || !s) return;
@@ -727,21 +756,11 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
         speed: survival ? levRef.current : 1,
         timeline,
         fonts: fonts.current,
-        fx: { shake: calm.current ? 0 : s.shake, flash: calm.current ? 0 : s.flash, flapAge: s.flapAge, trail: s.trail, sparks: s.sparks, pops: s.pops },
+        fx: { shake: calm.current ? 0 : s.shake, flash: 0, flapAge: s.flapAge, trail: s.trail, sparks: s.sparks, pops: s.pops },
       };
       drawFrame(ctx, frame);
-      if (pausedRef.current) {
-        ctx.fillStyle = lightRef.current ? "rgba(234,246,243,0.7)" : "rgba(3,9,11,0.6)";
-        ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = lightRef.current ? "#0b2b2c" : "#f3f8f8";
-        ctx.font = `700 22px ${fonts.current.head}`;
-        ctx.textAlign = "center";
-        ctx.fillText("PAUSED", W / 2, H / 2);
-        ctx.font = `500 12px ${fonts.current.body}`;
-        ctx.fillStyle = MINT;
-        ctx.fillText("press the pause button or flap to go on", W / 2, H / 2 + 24);
-        ctx.textAlign = "left";
-      }
+      // The crash flash is a layer over the whole box, not just the canvas, so the bars flash too.
+      if (flashEl.current) flashEl.current.style.opacity = calm.current ? "0" : (s.flash * 0.35).toFixed(3);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -756,6 +775,13 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
         e.preventDefault();
         if (!e.repeat) flapNow();
       } else if (e.code === "KeyP") togglePause();
+      else if (e.code === "Escape") {
+        const sc = screenRef.current;
+        if (confirmRef.current) setConfirmLeave(false);
+        else if (sc === "play") togglePause();
+        else if (sc === "settings" || sc === "board" || sc === "name") setScreen(saveRef.current.tutorialDone ? "menu" : "attract");
+        else if (embedded) onClose?.();
+      }
       else if (screenRef.current === "attract" && (e.code === "Enter" || e.code === "Space")) {
         e.preventDefault();
         pressStart();
@@ -763,7 +789,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [flapNow, togglePause, pressStart]);
+  }, [flapNow, togglePause, pressStart, embedded, onClose]);
 
   /* ----------------------------- the screens ----------------------------- */
 
@@ -796,7 +822,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
 
   return (
     <div ref={root} className={cn("game-theme flex flex-col bg-background", embedded ? "absolute inset-0" : "fixed inset-0 z-40")}>
-      {/* The top bar: the way back, the desk, leverage while playing Survival, and the sound, pause and full screen controls. */}
+      {/* The top bar: the way back to the site, and the sound, pause and full screen controls. */}
       <div className="flex h-11 shrink-0 items-center gap-2 border-b border-primary/20 bg-card px-2 sm:gap-3 sm:px-3" style={{ zoom: Math.min(uiScale, 1.4) }}>
         {embedded ? (
           <span className="flex h-8 items-center gap-2 pr-2 font-heading text-base font-bold text-foreground/90">
@@ -808,11 +834,6 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
             <BrandMark size={28} className="size-7 shrink-0 object-contain" />
             Replay
           </Link>
-        )}
-        {screen !== "attract" && screen !== "intro" && screen !== "menu" && (
-          <button type="button" onClick={goMenu} className="h-8 border border-primary/30 px-3 text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:bg-primary/10">
-            Main menu
-          </button>
         )}
         <div className="min-w-0 flex-1" />
         <div className="flex items-center gap-1.5">
@@ -829,7 +850,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
             </button>
           )}
           {embedded && (
-            <button type="button" onClick={onClose} aria-label="Close" title="Close" className={barBtn}>
+            <button type="button" onClick={requestClose} aria-label="Close" title="Close" className={barBtn}>
               <X className="size-4" aria-hidden />
             </button>
           )}
@@ -864,6 +885,8 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
           <span key={r.id} aria-hidden className="tap-ripple z-10" style={{ left: r.x, top: r.y }} />
         ))}
         <canvas ref={canvas} className={cn("absolute", !showCanvas && "invisible")} aria-label="Tony Stonk flying through a price chart. Tap, click or press space to jetpack." role="img" />
+        {highFlash > 0 && <div key={highFlash} aria-hidden className="high-flash pointer-events-none absolute inset-0 z-30" />}
+        <div ref={flashEl} aria-hidden className="pointer-events-none absolute inset-0 z-[5] bg-[#fb7185] opacity-0" />
 
         {/* Everything drawn over the game: scaled up on big screens, so the text and buttons keep their size against the scene behind. */}
         <div className="absolute inset-0" style={{ zoom: uiScale }}>
@@ -1008,6 +1031,50 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
           </div>
         )}
 
+        {/* Paused: the whole box blurs and dims, bars included, with a dialog like the Liquidated one */}
+        {paused && screen === "play" && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center overflow-y-auto bg-background/60 p-3 backdrop-blur-md">
+            <div role="dialog" aria-label="Paused" onPointerDown={(e) => e.stopPropagation()} className="cut-card pulse-ring flex w-full max-w-xs flex-col gap-4 border border-border bg-card p-5 sm:p-6">
+              <div>
+                <p className="font-heading text-xl font-bold sm:text-2xl">Paused</p>
+                <p className="text-xs text-muted-foreground">Press Esc to go on.</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                <button type="button" autoFocus className="cut-btn cut-btn-solid flex h-11 w-full items-center justify-center gap-2 text-sm font-bold" onClick={() => (sfx.select(), setPaused(false))}>
+                  <Play className="size-4 fill-current" aria-hidden />
+                  Resume
+                </button>
+                <button type="button" className="cut-btn flex h-10 w-full items-center justify-center gap-2 text-sm font-bold text-primary" onClick={() => (sfx.select(), restart())}>
+                  <RotateCcw className="size-4" aria-hidden />
+                  Restart
+                </button>
+                <button type="button" className="cut-btn flex h-10 w-full items-center justify-center gap-2 text-sm font-bold text-primary" onClick={goMenu}>
+                  <House className="size-4" aria-hidden />
+                  Main menu
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leaving in the middle of a run */}
+        {confirmLeave && screen === "play" && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-background/70 p-4" onPointerDown={(e) => e.stopPropagation()}>
+            <div role="alertdialog" aria-label="Leave the game?" className={panel}>
+              <p className="font-heading text-lg font-bold sm:text-2xl">Leave the game?</p>
+              <p className="text-xs text-muted-foreground sm:text-sm">Your run will be lost.</p>
+              <div className="flex w-full flex-col gap-2">
+                <button type="button" autoFocus className="cut-btn cut-btn-solid flex h-11 w-full items-center justify-center gap-2 text-sm font-bold" onClick={() => setConfirmLeave(false)}>
+                  Keep playing
+                </button>
+                <button type="button" className="cut-btn flex h-10 w-full items-center justify-center gap-2 text-sm font-bold text-primary" onClick={() => (setConfirmLeave(false), onClose?.())}>
+                  Leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Settings: leverage, the game's difficulty */}
         {screen === "settings" && (
           <div className={"absolute inset-0 flex items-center justify-center p-4"}>
@@ -1035,7 +1102,25 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
                   </button>
                 ))}
               </div>
-              <button type="button" className="cut-btn cut-btn-solid flex h-11 w-full items-center justify-center gap-2 text-sm font-bold" onClick={() => (sfx.select(), setScreen("menu"))}>
+              {confirmReset ? (
+                <div className="flex w-full flex-col gap-2 text-left">
+                  <p className="text-xs text-muted-foreground">Clears your name, best score and tutorial progress on this device. Your leaderboard entry stays.</p>
+                  <div className="flex gap-2">
+                    <button type="button" className="cut-btn flex h-10 flex-1 items-center justify-center text-sm font-bold text-primary" onClick={() => setConfirmReset(false)}>
+                      Cancel
+                    </button>
+                    <button type="button" className="cut-btn flex h-10 flex-1 items-center justify-center text-sm font-bold text-[var(--game-red)]" onClick={resetProgress}>
+                      Reset
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button type="button" className="flex h-9 w-full items-center justify-between text-xs font-bold" onClick={() => setConfirmReset(true)}>
+                  <span>Progress</span>
+                  <span className="text-[var(--game-red)] underline underline-offset-4">Reset</span>
+                </button>
+              )}
+              <button type="button" className="cut-btn cut-btn-solid flex h-11 w-full items-center justify-center gap-2 text-sm font-bold" onClick={() => (sfx.select(), setConfirmReset(false), setScreen("menu"))}>
                 Done
               </button>
             </div>
