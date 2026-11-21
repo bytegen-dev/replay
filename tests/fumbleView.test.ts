@@ -124,3 +124,15 @@ test("gains and losses are written with their sign", () => {
   assert.equal(signedSol(-20.43), "-20.4 SOL");
   assert.equal(signedSol(0.5), "+0.50 SOL");
 });
+
+test("the profit that came with the trade list is shown before the result, in SOL, and the result's dollars replace it", () => {
+  const rows = buildRows([trade("a", "sell"), trade("b", "sell"), trade("c", "sell"), trade("d", "buy")], null);
+  const early = { a: { profitSol: -2, matchedTokens: 100 }, b: { profitSol: 0, matchedTokens: 0 }, c: { profitSol: 1, matchedTokens: 40 } };
+  assert.deepEqual(pnlCell(rows[0], false, early), { kind: "profit", usd: null, sol: -2, partial: false });
+  assert.deepEqual(pnlCell(rows[1], false, early), { kind: "unknown" }, "no buy traced: unknown, not zero");
+  assert.deepEqual(pnlCell(rows[2], false, early), { kind: "profit", usd: null, sol: 1, partial: true });
+  assert.deepEqual(pnlCell(rows[3], false, early), { kind: "none" });
+  assert.equal(pnlCell(rows[0], false, {}).kind, "pending", "no profit yet (history still being read)");
+  const withResult = buildRows([trade("a", "sell")], [sell("a", { profitSol: -2, profitUsd: -134, matchedTokens: 100 })]);
+  assert.deepEqual(pnlCell(withResult[0], true, early), { kind: "profit", usd: -134, sol: -2, partial: false });
+});

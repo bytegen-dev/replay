@@ -93,3 +93,40 @@ export function heliusTokens(apiKey: string, deps: TokenDeps = {}) {
     return out;
   };
 }
+
+/**
+ * A growing set of coin names. `ensure` looks up only the coins not asked about yet, one lookup at a time, so a scan can ask after every
+ * page of history without repeating itself, and a later call waits for any lookup still in flight. A lookup that fails leaves those
+ * coins without a name (they are not retried), and `ensure` never throws.
+ */
+export function createNameBook(lookup?: (mints: string[]) => Promise<Map<string, TokenInfo>>) {
+  const known = new Map<string, TokenInfo>();
+  const asked = new Set<string>();
+  let chain: Promise<unknown> = Promise.resolve();
+  return {
+    /** Resolves true when it learned something new. */
+    ensure(mints: string[]): Promise<boolean> {
+      if (!lookup) return Promise.resolve(false);
+      const run = chain.then(async () => {
+        const fresh = [...new Set(mints)].filter((m) => !asked.has(m));
+        if (!fresh.length) return false;
+        for (const m of fresh) asked.add(m);
+        try {
+          const got = await lookup(fresh);
+          for (const [m, info] of got) known.set(m, info);
+          return got.size > 0;
+        } catch {
+          return false;
+        }
+      });
+      chain = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
+    },
+    snapshot(): Record<string, TokenInfo> {
+      return Object.fromEntries(known);
+    },
+  };
+}

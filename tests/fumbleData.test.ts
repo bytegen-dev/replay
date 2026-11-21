@@ -176,6 +176,22 @@ test("history rejects an address that is not a wallet, an error answer, and a re
   await assert.rejects(fetchHistory(WALLET, { apiKey: KEY, sleep: noSleep, fetchImpl: async () => reply(200, { error: "bad key" }) }), /other than a list/);
 });
 
+test("each page is reported as it is read, with everything read so far, for a single list", async () => {
+  const left = [page("x", 0, 100), page("x", 100, 40)];
+  const fetchImpl: Fetch = async () => reply(200, left.shift() ?? []);
+  const got: { n: number; pages: number }[] = [];
+  const h = await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, onPage: (txs, pages) => got.push({ n: txs.length, pages }) });
+  assert.deepEqual(got, [{ n: 100, pages: 1 }, { n: 140, pages: 2 }], "an empty last page is not reported");
+  assert.equal(h.txs.length, 140);
+});
+
+test("with several lists nothing is reported early, because a half-read list would mix times", async () => {
+  let calls = 0;
+  const fetchImpl = lists({ SWAP: [page("s", 0, 10)], TRANSFER: [page("t", 0, 10, 9_990)] });
+  await fetchHistory(WALLET, { apiKey: KEY, fetchImpl, sleep: noSleep, types: ["SWAP", "TRANSFER"], onPage: () => calls++ });
+  assert.equal(calls, 0);
+});
+
 /* ------------------------------------ prices ------------------------------------ */
 
 test("the candle size is the finest one that covers the stretch in a single call", () => {

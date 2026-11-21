@@ -99,12 +99,17 @@ export type PnlCell =
   | { kind: "unknown" } // none of the coins sold were bought in the part of the history that was read, so the cost is not known
   | { kind: "profit"; usd: number | null; sol: number; partial: boolean }; // partial: part of the sale could not be traced to a buy
 
-export function pnlCell(row: Row, scanDone: boolean): PnlCell {
+export function pnlCell(row: Row, scanDone: boolean, early: Record<string, { profitSol: number; matchedTokens: number }> = {}): PnlCell {
   if (row.trade.side === "buy") return { kind: "none" };
   const s = row.sell;
-  if (!s) return scanDone ? { kind: "unknown" } : { kind: "pending" };
-  if (s.matchedTokens <= 0) return { kind: "unknown" };
-  return { kind: "profit", usd: s.profitUsd ?? null, sol: s.profitSol, partial: s.matchedTokens < s.tokens * 0.999 };
+  if (s) {
+    if (s.matchedTokens <= 0) return { kind: "unknown" };
+    return { kind: "profit", usd: s.profitUsd ?? null, sol: s.profitSol, partial: s.matchedTokens < s.tokens * 0.999 };
+  }
+  // Before the scan's result: the profit in SOL that came with the trade list, once the whole history was read.
+  const e = early[row.trade.signature];
+  if (e) return e.matchedTokens <= 0 ? { kind: "unknown" } : { kind: "profit", usd: null, sol: e.profitSol, partial: e.matchedTokens < row.trade.tokens * 0.999 };
+  return scanDone ? { kind: "unknown" } : { kind: "pending" };
 }
 
 /** Dollars with a sign when it is a gain or a loss: +$903, -$1,370. */

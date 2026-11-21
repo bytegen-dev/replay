@@ -160,7 +160,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                 )}
               </form>
 
-              {scanning && !launch && <ProgressLine progress={progress} hasTrades={!!trades} />}
+              {scanning && !launch && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} />}
         </div>
         {aside && <div className="hidden lg:order-first lg:block">{aside}</div>}
       </div>
@@ -168,17 +168,18 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
       {trades && (
         <>
           <Summary trades={trades} result={result} />
-          <TradeTable rows={rows} tokens={trades.tokens} done={status === "done"} />
+          <TradeTable rows={rows} tokens={trades.tokens} pnl={trades.pnl} done={status === "done"} />
         </>
       )}
     </div>
   );
 }
 
-function ProgressLine({ progress, hasTrades }: { progress: Progress | null; hasTrades: boolean }) {
+function ProgressLine({ progress, hasTrades, reading }: { progress: Progress | null; hasTrades: boolean; reading: boolean }) {
   const prices = progress?.stage === "prices" && progress.total > 0;
-  const label = !hasTrades ? "Reading trades" : prices ? `Pricing coins, ${Math.min(progress!.done + 1, progress!.total)} of ${progress!.total}` : "Pricing coins";
-  const pct = prices ? Math.round((progress!.done / progress!.total) * 100) : null;
+  const read = progress?.stage === "history" && progress.done > 0 ? ` (${progress.done.toLocaleString("en-US")} transactions read)` : "";
+  const label = reading ? `${hasTrades ? "Reading older trades" : "Reading trades"}${read}` : prices ? `Pricing coins, ${Math.min(progress!.done + 1, progress!.total)} of ${progress!.total}` : "Pricing coins";
+  const pct = !reading && prices ? Math.round((progress!.done / progress!.total) * 100) : null;
   return (
     <div role="status" aria-live="polite" className="max-w-2xl">
       <p className="text-sm text-muted-foreground">{label}</p>
@@ -261,7 +262,8 @@ function CoinCell({ row, tokens }: { row: Row; tokens: ApiTrades["tokens"] }) {
 
 function PnlView({ cell }: { cell: PnlCell }) {
   if (cell.kind === "none") return <span className="text-muted-foreground">&mdash;</span>;
-  if (cell.kind === "pending") return <span className="animate-pulse text-muted-foreground">Pricing</span>;
+  // Waiting for the rest of the history, not for prices: a sell's profit needs the buys before it.
+  if (cell.kind === "pending") return <span className="animate-pulse text-muted-foreground" title="Waiting for the rest of the history">&hellip;</span>;
   if (cell.kind === "unknown")
     return (
       <span className="text-muted-foreground" title="None of these coins were bought in the part of the history that was read, so what they cost is not known.">
@@ -321,7 +323,7 @@ function TripView({ cell }: { cell: RoundTripCell }) {
  * The trades, in the same table the Wayback results use: a bordered box, a header that stays put, striped rows, and a first column that
  * stays put when it scrolls sideways. On a phone the rows stack instead, because six columns do not fit.
  */
-function TradeTable({ rows, tokens, done }: { rows: Row[]; tokens: ApiTrades["tokens"]; done: boolean }) {
+function TradeTable({ rows, tokens, pnl, done }: { rows: Row[]; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean }) {
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No token trades of 0.1 SOL or more in the part of the history that was read.</p>;
   const head = "sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]";
   return (
@@ -346,7 +348,7 @@ function TradeTable({ rows, tokens, done }: { rows: Row[]; tokens: ApiTrades["to
               </TableCell>
               <TableCell className="text-right whitespace-nowrap tabular-nums">{r.trade.sol.toFixed(2)} SOL</TableCell>
               <TableCell className="text-right whitespace-nowrap">
-                <PnlView cell={pnlCell(r, done)} />
+                <PnlView cell={pnlCell(r, done, pnl)} />
               </TableCell>
               <TableCell className="text-right whitespace-nowrap">
                 <FumbleView cell={fumbleCell(r, done)} />
@@ -360,15 +362,15 @@ function TradeTable({ rows, tokens, done }: { rows: Row[]; tokens: ApiTrades["to
       </Table>
       <ul className="sm:hidden">
         {rows.map((r) => (
-          <PhoneRow key={r.trade.signature} row={r} tokens={tokens} done={done} />
+          <PhoneRow key={r.trade.signature} row={r} tokens={tokens} pnl={pnl} done={done} />
         ))}
       </ul>
     </section>
   );
 }
 
-function PhoneRow({ row, tokens, done }: { row: Row; tokens: ApiTrades["tokens"]; done: boolean }) {
-  const pnl = pnlCell(row, done);
+function PhoneRow({ row, tokens, pnl: early, done }: { row: Row; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean }) {
+  const pnl = pnlCell(row, done, early);
   const fumble = fumbleCell(row, done);
   const trip = roundTripCell(row);
   const line = "flex items-baseline justify-between gap-3";

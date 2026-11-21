@@ -39,7 +39,7 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
     run: (wallet, emit) => {
       const deadline = Date.now() + budgetMs;
       return scanWallet(wallet, {
-        history: (w) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs }),
+        history: (w, onPage) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs, onPage }),
         prices,
         solUsd,
         tokens,

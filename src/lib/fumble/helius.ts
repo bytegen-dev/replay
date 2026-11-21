@@ -28,6 +28,8 @@ export interface HistoryOptions {
   maxPages?: number;
   /** Stop a type once a page reaches back to this time (seconds). */
   sinceTime?: number;
+  /** Called after each page with everything read so far (newest first) and how many pages that took, so a caller can show trades while the rest loads. Only for a single list: with several lists nothing is partial yet. */
+  onPage?: (txs: HeliusTx[], pages: number) => void;
   /** Stop reading once this many milliseconds have passed. What was read is kept, and the history is reported incomplete. */
   maxMs?: number;
   now?: () => number;
@@ -54,7 +56,7 @@ interface TypeRead {
   complete: boolean;
 }
 
-async function readType(wallet: string, type: string, opts: HistoryOptions, fetchImpl: Fetch, sleep: Sleep, outOfTime: () => boolean): Promise<TypeRead> {
+async function readType(wallet: string, type: string, opts: HistoryOptions, fetchImpl: Fetch, sleep: Sleep, outOfTime: () => boolean, onPage?: HistoryOptions["onPage"]): Promise<TypeRead> {
   const maxPages = opts.maxPages ?? 30;
   const txs: HeliusTx[] = [];
   let before = "";
@@ -68,6 +70,7 @@ async function readType(wallet: string, type: string, opts: HistoryOptions, fetc
     const page = (await res.json()) as unknown;
     if (!Array.isArray(page)) throw new Error("Helius answered with something other than a list of transactions");
     txs.push(...(page as HeliusTx[]));
+    if (page.length) onPage?.(txs, pages);
     const last = page.length ? (page[page.length - 1] as HeliusTx) : null;
     if (page.length === 0 || (opts.sinceTime !== undefined && last !== null && last.timestamp <= opts.sinceTime)) {
       complete = true;
@@ -89,7 +92,7 @@ export async function fetchHistory(wallet: string, opts: HistoryOptions): Promis
   const outOfTime = () => opts.maxMs !== undefined && now() - started >= opts.maxMs;
 
   const reads: TypeRead[] = [];
-  for (const type of types.length ? types : [""]) reads.push(await readType(wallet, type, opts, fetchImpl, sleep, outOfTime));
+  for (const type of types.length ? types : [""]) reads.push(await readType(wallet, type, opts, fetchImpl, sleep, outOfTime, types.length <= 1 ? opts.onPage : undefined));
 
   // The same transaction can be in more than one list; it is kept once.
   const bySig = new Map<string, HeliusTx>();

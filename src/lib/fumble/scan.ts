@@ -1,10 +1,10 @@
 import { fumbleFor, MIN_TRADE_SOL, priceAt, type Fumble } from "./fumble.ts";
 import type { History } from "./helius.ts";
 import { matchLots, type SellLot } from "./lots.ts";
-import type { TokenInfo } from "./tokens.ts";
+import { createNameBook, type TokenInfo } from "./tokens.ts";
 import { SOL_MINT, type PriceSeries } from "./prices.ts";
 import { findPositions, roundTripFor, type Position, type RoundTrip } from "./roundtrip.ts";
-import { parseTrades } from "./trades.ts";
+import { parseTrades, type HeliusTx } from "./trades.ts";
 import type { Dropped, Trade } from "./types.ts";
 
 /**
@@ -14,7 +14,8 @@ import type { Dropped, Trade } from "./types.ts";
  */
 
 export interface ScanDeps {
-  history: (wallet: string) => Promise<History>;
+  /** Reads the wallet's history. `onPage` is called after each page with everything read so far, newest first. */
+  history: (wallet: string, onPage?: (txs: HeliusTx[], pages: number) => void) => Promise<History>;
   /** A token's candles from `from` to `now`, or null when no provider has them. */
   prices: (mint: string, from: number, now: number) => Promise<PriceSeries | null>;
   /** The SOL price in USD at a time, or null. */
@@ -26,7 +27,7 @@ export interface ScanDeps {
   tokens?: (mints: string[]) => Promise<Map<string, TokenInfo>>;
   /** Called as the scan moves along, so a page can show progress. */
   onProgress?: (p: ScanProgress) => void;
-  /** Called once the history is read and the trades are known, before any price lookups: the trade list can be shown at once. */
+  /** Called with the trade list as it is known: first while the history is still being read (`partial`, growing with each page), then once it is complete, before any price lookups. */
   onTrades?: (t: TradeList) => void;
 }
 
@@ -38,11 +39,15 @@ export interface TradeList {
   tradeCount: number;
   trades: Trade[];
   tokens: Record<string, TokenInfo>;
+  /** True while the history is still being read: more trades are coming, and the profit on a sell cannot be told yet (its buys may be on a page not read). */
+  partial: boolean;
+  /** For each sell in the list, by transaction: the profit traced to its buys, in SOL. Only once the history is complete, and it needs no prices. */
+  pnl: Record<string, { profitSol: number; matchedTokens: number }>;
 }
 
 export interface ScanProgress {
   stage: "history" | "prices" | "done";
-  /** Tokens priced so far out of how many need pricing (stage "prices"). */
+  /** Transactions read so far (stage "history"), or tokens priced so far out of how many need pricing (stage "prices"). */
   done: number;
   total: number;
 }
@@ -99,25 +104,45 @@ export interface ScanResult {
 export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanResult> {
   const now = deps.now ? deps.now() : Math.floor(Date.now() / 1000);
   deps.onProgress?.({ stage: "history", done: 0, total: 0 });
-  const history = await deps.history(wallet);
+  const names = createNameBook(deps.tokens);
+  const bigEnough = (list: Trade[]) => list.filter((t) => t.sol >= MIN_TRADE_SOL).sort((a, b) => b.time - a.time);
+
+  // While the history is still being read, each page puts the trades found so far on the page: the list grows, and the names of new coins
+  // follow a moment later. Nothing about profit is said yet, because the buys behind an old sell may be on a page not read.
+  let reading = true;
+  const emitPartial = deps.onTrades
+    ? (txs: HeliusTx[], pages: number) => {
+        deps.onProgress?.({ stage: "history", done: txs.length, total: 0 });
+        const { trades: soFar, dropped: droppedSoFar } = parseTrades(wallet, txs);
+        const list = bigEnough(soFar);
+        const send = () => {
+          if (!reading) return;
+          deps.onTrades?.({ history: { transactions: txs.length, pages, complete: false, oldest: txs.length ? txs[txs.length - 1].timestamp : null }, dropped: droppedSoFar, tradeCount: soFar.length, trades: list, tokens: names.snapshot(), partial: true, pnl: {} });
+        };
+        send();
+        void names.ensure(list.map((t) => t.mint)).then((learned) => learned && send());
+      }
+    : undefined;
+  const history = await deps.history(wallet, emitPartial);
+  reading = false;
   const { trades, dropped } = parseTrades(wallet, history.txs);
   const lots = matchLots(trades)
     .filter((l) => l.sell.sol >= MIN_TRADE_SOL)
     .sort((a, b) => a.sell.time - b.sell.time);
 
-  // The trade list goes out now, before the slow price lookups.
-  const tradeList = trades.filter((t) => t.sol >= MIN_TRADE_SOL).sort((a, b) => b.time - a.time);
+  // The complete trade list goes out now, before the slow price lookups, with each sell's profit, which needs no prices.
+  const tradeList = bigEnough(trades);
   const historySummary = { transactions: history.txs.length, pages: history.pages, complete: history.complete, oldest: history.oldest };
-  // The names are looked up while the prices are, and the list goes out as soon as they are in, so it never waits on the slow part. With
-  // no name lookup there is nothing to wait for and the list goes out at once.
-  const sendList = (tokens: Record<string, TokenInfo>) => deps.onTrades?.({ history: historySummary, dropped, tradeCount: trades.length, trades: tradeList, tokens });
+  const pnl = Object.fromEntries(lots.map((l) => [l.sell.signature, { profitSol: l.profitSol, matchedTokens: l.matchedTokens }]));
+  // The names of any coins not looked up yet are fetched while the prices are, and the list goes out as soon as they are in, so it never
+  // waits on the slow part. With no name lookup there is nothing to wait for and the list goes out at once.
+  const sendList = (tokens: Record<string, TokenInfo>) => deps.onTrades?.({ history: historySummary, dropped, tradeCount: trades.length, trades: tradeList, tokens, partial: false, pnl });
   const mints = [...new Set(tradeList.map((t) => t.mint))];
   let listSent: Promise<Record<string, TokenInfo>>;
   if (deps.tokens && mints.length) {
-    listSent = deps
-      .tokens(mints)
-      .then((m) => Object.fromEntries(m))
-      .catch(() => ({}) as Record<string, TokenInfo>) // the list is shown with addresses instead
+    listSent = names
+      .ensure(mints)
+      .then(() => names.snapshot())
       .then((tokens) => (sendList(tokens), tokens));
   } else {
     sendList({});

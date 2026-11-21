@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Fetch } from "../src/lib/fumble/net.ts";
-import { cleanText, heliusTokens, parseAssets } from "../src/lib/fumble/tokens.ts";
+import { cleanText, createNameBook, heliusTokens, parseAssets, type TokenInfo } from "../src/lib/fumble/tokens.ts";
 
 const RLO = String.fromCharCode(0x202e); // right-to-left override
 const ZWSP = String.fromCharCode(0x200b); // zero-width space
@@ -77,4 +77,36 @@ test("anything that is not a coin address is never sent", async () => {
   const fetchImpl: Fetch = async () => (calls++, reply(200, { result: [] }));
   await heliusTokens("KEY", { fetchImpl, sleep: async () => {} })(["../../x", "not a mint", "a,b", ""]);
   assert.equal(calls, 0);
+});
+
+/* ------------------------------ the name book ------------------------------ */
+
+test("the name book asks only about coins it has not asked about, and says whether it learned anything", async () => {
+  const asked: string[][] = [];
+  const book = createNameBook(async (mints) => (asked.push(mints), new Map<string, TokenInfo>(mints.map((m) => [m, { symbol: m.slice(0, 3) }]))));
+  assert.equal(await book.ensure([WIN, GOOSE]), true);
+  assert.equal(await book.ensure([WIN]), false, "nothing new");
+  assert.equal(await book.ensure([WIN, GOOSE, "OTHER"]), true);
+  assert.deepEqual(asked, [[WIN, GOOSE], ["OTHER"]]);
+  assert.deepEqual(Object.keys(book.snapshot()).sort(), [GOOSE, "OTHER", WIN].sort());
+});
+
+test("lookups run one at a time, so a later call waits for one still in flight and then sees its names", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const book = createNameBook(async (mints) => (await gate, new Map<string, TokenInfo>(mints.map((m) => [m, { symbol: "T" }]))));
+  const first = book.ensure([WIN]);
+  const second = book.ensure([WIN, GOOSE]);
+  release();
+  await Promise.all([first, second]);
+  assert.deepEqual(Object.keys(book.snapshot()).sort(), [GOOSE, WIN].sort());
+});
+
+test("a failed lookup leaves those coins unnamed and never throws, and no lookup function means no names", async () => {
+  const failing = createNameBook(async () => {
+    throw new Error("down");
+  });
+  assert.equal(await failing.ensure([WIN]), false);
+  assert.deepEqual(failing.snapshot(), {});
+  assert.equal(await createNameBook(undefined).ensure([WIN]), false);
 });

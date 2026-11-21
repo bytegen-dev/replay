@@ -212,7 +212,7 @@ test("the trade list is newest first, buys and sells of a meaningful size, and g
 
 test("someone who joins a scan that already sent its trade list is sent it straight away", async () => {
   const gate = deferred<void>();
-  const list = toApiTrades(WALLET, { history: { transactions: 1, pages: 1, complete: true, oldest: 1 }, dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 }, tradeCount: 0, trades: [], tokens: {} });
+  const list = toApiTrades(WALLET, { history: { transactions: 1, pages: 1, complete: true, oldest: 1 }, dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 }, tradeCount: 0, trades: [], tokens: {}, partial: false, pnl: {} });
   const s = createScanner({
     run: async (w, emit) => {
       emit({ type: "trades", data: list });
@@ -354,4 +354,65 @@ test("the response carries each sell's profit and the wallet's totals", async ()
   assert.ok(win.profitSol < -20 && win.profitUsd! < -1300 && win.matchedTokens > 0);
   assert.equal(api.partialSells, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(api)), api);
+});
+
+/* ------------------------------- trades while the history is read ------------------------------- */
+
+import type { TradeList } from "../src/lib/fumble/scan.ts";
+
+/** The fixture's history in the order the API gives it (newest first), read in two pages. */
+const newestFirst = [...txs].sort((a, b) => b.timestamp - a.timestamp);
+
+test("trades appear after each page, growing, with no profit yet; then the complete list arrives with each sell's profit", async () => {
+  const events: { list: TradeList; at: string }[] = [];
+  const progress: { stage: string; done: number }[] = [];
+  const asked: string[][] = [];
+  await realScan(WALLET, {
+    history: async (_w, onPage) => {
+      onPage?.(newestFirst.slice(0, 30), 1);
+      onPage?.(newestFirst.slice(0, 70), 2);
+      return { txs: newestFirst, pages: 3, complete: true, oldest: newestFirst.at(-1)!.timestamp };
+    },
+    tokens: async (mints) => (asked.push(mints), new Map(mints.map((m) => [m, { symbol: m.slice(0, 4) }]))),
+    onTrades: (list) => events.push({ list, at: list.partial ? "partial" : "complete" }),
+    onProgress: (p) => progress.push({ stage: p.stage, done: p.done }),
+  });
+  const partials = events.filter((e) => e.at === "partial").map((e) => e.list);
+  const complete = events.filter((e) => e.at === "complete");
+  assert.ok(partials.length >= 2, "at least one event per page");
+  assert.equal(complete.length, 1);
+  assert.ok(partials.every((p) => p.partial && Object.keys(p.pnl).length === 0), "no profit while pages may still be missing");
+  assert.ok(partials[0].history.transactions === 30 && partials.some((p) => p.history.transactions === 70));
+  assert.ok(partials.every((p) => !p.history.complete));
+  assert.ok(partials.at(-1)!.trades.length >= partials[0].trades.length, "the list only grows");
+  assert.equal(complete[0].list.partial, false);
+  assert.equal(complete[0].list.history.complete, true);
+  assert.equal(Object.keys(complete[0].list.pnl).length, 3, "the three sells, with their profit");
+  const win = complete[0].list.trades.find((t) => t.mint === WIN && t.side === "sell")!;
+  assert.ok(complete[0].list.pnl[win.signature].profitSol < -20, "known without any price lookup");
+  assert.ok(progress.some((p) => p.stage === "history" && p.done === 30) && progress.some((p) => p.stage === "history" && p.done === 70), "progress says how many transactions were read");
+  // each coin's name is asked for once, however many events mention it
+  const flat = asked.flat();
+  assert.equal(new Set(flat).size, flat.length);
+});
+
+test("a partial list is never sent after the complete one", async () => {
+  const order: string[] = [];
+  await realScan(WALLET, {
+    history: async (_w, onPage) => {
+      onPage?.(newestFirst.slice(0, 50), 1);
+      return { txs: newestFirst, pages: 2, complete: true, oldest: newestFirst.at(-1)!.timestamp };
+    },
+    tokens: async (mints) => new Map(mints.map((m) => [m, { symbol: "T" }])),
+    onTrades: (l) => order.push(l.partial ? "partial" : "complete"),
+  });
+  assert.equal(order.at(-1), "complete");
+  assert.equal(order.filter((o) => o === "complete").length, 1);
+  assert.ok(order.indexOf("complete") === order.length - 1, "no partial after it");
+});
+
+test("with no page callback support the scan still works: only the complete list is sent", async () => {
+  const events: boolean[] = [];
+  await realScan(WALLET, { onTrades: (l) => events.push(l.partial) });
+  assert.deepEqual(events, [false]);
 });

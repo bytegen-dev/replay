@@ -59,12 +59,16 @@ export interface ApiTrades {
   trades: ApiTrade[];
   /** The ticker and name of each coin traded, where the chain has them. A coin with no entry is shown by its address. */
   tokens: Record<string, TokenInfo>;
+  /** True while the history is still being read: the list is growing, and `pnl` is empty because a sell's buys may be on a page not read yet. */
+  partial: boolean;
+  /** The profit on each sell (by transaction), in SOL, traced to its buys. Needs no prices, so it comes with the trade list once the history is read. */
+  pnl: Record<string, { profitSol: number; matchedTokens: number }>;
 }
 
 const toApiTrade = (t: Trade): ApiTrade => ({ signature: t.signature, side: t.side, token: t.mint, tokens: t.tokens, sol: t.sol, time: t.time, ...(t.source ? { source: t.source } : {}) });
 
 export function toApiTrades(wallet: string, t: TradeList): ApiTrades {
-  return { wallet, coverage: t.history, tradeCount: t.tradeCount, ignored: t.dropped, trades: t.trades.map(toApiTrade), tokens: t.tokens };
+  return { wallet, coverage: t.history, tradeCount: t.tradeCount, ignored: t.dropped, trades: t.trades.map(toApiTrade), tokens: t.tokens, partial: t.partial, pnl: t.pnl };
 }
 
 /** What a scan sends while it runs: progress, and once the history is read the trade list. */
@@ -153,6 +157,8 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     ignored: r.dropped,
     trades: r.tradeList.map(toApiTrade),
     tokens: r.tokens,
+    partial: false,
+    pnl: Object.fromEntries(r.sells.map((x) => [x.lot.sell.signature, { profitSol: x.lot.profitSol, matchedTokens: x.lot.matchedTokens }])),
     sells: [...measured, ...unknown],
     measured: measured.length,
     unknown: unknown.length,
