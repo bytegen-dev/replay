@@ -73,7 +73,7 @@
   /* Colours for the backdrop and the glows, so each theme can tune them. */
   --glow-a: rgba(57, 214, 163, 0.085);
   --glow-b: rgba(105, 170, 193, 0.06);
-  --hatch: rgba(105, 170, 193, 0.09);
+  --hatch: rgba(105, 170, 193, 0.16);
   --cta-glow: rgba(57, 214, 163, 0.55);
   --cta-ring: rgba(57, 214, 163, 0.18);
   --selection: rgba(57, 214, 163, 0.28);
@@ -101,7 +101,7 @@
   --ring: #1d7893;
   --glow-a: rgba(12, 143, 105, 0.075);
   --glow-b: rgba(29, 120, 147, 0.05);
-  --hatch: rgba(29, 120, 147, 0.1);
+  --hatch: rgba(29, 120, 147, 0.17);
   --cta-glow: rgba(12, 143, 105, 0.45);
   --cta-ring: rgba(12, 143, 105, 0.18);
   --selection: rgba(12, 143, 105, 0.25);
@@ -1177,12 +1177,12 @@ html[data-motion="reduce"] [data-slot="button"] {
     mask-image: linear-gradient(to bottom, #000 0%, transparent calc(var(--hatch-fade, 50%) + var(--p, 0) * 8%)), radial-gradient(95% 95% at calc(var(--p, 0) * 14%) calc(var(--p, 0) * 10%), transparent 14%, #000 92%);
     mask-composite: intersect;
   }
-  /* On a wide screen the lines are much quieter: fainter, and fading out sooner down the page, so they hint at texture up at the
+  /* On a wide screen the lines are quieter than on a phone: fainter, and fading out sooner down the page, so they stay a texture up at the
      top instead of hatching the whole width. Phones keep the fuller version, where there is less else to look at. */
   @media (min-width: 1024px) {
     body::after {
-      --hatch-fade: 30%;
-      opacity: 0.38;
+      --hatch-fade: 42%;
+      opacity: 0.85;
     }
   }
   /* The display face is for things you read as labels or press: headings, the nav, buttons and tab switches. Data stays in the mono. */
