@@ -1,5 +1,5 @@
 import { fetchHistory } from "./helius.ts";
-import { birdeyeProvider, firstOf, geckoProvider, solPriceAt } from "./prices.ts";
+import { birdeyeProvider, firstOf, geckoProvider, sharedPrices, solPriceAt } from "./prices.ts";
 import { scanWallet } from "./scan.ts";
 import { createScanner, toApiTrades } from "./service.ts";
 import { heliusTokens } from "./tokens.ts";
@@ -28,7 +28,8 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   const heliusKey = process.env.HELIUS_API_KEY;
   if (!heliusKey) return (scanner = null);
   const birdeyeKey = process.env.BIRDEYE_API_KEY;
-  const prices = firstOf([...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]);
+  // Shared by every scan on this server, so a coin two wallets traded is priced once.
+  const prices = sharedPrices(firstOf([...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]));
   const solUsd = solPriceAt(prices);
   const tokens = heliusTokens(heliusKey);
   const maxPages = intEnv("FUMBLE_MAX_PAGES", 30);

@@ -180,8 +180,10 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
   const sells: ScannedSell[] = [];
   for (const lot of lots) {
     const s = series.get(lot.sell.mint) ?? null;
-    const solUsd = s ? await deps.solUsd(lot.sell.time) : null;
     const rate = solAt(lot.sell.time);
+    // The SOL price series fetched once for the whole scan answers this; asking for the sale's own hour is only the fallback, because each
+    // of those is a price call and the free tiers allow about one a second.
+    const solUsd = s ? (rate ?? (await deps.solUsd(lot.sell.time))) : null;
     const profitUsd = rate ? lot.profitSol * rate : null;
     if (timedOut.has(lot.sell.mint)) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null });
     else if (!s) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "no price history for this token" }, source: null });

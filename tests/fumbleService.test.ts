@@ -416,3 +416,24 @@ test("with no page callback support the scan still works: only the complete list
   await realScan(WALLET, { onTrades: (l) => events.push(l.partial) });
   assert.deepEqual(events, [false]);
 });
+
+/* ------------------------------- price calls are not wasted ------------------------------- */
+
+test("the SOL price for every sale comes from the one series fetched for the scan, not a lookup per sale", async () => {
+  let hourly = 0;
+  const result = await realScan(WALLET, { prices: async (m) => priceSol(m), solUsd: async () => (hourly++, 70) });
+  assert.equal(hourly, 0, "no per-sale SOL lookups when the series has the price");
+  assert.ok(result.sells.some((s) => s.fumble.status === "ok"));
+  const win = result.sells.find((s) => s.lot.sell.mint === WIN)!;
+  assert.equal(win.fumble.status === "ok" && Math.round(win.fumble.soldUsd), Math.round(win.lot.sell.sol * 67), "valued at the series' price ($67), not the fallback's ($70)");
+});
+
+test("the per-sale lookup is still the fallback when the series cannot give a price", async () => {
+  let hourly = 0;
+  const result = await realScan(WALLET, {
+    prices: async (m) => (m === SOL_MINT ? null : m === WIN ? { candles: winPrices.candles, source: "fake" } : null),
+    solUsd: async () => (hourly++, 70),
+  });
+  assert.ok(hourly >= 1);
+  assert.ok(result.sells.some((s) => s.fumble.status === "ok"));
+});

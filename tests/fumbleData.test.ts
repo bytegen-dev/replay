@@ -345,7 +345,7 @@ test("a sale that cannot be valued because there is no SOL price is unknown, and
   let lookups = 0;
   const result = await scanWallet(WALLET, {
     history,
-    prices: async (mint) => (mint !== SOL_MINT && lookups++, { candles: winPrices.candles, source: "fake" }),
+    prices: async (mint) => (mint === SOL_MINT ? null : (lookups++, { candles: winPrices.candles, source: "fake" })), // no SOL price from anywhere: not in a series, not for the hour
     solUsd: async () => null,
     now: () => 1_795_300_000,
   });
@@ -366,4 +366,89 @@ test("a scan carries the history's own limits through, so a page can say it only
   assert.equal(result.history.pages, 5);
   assert.equal(result.sells.length, 0);
   assert.equal(result.totalFumbleUsd, 0);
+});
+
+/* ------------------------------- price lookups shared between scans ------------------------------- */
+
+import { sharedPrices } from "../src/lib/fumble/prices.ts";
+
+const series = (tag: string): PriceSeries => ({ candles: [{ t: 1, h: 2, l: 1, c: 1.5 }], source: tag });
+
+test("a coin asked for again soon is not fetched again, as long as the new request starts no earlier", async () => {
+  const calls: [string, number][] = [];
+  const get = sharedPrices(async (m, from) => (calls.push([m, from]), series("a")), { clock: () => 0, ttlSeconds: 300 });
+  await get(WIN, 1000, 5000);
+  await get(WIN, 1000, 5000);
+  await get(WIN, 2000, 5100);
+  assert.equal(calls.length, 1, "later starts are covered");
+  await get("OTHER", 1000, 5000);
+  assert.equal(calls.length, 2, "another coin is its own");
+});
+
+test("a request that reaches further back is fetched again from the earlier time, and then covers both", async () => {
+  const calls: number[] = [];
+  const get = sharedPrices(async (_m, from) => (calls.push(from), series("a")), { clock: () => 0 });
+  await get(WIN, 2000, 5000);
+  await get(WIN, 1000, 5000);
+  await get(WIN, 1500, 5000);
+  assert.deepEqual(calls, [2000, 1000]);
+});
+
+test("saved candles expire, and a coin with no price history is remembered for a shorter time", async () => {
+  let t = 0;
+  let calls = 0;
+  let found = true;
+  const get = sharedPrices(async () => (calls++, found ? series("a") : null), { clock: () => t, ttlSeconds: 300, missSeconds: 60 });
+  await get(WIN, 1, 2);
+  t = 299_000;
+  await get(WIN, 1, 2);
+  assert.equal(calls, 1);
+  t = 301_000;
+  await get(WIN, 1, 2);
+  assert.equal(calls, 2, "expired after the ttl");
+  found = false;
+  await get("GONE", 1, 2);
+  t = 301_000 + 59_000;
+  await get("GONE", 1, 2);
+  assert.equal(calls, 3, "a miss is remembered for the short time");
+  t = 301_000 + 61_000;
+  await get("GONE", 1, 2);
+  assert.equal(calls, 4, "and then asked again");
+});
+
+test("scans asking for the same coin at the same moment share one call", async () => {
+  let calls = 0;
+  let release!: () => void;
+  const gate = new Promise<void>((r) => (release = r));
+  const get = sharedPrices(async () => (calls++, await gate, series("a")), { clock: () => 0 });
+  const a = get(WIN, 1, 2);
+  const b = get(WIN, 1, 2);
+  release();
+  const [x, y] = await Promise.all([a, b]);
+  assert.equal(calls, 1);
+  assert.equal(x, y);
+});
+
+test("a lookup that throws is not remembered: the next ask tries again", async () => {
+  let calls = 0;
+  const get = sharedPrices(async () => {
+    if (++calls === 1) throw new Error("down");
+    return series("a");
+  }, { clock: () => 0 });
+  await assert.rejects(get(WIN, 1, 2), /down/);
+  assert.equal((await get(WIN, 1, 2))?.source, "a");
+  assert.equal(calls, 2);
+});
+
+test("the saved coins are bounded: the oldest goes when it is full", async () => {
+  let calls = 0;
+  const get = sharedPrices(async () => (calls++, series("a")), { clock: () => 0, maxEntries: 2 });
+  await get("a", 1, 2);
+  await get("b", 1, 2);
+  await get("c", 1, 2);
+  assert.equal(calls, 3);
+  await get("a", 1, 2);
+  assert.equal(calls, 4, "a was pushed out");
+  await get("c", 1, 2);
+  assert.equal(calls, 4, "c is still saved");
 });

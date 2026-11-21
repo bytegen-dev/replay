@@ -181,3 +181,45 @@ export function solPriceAt(prices: (mint: string, from: number, now: number) => 
     return candles ? priceAt(candles, time) : null;
   };
 }
+
+/**
+ * Shares price lookups between scans. Wallets trade the same coins, and the free tiers allow about one call a second, so a coin asked for
+ * twice within a few minutes should cost one call: the second scan reuses the first one's candles, and two scans asking at the same
+ * moment share one call.
+ *
+ * A saved series answers a request that starts no earlier than it did (it covers that stretch). A request that reaches further back is
+ * fetched again, from the earlier time, and replaces it. A coin with no price history at all is remembered too, but for less time, so a
+ * hiccup in both providers does not hide a coin for long. Nothing is saved when the lookup throws.
+ */
+export function sharedPrices(inner: (mint: string, from: number, now: number) => Promise<PriceSeries | null>, opts: { ttlSeconds?: number; missSeconds?: number; maxEntries?: number; clock?: () => number } = {}) {
+  const ttl = (opts.ttlSeconds ?? 300) * 1000;
+  const miss = (opts.missSeconds ?? 60) * 1000;
+  const max = opts.maxEntries ?? 500;
+  const clock = opts.clock ?? Date.now;
+  const entries = new Map<string, { from: number; at: number; promise: Promise<PriceSeries | null>; settled: boolean; found: boolean }>();
+
+  return function get(mint: string, from: number, now: number): Promise<PriceSeries | null> {
+    const hit = entries.get(mint);
+    if (hit && hit.from <= from) {
+      // Still being fetched, or fetched recently enough (a coin that was not found is remembered for less time).
+      if (!hit.settled || clock() - hit.at < (hit.found ? ttl : miss)) return hit.promise;
+    }
+    const startFrom = hit && hit.from < from ? hit.from : from;
+    const entry = { from: startFrom, at: clock(), settled: false, found: false, promise: null as unknown as Promise<PriceSeries | null> };
+    entry.promise = inner(mint, startFrom, now).then(
+      (series) => {
+        entry.settled = true;
+        entry.found = series !== null;
+        entry.at = clock();
+        return series;
+      },
+      (e) => {
+        if (entries.get(mint) === entry) entries.delete(mint); // a failed lookup is not remembered
+        throw e;
+      },
+    );
+    entries.set(mint, entry);
+    if (entries.size > max) entries.delete(entries.keys().next().value as string); // the oldest goes first
+    return entry.promise;
+  };
+}
