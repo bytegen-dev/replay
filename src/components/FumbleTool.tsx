@@ -193,7 +193,7 @@ function Summary({ trades, result }: { trades: ApiTrades; result: ApiResult | nu
   const sells = trades.trades.filter((t) => t.side === "sell").length;
   const cov = trades.coverage;
   return (
-    <section aria-label="Summary" className="cut-card border border-border bg-card p-5 sm:p-6">
+    <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card p-5 sm:p-6">
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
         <div>
           <p className="text-sm text-muted-foreground">Fumbled</p>
