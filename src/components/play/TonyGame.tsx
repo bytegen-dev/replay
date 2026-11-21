@@ -1,6 +1,6 @@
 "use client";
 
-import { GraduationCap, House, Maximize2, Minimize2, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X } from "lucide-react";
+import { GraduationCap, House, Settings, Maximize2, Minimize2, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
@@ -9,14 +9,14 @@ import { Input } from "@/components/ui/input";
 import { drawFrame, drawMenuScene, type Frame, type MenuBuddy } from "@/components/play/drawGame";
 import { buildCourse, buildEndless, placeCoins, placeObstacles, type Course, type Endless, type Obstacle, type Track } from "@/lib/flappyCourse.ts";
 import { finishAt, flap, H, PLAY_H, hitsObstacle, hitsWall, newBird, step, type Bird } from "@/lib/flappyPhysics.ts";
-import { setMuted as audioMute, setVolume as audioVolume, sfx, startAudio, startMusic, stopMusic } from "@/lib/gameAudio.ts";
+import { buzz, canBuzz, setHaptics as audioHaptics, setMusic as audioMusic, setMuted as audioMute, setSfx as audioSfx, setVolume as audioVolume, sfx, startAudio, startMusic, stopMusic } from "@/lib/gameAudio.ts";
 import type { BoardEntry } from "@/lib/gameBoard.ts";
 import { gamePrice, SCROLL_SPEED, scoreFor, STORY, SURVIVAL_COURSE, survivalObstacles, survivalSpeed, type Level } from "@/lib/gameLevels.ts";
 import type { EndlessSegment } from "@/lib/flappyCourse.ts";
 import { cn } from "@/lib/utils";
 import { openWaitlist } from "@/lib/viewerClient.ts";
 
-type Screen = "attract" | "intro" | "play" | "clear" | "menu" | "name" | "gameover" | "board";
+type Screen = "attract" | "intro" | "play" | "clear" | "menu" | "settings" | "name" | "gameover" | "board";
 type Mode = "tutorial" | "survival";
 type Phase = "ready" | "running" | "crashed";
 
@@ -141,6 +141,10 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
   const [paused, setPaused] = useState(false);
   const [volume, setVolume] = useState(0.6);
   const [muted, setMutedState] = useState(false);
+  const [sfxOn, setSfxOn] = useState(true);
+  const [musicOn, setMusicOn] = useState(true);
+  const [hapticsOn, setHapticsOn] = useState(true);
+  const [buzzable, setBuzzable] = useState(false);
   const [name, setName] = useState("");
   const [nameError, setNameError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -230,7 +234,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       setSave(s);
       writeSave(s);
       try {
-        const p = JSON.parse(window.localStorage.getItem(PREF_KEY) ?? "{}") as { volume?: number; muted?: boolean };
+        const p = JSON.parse(window.localStorage.getItem(PREF_KEY) ?? "{}") as { volume?: number; muted?: boolean; sfx?: boolean; music?: boolean; haptics?: boolean };
         if (typeof p.volume === "number") {
           setVolume(Math.min(1, Math.max(0, p.volume)));
           audioVolume(p.volume);
@@ -239,6 +243,19 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
           setMutedState(true);
           audioMute(true);
         }
+        if (p.sfx === false) {
+          setSfxOn(false);
+          audioSfx(false);
+        }
+        if (p.music === false) {
+          setMusicOn(false);
+          audioMusic(false);
+        }
+        if (p.haptics === false) {
+          setHapticsOn(false);
+          audioHaptics(false);
+        }
+        setBuzzable(canBuzz());
       } catch {
         /* default volume */
       }
@@ -257,12 +274,35 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
     saveRef.current = next;
     writeSave(next);
   }, []);
-  const prefs = (v: number, m: boolean) => {
+  const prefs = (next: { volume?: number; muted?: boolean; sfx?: boolean; music?: boolean; haptics?: boolean }) => {
     try {
-      window.localStorage.setItem(PREF_KEY, JSON.stringify({ volume: v, muted: m }));
+      const was = JSON.parse(window.localStorage.getItem(PREF_KEY) ?? "{}") as object;
+      window.localStorage.setItem(PREF_KEY, JSON.stringify({ ...was, ...next }));
     } catch {
       /* not remembered */
     }
+  };
+  const toggleSfx = () => {
+    startAudio();
+    const on = !sfxOn;
+    setSfxOn(on);
+    audioSfx(on);
+    prefs({ sfx: on });
+    if (on) sfx.select();
+  };
+  const toggleMusic = () => {
+    startAudio();
+    const on = !musicOn;
+    setMusicOn(on);
+    audioMusic(on);
+    prefs({ music: on });
+  };
+  const toggleHaptics = () => {
+    const on = !hapticsOn;
+    setHapticsOn(on);
+    audioHaptics(on);
+    prefs({ haptics: on });
+    if (on) buzz(30);
   };
   const changeVolume = (v: number) => {
     startAudio();
@@ -272,7 +312,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       setMutedState(false);
       audioMute(false);
     }
-    prefs(v, v === 0 ? muted : false);
+    prefs({ volume: v, muted: v === 0 ? muted : false });
     sfx.select();
   };
   const toggleMute = () => {
@@ -280,7 +320,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
     const m = !muted;
     setMutedState(m);
     audioMute(m);
-    prefs(volume, m);
+    prefs({ muted: m });
   };
 
   const fetchBoard = useCallback(async () => {
@@ -484,7 +524,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       const s = sim.current;
       const sc = screenRef.current;
       // The title screen and the main menu have their own little scene: Tony floating after the cursor among drifting motes.
-      const demoMode = sc === "attract" || sc === "menu" || sc === "intro" || sc === "name" || sc === "board";
+      const demoMode = sc === "attract" || sc === "menu" || sc === "settings" || sc === "intro" || sc === "name" || sc === "board";
       if (!cv || (!demoMode && (!r || !s || (sc !== "play" && sc !== "clear" && sc !== "gameover")))) return;
       // keep the backing store matched to the box on screen (sharp on high-density screens)
       // The playing area is always H tall; it is as wide as the screen's shape asks (within limits), so a wide screen sees further ahead.
@@ -554,6 +594,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
               s.taken.add(key);
               s.gotCount++;
               sfx.coin();
+              buzz(12);
               s.pops.push({ x: (survival ? lap * r.cycle : 0) + k.x, y: k.y, age: 0, text: "+5" });
               for (let n = 0; n < 9; n++) {
                 const a = (n / 9) * Math.PI * 2;
@@ -572,6 +613,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
               s.syncLabel = `SYNC  >  ${nextSeg.label.toUpperCase()}`;
               s.syncUntil = s.time + 2.2;
               sfx.sync();
+              buzz(25);
             }
           }
           // coach hints (tutorial)
@@ -588,6 +630,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
             s.crashAt = performance.now();
             s.attempts++;
             sfx.crash();
+            buzz([70, 40, 110]);
             if (!calm.current) {
               s.shake = 0.85;
               s.flash = 1;
@@ -603,6 +646,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
             const lastLevel = levelIdx >= levels.length - 1;
             keep({ ...cur, tutorialDone: cur.tutorialDone || lastLevel, stars: { ...cur.stars, [r.level.id]: Math.max(cur.stars[r.level.id] ?? 0, st) } });
             sfx.clear();
+            buzz([30, 40, 30, 40, 60]);
             if (r.course) {
               const gx = finishAt(r.course);
               const gy = r.track.centerAt(gx);
@@ -728,7 +772,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
   const btn = "cut-btn cut-btn-solid h-10 px-6 text-sm font-bold";
   const ghost = "h-9 border border-primary/50 px-4 text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:bg-primary/10";
   const panel = "cut-card pulse-ring flex w-full max-w-sm flex-col items-center gap-3 border border-border bg-card p-5 text-center sm:gap-4 sm:p-6";
-  const showCanvas = screen === "play" || screen === "clear" || screen === "gameover" || screen === "attract" || screen === "menu" || screen === "intro" || screen === "name" || screen === "board";
+  const showCanvas = screen === "play" || screen === "clear" || screen === "gameover" || screen === "attract" || screen === "menu" || screen === "settings" || screen === "intro" || screen === "name" || screen === "board";
   const inRun = screen === "play";
 
   const boardTable = (entries: BoardEntry[], me: string | null, compact = false) =>
@@ -944,14 +988,6 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
                   <Play className="size-4 fill-current" aria-hidden />
                   Play
                 </button>
-                <label className="flex flex-col gap-1.5 py-2 text-left">
-                  <span className="flex items-center justify-between text-xs font-bold">
-                    <span>Leverage</span>
-                    <span className={cn("tabular-nums", leverage >= 7 ? "text-[var(--game-red)]" : leverage > 1 ? "text-[var(--game-gold)]" : "text-muted-foreground")}>{leverage}x</span>
-                  </span>
-                  <input type="range" min={1} max={10} step={1} value={leverage} onChange={(e) => setLev(Number(e.target.value))} aria-label="Leverage" className="h-1.5 w-full cursor-pointer accent-primary" />
-                  <span className="text-[0.65rem] text-muted-foreground">Faster tunnel, higher score.</span>
-                </label>
                 <button type="button" className="cut-btn flex h-10 w-full items-center justify-center gap-2 text-sm font-bold text-primary" onClick={() => (sfx.select(), void fetchBoard(), setScreen("board"))}>
                   <Trophy className="size-4" aria-hidden />
                   Leaderboard
@@ -960,10 +996,48 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
                   <GraduationCap className="size-4" aria-hidden />
                   Tutorial
                 </button>
+                <button type="button" className="cut-btn flex h-10 w-full items-center justify-center gap-2 text-sm font-bold text-primary" onClick={() => (sfx.select(), setScreen("settings"))}>
+                  <Settings className="size-4" aria-hidden />
+                  Settings
+                </button>
               </div>
               <p className="text-[0.7rem] text-muted-foreground">
                 Playing as {save.username ?? "Guest"}. Best: {save.best}
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Settings: leverage, the game's difficulty */}
+        {screen === "settings" && (
+          <div className={"absolute inset-0 flex items-center justify-center p-4"}>
+            <div className="flex w-full max-w-xs flex-col items-center gap-5">
+              <p className="font-heading text-2xl font-bold tracking-tight sm:text-3xl">Settings</p>
+              <label className="flex w-full flex-col gap-1.5 text-left">
+                <span className="flex items-center justify-between text-xs font-bold">
+                  <span>Leverage</span>
+                  <span className={cn("tabular-nums", leverage >= 7 ? "text-[var(--game-red)]" : leverage > 1 ? "text-[var(--game-gold)]" : "text-muted-foreground")}>{leverage}x</span>
+                </span>
+                <input type="range" min={1} max={10} step={1} value={leverage} onChange={(e) => setLev(Number(e.target.value))} aria-label="Leverage" className="h-1.5 w-full cursor-pointer accent-primary" />
+                <span className="text-[0.65rem] text-muted-foreground">Faster tunnel, higher score.</span>
+              </label>
+              <div className="flex w-full flex-col gap-2 text-left">
+                {([
+                  ["Sound effects", sfxOn, toggleSfx],
+                  ["Music", musicOn, toggleMusic],
+                  ...(buzzable ? [["Vibration", hapticsOn, toggleHaptics] as const] : []),
+                ] as const).map(([label, on, fn]) => (
+                  <button key={label} type="button" role="switch" aria-checked={on} onClick={fn} className="flex h-9 w-full items-center justify-between text-xs font-bold">
+                    <span>{label}</span>
+                    <span className={cn("relative h-5 w-9 border transition-colors", on ? "border-primary bg-primary/30" : "border-foreground/25 bg-transparent")}>
+                      <span className={cn("absolute top-0.5 size-3.5 transition-all", on ? "left-[1.1rem] bg-primary" : "left-0.5 bg-foreground/50")} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" className="cut-btn cut-btn-solid flex h-11 w-full items-center justify-center gap-2 text-sm font-bold" onClick={() => (sfx.select(), setScreen("menu"))}>
+                Done
+              </button>
             </div>
           </div>
         )}

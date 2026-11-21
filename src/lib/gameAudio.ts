@@ -8,6 +8,9 @@ type Win = typeof window & { webkitAudioContext?: typeof AudioContext };
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let sfxBus: GainNode | null = null;
+let musicBus: GainNode | null = null;
+let buzzOn = true;
 let volume = 0.6;
 let muted = false;
 let music: { timer: number; step: number } | null = null;
@@ -25,7 +28,12 @@ export function startAudio(): void {
     ctx = new AC();
     master = ctx.createGain();
     master.connect(ctx.destination);
+    sfxBus = ctx.createGain();
+    musicBus = ctx.createGain();
+    sfxBus.connect(master);
+    musicBus.connect(master);
     apply();
+    applyBuses();
   }
   if (ctx.state === "suspended") void ctx.resume();
 }
@@ -39,9 +47,36 @@ export function setMuted(m: boolean): void {
   apply();
 }
 
+/** Sound effects and the tune can each be switched off on their own. Kept here so they apply once audio opens. */
+let sfxOn = true;
+let musicOn = true;
+function applyBuses() {
+  if (ctx && sfxBus) sfxBus.gain.setTargetAtTime(sfxOn ? 1 : 0, ctx.currentTime, 0.02);
+  if (ctx && musicBus) musicBus.gain.setTargetAtTime(musicOn ? 1 : 0, ctx.currentTime, 0.02);
+}
+export function setSfx(on: boolean): void {
+  sfxOn = on;
+  applyBuses();
+}
+export function setMusic(on: boolean): void {
+  musicOn = on;
+  applyBuses();
+}
+
+/** Phone vibration, where the browser allows it (Android; not iOS Safari). */
+export function canBuzz(): boolean {
+  return typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+}
+export function setHaptics(on: boolean): void {
+  buzzOn = on;
+}
+export function buzz(pattern: number | number[]): void {
+  if (buzzOn && canBuzz()) navigator.vibrate(pattern);
+}
+
 /** One note: a short tone that can slide from one pitch to another. */
-function tone(freq: number, dur: number, type: OscillatorType, gain: number, slideTo?: number, delay = 0): void {
-  if (!ctx || !master) return;
+function tone(freq: number, dur: number, type: OscillatorType, gain: number, slideTo?: number, delay = 0, bus: GainNode | null = sfxBus): void {
+  if (!ctx || !master || !bus) return;
   const t = ctx.currentTime + delay;
   const o = ctx.createOscillator();
   const g = ctx.createGain();
@@ -51,13 +86,13 @@ function tone(freq: number, dur: number, type: OscillatorType, gain: number, sli
   g.gain.setValueAtTime(0.0001, t);
   g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g).connect(master);
+  o.connect(g).connect(bus);
   o.start(t);
   o.stop(t + dur + 0.02);
 }
 
 function noise(dur: number, gain: number, delay = 0): void {
-  if (!ctx || !master) return;
+  if (!ctx || !sfxBus) return;
   const t = ctx.currentTime + delay;
   const buf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * dur)), ctx.sampleRate);
   const d = buf.getChannelData(0);
@@ -67,7 +102,7 @@ function noise(dur: number, gain: number, delay = 0): void {
   src.buffer = buf;
   g.gain.setValueAtTime(gain, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  src.connect(g).connect(master);
+  src.connect(g).connect(sfxBus);
   src.start(t);
 }
 
@@ -105,8 +140,8 @@ export function startMusic(): void {
     timer: window.setInterval(() => {
       if (!music) return;
       const s = music.step++;
-      if (s % 2 === 0) tone(BASS[(s / 2) % BASS.length], 0.34, "triangle", 0.1);
-      tone(ARP[s % ARP.length], 0.16, "square", 0.028);
+      if (s % 2 === 0) tone(BASS[(s / 2) % BASS.length], 0.34, "triangle", 0.1, undefined, 0, musicBus);
+      tone(ARP[s % ARP.length], 0.16, "square", 0.028, undefined, 0, musicBus);
     }, stepMs),
   };
 }
