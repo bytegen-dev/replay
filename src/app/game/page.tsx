@@ -6,7 +6,7 @@ import { pageMeta } from "@/lib/site.ts";
 const TITLE = "Tony Stonk: fly through the market's history";
 const DESCRIPTION = "Tony Stonk is a trader protecting his liquidity. Learn the controls in a short tutorial, then play the endless mode: a run through real price history, with every trader on the board.";
 
-export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} | Replay`, description: DESCRIPTION, path: "/play" });
+export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} | Replay`, description: DESCRIPTION, path: "/game" });
 
 export default function PlayPage() {
   const levels = getLevels();

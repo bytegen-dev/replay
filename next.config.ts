@@ -25,6 +25,7 @@ const nextConfig: NextConfig = {
     return [
       { source: "/price", destination: "/wayback?view=price", permanent: true },
       { source: "/hindsight", destination: "/wayback", permanent: true },
+      { source: "/play", destination: "/game", permanent: true },
       ...toolKeys.map((key) => ({ source: "/", has: [{ type: "query" as const, key }], destination: "/wayback", permanent: false })),
     ];
   },

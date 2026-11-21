@@ -8,12 +8,12 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { GithubIcon, XIcon } from "@/components/BrandIcons";
 import { cn } from "@/lib/utils";
-import { AUTH_CHANGED_EVENT, openSignIn, useViewer } from "@/lib/viewerClient.ts";
+import { AUTH_CHANGED_EVENT, openGameFromLink, openSignIn, useViewer } from "@/lib/viewerClient.ts";
 
 const TOOLS = [
   { href: "/#trade", label: "Trade", note: "Paper and live trading, coming soon", Icon: ArrowLeftRight },
   { href: "/wayback", label: "Wayback", note: "Past buys and the price on any day", Icon: History },
-  { href: "/play", label: "Play", note: "Tony Stonk, a chart game", Icon: Gamepad2 },
+  { href: "/game", label: "Game", note: "Tony Stonk, a chart game", Icon: Gamepad2 },
   { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },
 ];
 const LINKS = [
@@ -111,7 +111,10 @@ export function MobileMenu() {
                 <Link
                   key={href}
                   href={href}
-                  onClick={close}
+                  onClick={(e) => {
+                    if (href === "/game") openGameFromLink(e);
+                    close();
+                  }}
                   aria-current={active ? "page" : undefined}
                   style={enter(i)}
                   className={cn("group relative flex items-center gap-4 border px-4 py-4 transition-colors", active ? "border-primary bg-primary/10" : "border-border hover:border-primary/60 hover:bg-secondary/60")}

@@ -3,6 +3,7 @@ import { Chakra_Petch, JetBrains_Mono } from "next/font/google";
 import { AccessPanel } from "@/components/AccessPanel";
 import { SignInDialog } from "@/components/SignInDialog";
 import { BackgroundMotion } from "@/components/BackgroundMotion";
+import { GameDialog } from "@/components/GameDialog";
 import { PwaRegister } from "@/components/PwaRegister";
 import { UpdatePrompt } from "@/components/UpdatePrompt";
 import { SettingsProvider } from "@/components/SettingsProvider";
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <UpdatePrompt />
           <AccessPanel />
           <SignInDialog />
+          <GameDialog />
           <BackgroundMotion />
         </SettingsProvider>
       </body>

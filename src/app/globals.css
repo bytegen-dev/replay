@@ -77,10 +77,15 @@
   --cta-glow: rgba(57, 214, 163, 0.55);
   --cta-ring: rgba(57, 214, 163, 0.18);
   --selection: rgba(57, 214, 163, 0.28);
+  /* The game's gold (scores, coins) and red (crashes), tuned per theme so they stay readable. */
+  --game-gold: #f5c451;
+  --game-red: #fb7185;
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
+  --game-gold: #a16207;
+  --game-red: #e11d48;
   --background: #f2f7f7;
   --foreground: #0b171b;
   --card: #ffffff;
@@ -1691,4 +1696,29 @@ html[data-motion="reduce"] .tex-layer {
 }
 html[data-motion="reduce"] .tap-ripple {
   display: none;
+}
+
+/* In the dark theme the game pins the dark palette for the text and buttons over its picture (so a dark-theme site with a custom or
+   high-contrast setting cannot wash it out). In the light theme the game follows the site: it draws a light scene and takes the
+   light colours. */
+:root:not([data-theme="light"]) .game-theme {
+  --background: #03090b;
+  --foreground: #f3f8f8;
+  --card: #071215;
+  --card-foreground: #f3f8f8;
+  --popover: #0a181c;
+  --popover-foreground: #f3f8f8;
+  --primary: #39d6a3;
+  --primary-foreground: #03090b;
+  --secondary: #0f1a1e;
+  --secondary-foreground: #f3f8f8;
+  --muted: #0f1a1e;
+  --muted-foreground: #8ea4ad;
+  --accent: #69aac1;
+  --accent-foreground: #03090b;
+  --destructive: #fb7185;
+  --border: #25414a;
+  --input: #2f4f58;
+  --ring: #69aac1;
+  color: var(--foreground);
 }

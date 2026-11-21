@@ -21,6 +21,8 @@ export interface Frame {
   phase: "ready" | "running" | "crashed";
   bits: { x: number; y: number; age: number }[];
   hud: { left: string; right: string; center: string };
+  /** Draw in the light theme's colours. */
+  light: boolean;
   /** The leverage the run is flying at (1 to 10): the faster it is, the more streaks fly past. */
   speed: number;
   /** The width of the playing area in game pixels (the height is always H), which follows the shape of the screen. */
@@ -41,7 +43,73 @@ export interface Frame {
   };
 }
 
-const MINT = "#39d6a3";
+/** The colours the scene is drawn in: one set for the dark theme and one for the light, picked each frame from the site's theme. */
+interface Palette {
+  sky0: string;
+  sky1: string;
+  star: string;
+  wall: string;
+  /** "r,g,b" of the main accent, for the glows, the dashed middle line and the dots. */
+  glowRgb: string;
+  edge: string;
+  ink: string;
+  /** "r,g,b" of the text colour, for the soft versions of it. */
+  inkRgb: string;
+  gold: string;
+  goldEdge: string;
+  pop: string;
+  banner: string;
+  streak: string;
+  smoke: string;
+  gridRgb: string;
+  ghostUp: string;
+  ghostDown: string;
+  menuCenter: string;
+  menuEdge: string;
+}
+const DARK: Palette = {
+  sky0: "#050c0f",
+  sky1: "#0c2a30",
+  star: "#cfeee6",
+  wall: "#08161a",
+  glowRgb: "57,214,163",
+  edge: "#39d6a3",
+  ink: "#f3f8f8",
+  inkRgb: "243,248,248",
+  gold: "#f5c451",
+  goldEdge: "#fff1b8",
+  pop: "#ffe08a",
+  banner: "rgba(5,12,15,0.7)",
+  streak: "#cfeee6",
+  smoke: "#9fb3b8",
+  gridRgb: "143,200,190",
+  ghostUp: "#39d6a3",
+  ghostDown: "#fb7185",
+  menuCenter: "rgb(16,54,61)",
+  menuEdge: "#050c0f",
+};
+const LIGHT: Palette = {
+  sky0: "#eaf6f3",
+  sky1: "#cbe7e1",
+  star: "#3f9384",
+  wall: "#a9cdc5",
+  glowRgb: "14,159,119",
+  edge: "#0e9f77",
+  ink: "#0b2b2c",
+  inkRgb: "11,43,44",
+  gold: "#c98a0b",
+  goldEdge: "#7a4d00",
+  pop: "#8a5a00",
+  banner: "rgba(240,250,248,0.85)",
+  streak: "#2b8a78",
+  smoke: "#5f777d",
+  gridRgb: "11,90,80",
+  ghostUp: "#0e9f77",
+  ghostDown: "#e11d48",
+  menuCenter: "#f7fcfb",
+  menuEdge: "#cfe8e3",
+};
+let P: Palette = DARK;
 
 const stars = Array.from({ length: 90 }, (_, i) => {
   // A fixed scatter (no randomness at render), so the sky is the same every time.
@@ -77,7 +145,7 @@ const candles = (() => {
 function drawBackdrop(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
   const x = f.bird.x;
   // Chart gridlines: horizontal price lines stay put, vertical time lines slide by.
-  ctx.fillStyle = "rgba(143,200,190,0.05)";
+  ctx.fillStyle = `rgba(${P.gridRgb},0.05)`;
   for (let gy = 40; gy < H - 30; gy += 56) ctx.fillRect(0, gy, W, 1);
   const gOff = Math.round(x * 0.2);
   for (let gx = -(gOff % 120); gx < W; gx += 120) ctx.fillRect(gx, 0, 1, H);
@@ -88,7 +156,7 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
     for (const k of candles) {
       const sx = rep * CANDLE_LEN + k.x - cOff;
       if (sx > W + 8 || sx < -8) continue;
-      ctx.fillStyle = k.c < k.o ? "#39d6a3" : "#fb7185";
+      ctx.fillStyle = k.c < k.o ? P.ghostUp : P.ghostDown;
       ctx.fillRect(sx - 0.5, k.hi, 1, k.lo - k.hi);
       ctx.fillRect(sx - 3, Math.min(k.o, k.c), 6, Math.max(2, Math.abs(k.o - k.c)));
     }
@@ -102,7 +170,7 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
       const len = 30 + f.speed * 14 + (i % 4) * 12;
       const sx = W + 40 - ((f.time * (500 + f.speed * 260) + i * 173) % (W + 200));
       ctx.globalAlpha = 0.05 + f.speed * 0.012;
-      ctx.fillStyle = f.speed >= 7 ? "#fb7185" : "#cfeee6";
+      ctx.fillStyle = f.speed >= 7 ? "#fb7185" : P.streak;
       ctx.fillRect(sx, y, len, 1.5);
     }
     ctx.globalAlpha = 1;
@@ -266,6 +334,7 @@ export function drawTony(ctx: CanvasRenderingContext2D, x: number, y: number, ti
 }
 
 export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
+  P = f.light ? LIGHT : DARK;
   const { bird, track } = f;
   const W = f.w;
   const left = bird.x - BIRD_X;
@@ -276,14 +345,14 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   }
   // Sky: a deep teal-black wash, and stars that drift past slower than the course (they are far away).
   const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, "#050c0f");
-  sky.addColorStop(1, "#0c2a30");
+  sky.addColorStop(0, P.sky0);
+  sky.addColorStop(1, P.sky1);
   ctx.fillStyle = sky;
   ctx.fillRect(-12, -12, W + 24, H + 24);
   for (const s of stars) {
     const sx = (((s.x * W - bird.x * s.depth) % W) + W) % W;
     ctx.globalAlpha = 0.35 + 0.35 * Math.sin(f.time * 1.5 + s.tw);
-    ctx.fillStyle = "#cfeee6";
+    ctx.fillStyle = P.star;
     ctx.beginPath();
     ctx.arc(sx, s.y, s.r, 0, Math.PI * 2);
     ctx.fill();
@@ -302,7 +371,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
     tops.push(c - g / 2);
     bots.push(c + g / 2);
   }
-  ctx.fillStyle = "#08161a";
+  ctx.fillStyle = P.wall;
   ctx.beginPath();
   ctx.moveTo(xs[0], -2);
   xs.forEach((x, i) => ctx.lineTo(x, tops[i]));
@@ -316,18 +385,18 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   ctx.closePath();
   ctx.fill();
   const glow = ctx.createLinearGradient(0, 0, 0, H);
-  glow.addColorStop(0, "rgba(57,214,163,0)");
-  glow.addColorStop(0.5, "rgba(57,214,163,0.05)");
-  glow.addColorStop(1, "rgba(57,214,163,0)");
+  glow.addColorStop(0, `rgba(${P.glowRgb},0)`);
+  glow.addColorStop(0.5, `rgba(${P.glowRgb},0.05)`);
+  glow.addColorStop(1, `rgba(${P.glowRgb},0)`);
   ctx.fillStyle = glow;
   ctx.beginPath();
   xs.forEach((x, i) => (i === 0 ? ctx.moveTo(x, tops[i]) : ctx.lineTo(x, tops[i])));
   for (let i = xs.length - 1; i >= 0; i--) ctx.lineTo(xs[i], bots[i]);
   ctx.closePath();
   ctx.fill();
-  ctx.shadowColor = MINT;
+  ctx.shadowColor = P.edge;
   ctx.shadowBlur = 8;
-  ctx.strokeStyle = MINT;
+  ctx.strokeStyle = P.edge;
   ctx.lineWidth = 2;
   for (const edge of [tops, bots]) {
     ctx.beginPath();
@@ -336,7 +405,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   }
   ctx.shadowBlur = 0;
   ctx.setLineDash([3, 7]);
-  ctx.strokeStyle = "rgba(57,214,163,0.32)";
+  ctx.strokeStyle = `rgba(${P.glowRgb},0.32)`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   xs.forEach((x, i) => (i === 0 ? ctx.moveTo(x, (tops[i] + bots[i]) / 2) : ctx.lineTo(x, (tops[i] + bots[i]) / 2)));
@@ -350,12 +419,12 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
       const gc = track.centerAt(f.gate.x);
       const gp = track.gapAt(f.gate.x);
       const g = ctx.createLinearGradient(gateX - 18, 0, gateX + 18, 0);
-      g.addColorStop(0, "rgba(57,214,163,0)");
-      g.addColorStop(0.5, "rgba(57,214,163,0.55)");
-      g.addColorStop(1, "rgba(57,214,163,0)");
+      g.addColorStop(0, `rgba(${P.glowRgb},0)`);
+      g.addColorStop(0.5, `rgba(${P.glowRgb},0.55)`);
+      g.addColorStop(1, `rgba(${P.glowRgb},0)`);
       ctx.fillStyle = g;
       ctx.fillRect(gateX - 18, gc - gp / 2, 36, gp);
-      ctx.fillStyle = "#f3f8f8";
+      ctx.fillStyle = P.ink;
       ctx.font = `700 11px ${f.fonts.head}`;
       ctx.textAlign = "center";
       ctx.fillText(f.gate.label, gateX, gc - gp / 2 - 8);
@@ -403,14 +472,14 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
       if (sx < -10 || sx > W + 10) return;
       // A coin turning on its edge.
       const rx = Math.max(1.6, 6.5 * Math.abs(Math.cos(f.time * 4 + i * 0.9)));
-      ctx.shadowColor = "#f5c451";
+      ctx.shadowColor = P.gold;
       ctx.shadowBlur = 8;
-      ctx.fillStyle = "#f5c451";
+      ctx.fillStyle = P.gold;
       ctx.beginPath();
       ctx.ellipse(sx, k.y, rx, 6.5, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.strokeStyle = "#fff1b8";
+      ctx.strokeStyle = P.goldEdge;
       ctx.lineWidth = 1.2;
       ctx.stroke();
     });
@@ -419,7 +488,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   // Smoke from the jetpack.
   for (const d of f.fx.trail) {
     ctx.globalAlpha = Math.max(0, 1 - d.age / 0.5) * 0.4;
-    ctx.fillStyle = d.age < 0.12 ? "#ffb347" : "#9fb3b8";
+    ctx.fillStyle = d.age < 0.12 ? "#ffb347" : P.smoke;
     ctx.beginPath();
     ctx.arc(d.x - left, d.y, 1.5 + d.age * 6, 0, Math.PI * 2);
     ctx.fill();
@@ -433,7 +502,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   ctx.font = `700 12px ${f.fonts.head}`;
   for (const b of f.bits) {
     ctx.globalAlpha = Math.max(0, 1 - b.age / 0.8);
-    ctx.fillStyle = b.age % 0.2 < 0.1 ? "#f5c451" : MINT;
+    ctx.fillStyle = b.age % 0.2 < 0.1 ? P.gold : P.edge;
     ctx.fillRect(b.x - left, b.y, 3, 3);
   }
   ctx.globalAlpha = 1;
@@ -446,7 +515,7 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   ctx.textAlign = "center";
   for (const p of f.fx.pops) {
     ctx.globalAlpha = Math.max(0, 1 - p.age / 0.8);
-    ctx.fillStyle = "#ffe08a";
+    ctx.fillStyle = P.pop;
     ctx.fillText(p.text, p.x - left, p.y - 14 - p.age * 36);
   }
   ctx.textAlign = "left";
@@ -462,16 +531,16 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
     const a = f.sync.amount;
     for (let i = 0; i < 7; i++) {
       const y = ((f.time * 190 + i * 53) % H) | 0;
-      ctx.fillStyle = i % 2 ? "rgba(57,214,163,0.16)" : "rgba(207,238,230,0.1)";
+      ctx.fillStyle = i % 2 ? `rgba(${P.glowRgb},0.16)` : `rgba(${P.inkRgb},0.1)`;
       ctx.fillRect(0, y, W, 2 + (i % 3) * 3 * a);
     }
     ctx.globalAlpha = Math.min(1, a * 1.4);
-    ctx.fillStyle = "rgba(5,12,15,0.7)";
+    ctx.fillStyle = P.banner;
     ctx.fillRect(W / 2 - 150, 46, 300, 30);
-    ctx.strokeStyle = MINT;
+    ctx.strokeStyle = P.edge;
     ctx.lineWidth = 1.5;
     ctx.strokeRect(W / 2 - 150, 46, 300, 30);
-    ctx.fillStyle = "#f3f8f8";
+    ctx.fillStyle = P.ink;
     ctx.font = `700 13px ${f.fonts.head}`;
     ctx.textAlign = "center";
     ctx.fillText(f.sync.label, W / 2, 66);
@@ -480,19 +549,19 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   }
 
   // Heads-up display.
-  ctx.fillStyle = "rgba(243,248,248,0.9)";
+  ctx.fillStyle = `rgba(${P.inkRgb},0.9)`;
   ctx.font = `600 12px ${f.fonts.head}`;
   ctx.textAlign = "left";
   ctx.fillText(f.hud.left, 14, 22);
   ctx.textAlign = "right";
-  ctx.fillStyle = "#f5c451";
+  ctx.fillStyle = P.gold;
   ctx.fillText(f.hud.right, W - 14, 22);
   if (f.progress !== undefined) {
-    ctx.fillStyle = MINT;
+    ctx.fillStyle = P.edge;
     ctx.fillRect(0, 0, W * Math.min(1, f.progress), 3);
   }
   ctx.textAlign = "center";
-  ctx.fillStyle = "rgba(243,248,248,0.85)";
+  ctx.fillStyle = `rgba(${P.inkRgb},0.85)`;
   ctx.font = `500 12px ${f.fonts.body}`;
   ctx.fillText(f.hud.center, W / 2, 22);
   ctx.textAlign = "left";
@@ -506,9 +575,9 @@ function drawTimeline(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
   const x1 = W - 36;
   const y = H - 9;
   const p = Math.min(1, Math.max(0, (at - from) / Math.max(1, to - from)));
-  ctx.fillStyle = "rgba(243,248,248,0.14)";
+  ctx.fillStyle = `rgba(${P.inkRgb},0.14)`;
   ctx.fillRect(x0, y - 1.5, x1 - x0, 3);
-  ctx.fillStyle = MINT;
+  ctx.fillStyle = P.edge;
   ctx.fillRect(x0, y - 1.5, (x1 - x0) * p, 3);
   const y0 = new Date(from).getUTCFullYear();
   const y1 = new Date(to).getUTCFullYear();
@@ -517,21 +586,21 @@ function drawTimeline(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
   ctx.textAlign = "center";
   for (let yr = y0 + 1; yr <= y1; yr++) {
     const fx = x0 + ((x1 - x0) * (Date.UTC(yr, 0, 1) - from)) / Math.max(1, to - from);
-    ctx.fillStyle = "rgba(243,248,248,0.35)";
+    ctx.fillStyle = `rgba(${P.inkRgb},0.35)`;
     ctx.fillRect(Math.round(fx) - 0.5, y - 5, 1, 10);
     if ((yr - y0) % step === 0) ctx.fillText(String(yr), fx, y - 8);
   }
   const px = x0 + (x1 - x0) * p;
-  ctx.shadowColor = MINT;
+  ctx.shadowColor = P.edge;
   ctx.shadowBlur = 8;
-  ctx.fillStyle = "#f3f8f8";
+  ctx.fillStyle = P.ink;
   ctx.beginPath();
   ctx.arc(px, y, 4, 0, Math.PI * 2);
   ctx.fill();
   ctx.shadowBlur = 0;
   const label = new Date(at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   ctx.font = `700 12px ${f.fonts.head}`;
-  ctx.fillStyle = "#f3f8f8";
+  ctx.fillStyle = P.ink;
   ctx.fillText(label, Math.min(x1 - 46, Math.max(x0 + 46, px)), y - 22);
   ctx.textAlign = "left";
 }
@@ -557,6 +626,67 @@ const priceLines = [
   return { ...l, pts };
 });
 
+let dotTile: { key: string; canvas: HTMLCanvasElement } | null = null;
+let dotLayer: HTMLCanvasElement | null = null;
+
+/**
+ * The site's dotted texture (the one on the chosen option of the Wayback page): round mint dots 12 screen pixels apart, drifting
+ * diagonally over six seconds, and fading out towards the corners so it shows only around the middle, like a patch of light and not a wallpaper. `unit` is how many screen pixels one game unit is, so
+ * the dots keep the size they have on the site however big the game is drawn.
+ */
+function drawSiteDots(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, unit: number) {
+  const m = ctx.getTransform();
+  const dev = m.a; // device pixels per game unit
+  const dpr = dev / unit; // device pixels per screen pixel
+  const tile = Math.max(2, Math.round(12 * dpr));
+  const key = `${tile}:${dpr.toFixed(3)}:${P.glowRgb}`;
+  if (!dotTile || dotTile.key !== key) {
+    const c = document.createElement("canvas");
+    c.width = tile;
+    c.height = tile;
+    const x = c.getContext("2d");
+    if (!x) return;
+    const g = x.createRadialGradient(tile / 2, tile / 2, 0, tile / 2, tile / 2, 1.7 * dpr);
+    g.addColorStop(0, `rgba(${P.glowRgb},0.8)`);
+    g.addColorStop(0.65, `rgba(${P.glowRgb},0.8)`);
+    g.addColorStop(1, `rgba(${P.glowRgb},0)`);
+    x.fillStyle = g;
+    x.fillRect(0, 0, tile, tile);
+    dotTile = { key, canvas: c };
+  }
+  const W2 = ctx.canvas.width;
+  const H2 = ctx.canvas.height;
+  if (!dotLayer) dotLayer = document.createElement("canvas");
+  if (dotLayer.width !== W2 || dotLayer.height !== H2) {
+    dotLayer.width = W2;
+    dotLayer.height = H2;
+  }
+  const lc = dotLayer.getContext("2d");
+  const pattern = lc?.createPattern(dotTile.canvas, "repeat");
+  if (!lc || !pattern) return;
+  lc.setTransform(1, 0, 0, 1, 0, 0);
+  lc.globalCompositeOperation = "source-over";
+  lc.clearRect(0, 0, W2, H2);
+  lc.setTransform(m);
+  const shift = ((t / 6) % 1) * (12 / unit);
+  pattern.setTransform(new DOMMatrix().translate(shift, shift).scale((12 / unit) / tile));
+  lc.fillStyle = pattern;
+  lc.fillRect(0, 0, W, H);
+  // Fade out towards all four corners, so the dots show only around the middle.
+  lc.globalCompositeOperation = "destination-in";
+  const g = lc.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.hypot(W, H) * 0.42);
+  g.addColorStop(0, "#000");
+  g.addColorStop(0.5, "rgba(0,0,0,0.4)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  lc.fillStyle = g;
+  lc.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 0.32;
+  ctx.drawImage(dotLayer, 0, 0);
+  ctx.restore();
+}
+
 export interface MenuBuddy {
   x: number;
   y: number;
@@ -571,25 +701,29 @@ export interface MenuBuddy {
  * Tony floating about on his jetpack. He trails the cursor (or a finger) a little behind it on a soft spring, and wanders slowly when
  * nobody is pointing.
  */
-export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt: number; time: number; buddy: MenuBuddy; pointer: { x: number; y: number } | null }) {
+export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt: number; time: number; buddy: MenuBuddy; pointer: { x: number; y: number } | null; tony: boolean; unit: number; light: boolean }) {
   const { w: W, dt, time: t, buddy: b, pointer } = o;
-  const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.hypot(W, H) * 0.55);
-  g.addColorStop(0, "#0c2a30");
-  g.addColorStop(0.8, "#050c0f");
-  g.addColorStop(1, "#050c0f");
+  P = o.light ? LIGHT : DARK;
+  // The glow in the middle holds steady (k is where it sits between its dimmest and brightest).
+  const k = 0.5;
+  const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.hypot(W, H) * (0.55 + 0.06 * k));
+  g.addColorStop(0, P.menuCenter);
+  g.addColorStop(0.8, P.menuEdge);
+  g.addColorStop(1, P.menuEdge);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
+  drawSiteDots(ctx, W, H, t, o.unit);
   // Price lines. The nearer ones shift against the pointer a little, so the scene has depth.
   const px = pointer ? (pointer.x - W / 2) / W : 0;
   const py = pointer ? (pointer.y - H / 2) / H : 0;
-  ctx.fillStyle = "rgba(143,200,190,0.045)";
+  ctx.fillStyle = `rgba(${P.gridRgb},0.045)`;
   for (let gy = 50; gy < H; gy += 70) ctx.fillRect(0, gy, W, 1);
   ctx.lineJoin = "round";
   for (const l of priceLines) {
     const off = t * l.speed + px * 30 * (l.speed / 15);
     ctx.globalAlpha = l.alpha;
-    ctx.strokeStyle = "#39d6a3";
+    ctx.strokeStyle = P.edge;
     ctx.lineWidth = l.width;
     ctx.beginPath();
     for (let sx = -LINE_STEP; sx <= W + LINE_STEP; sx += LINE_STEP) {
@@ -604,6 +738,7 @@ export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt:
   }
   ctx.globalAlpha = 1;
 
+  if (!o.tony) return;
   // Tony: a soft spring toward a spot just below the pointer, or a slow wander.
   const tx = pointer ? pointer.x : W / 2 + Math.sin(t * 0.5) * W * 0.3;
   const ty = (pointer ? pointer.y + 28 : H / 2 + Math.sin(t * 0.8) * H * 0.14) + Math.sin(t * 2.4) * 3;
@@ -623,7 +758,7 @@ export function drawMenuScene(ctx: CanvasRenderingContext2D, o: { w: number; dt:
   for (const d of b.smoke) {
     d.age += step;
     ctx.globalAlpha = Math.max(0, 1 - d.age / 0.55) * 0.4;
-    ctx.fillStyle = d.age < 0.12 ? "#ffb347" : "#9fb3b8";
+    ctx.fillStyle = d.age < 0.12 ? "#ffb347" : P.smoke;
     ctx.beginPath();
     ctx.arc(d.x, d.y, 1.5 + d.age * 6, 0, Math.PI * 2);
     ctx.fill();

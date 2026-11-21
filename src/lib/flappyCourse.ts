@@ -195,9 +195,12 @@ export function buildEndless(segments: EndlessSegment[], o: EndlessOptions): End
   const bounds: { from: number; to: number; chartFrom: number; chartTo: number }[] = [];
   const seams: number[] = [];
   segments.forEach((seg, k) => {
-    const lo = Math.min(...seg.prices);
-    const span = Math.max(...seg.prices) - lo || 1;
-    const toY = (p: number) => bottom - ((p - lo) / span) * (bottom - top);
+    // Heights follow the log of the price, as on a log chart: otherwise an asset that grew a hundredfold is a flat line for years and
+    // then a wall (Bitcoin from 2018 is the example), where in percentage terms it was moving all along.
+    const logs = seg.prices.map((p) => Math.log(Math.max(p, 1e-9)));
+    const lo = Math.min(...logs);
+    const span = Math.max(...logs) - lo || 1;
+    const toY = (p: number) => bottom - ((Math.log(Math.max(p, 1e-9)) - lo) / span) * (bottom - top);
     const run = Math.round(o.seamRunway / STEP);
     const first = toY(seg.prices[0]);
     const last = toY(seg.prices[seg.prices.length - 1]);

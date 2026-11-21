@@ -1,9 +1,11 @@
 "use client";
 
-import { GraduationCap, House, Maximize2, Minimize2, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX } from "lucide-react";
+import { ExternalLink, GraduationCap, House, Maximize2, Minimize2, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { drawFrame, drawMenuScene, type Frame, type MenuBuddy } from "@/components/play/drawGame";
 import { buildCourse, buildEndless, placeCoins, placeObstacles, type Course, type Endless, type Obstacle, type Track } from "@/lib/flappyCourse.ts";
 import { finishAt, flap, H, PLAY_H, hitsObstacle, hitsWall, newBird, step, type Bird } from "@/lib/flappyPhysics.ts";
@@ -122,7 +124,11 @@ function makeSim(bird: Bird, attempts = 0): Sim {
 const starsFor = (attempts: number) => (attempts <= 1 ? 3 : attempts <= 3 ? 2 : 1);
 const monthLabel = (ms: number) => new Date(ms).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
-export function TonyGame({ levels, segments }: { levels: Level[]; segments: EndlessSegment[] }) {
+/**
+ * The whole game. On its own page it fills the screen; with `embedded` it fills the box it is put in (the dialog that opens over other
+ * pages), where the top bar has buttons to open it in a new tab and to close it in place of the link back to the site.
+ */
+export function TonyGame({ levels, segments, embedded = false, onClose }: { levels: Level[]; segments: EndlessSegment[]; embedded?: boolean; onClose?: () => void }) {
   const [screen, setScreen] = useState<Screen>("attract");
   const [mode, setMode] = useState<Mode>("tutorial");
   const [levelIdx, setLevelIdx] = useState(0);
@@ -139,6 +145,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
   const [nameError, setNameError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [leverage, setLeverage] = useState(1);
+  const [uiScale, setUiScale] = useState(1);
   const [canFull, setCanFull] = useState(false);
   const [isFull, setIsFull] = useState(false);
   const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
@@ -149,6 +156,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
   const pointer = useRef<{ x: number; y: number; on: boolean }>({ x: 0, y: 0, on: false });
   const buddy = useRef<MenuBuddy>({ x: 320, y: 180, vx: 0, vy: 0, acc: 0, smoke: [] });
   const levRef = useRef(1);
+  const lightRef = useRef(false);
   const rippleId = useRef(0);
   const screenRef = useRef<Screen>("attract");
   const saveRef = useRef(save);
@@ -168,6 +176,32 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  // On big screens the text and buttons over the game grow with the scene behind them (up to 1.8x), never below their normal size.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      const r = el.getBoundingClientRect();
+      setUiScale(Math.round(Math.min(1.8, Math.max(1, Math.min(r.height / 600, r.width / 700))) * 20) / 20);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // The game follows the site's theme: the scene is drawn in a light or a dark palette, and the text over it takes the theme's colours.
+  useEffect(() => {
+    const read = () => {
+      const light = document.documentElement.dataset.theme === "light";
+      lightRef.current = light;
+    };
+    read();
+    const mo = new MutationObserver(read);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => mo.disconnect();
+  }, []);
 
   // Full screen: where the browser has it for elements, a button turns it on and off.
   useEffect(() => {
@@ -450,7 +484,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
       const s = sim.current;
       const sc = screenRef.current;
       // The title screen and the main menu have their own little scene: Tony floating after the cursor among drifting motes.
-      const demoMode = sc === "attract" || sc === "menu";
+      const demoMode = sc === "attract" || sc === "menu" || sc === "intro" || sc === "name" || sc === "board";
       if (!cv || (!demoMode && (!r || !s || (sc !== "play" && sc !== "clear" && sc !== "gameover")))) return;
       // keep the backing store matched to the box on screen (sharp on high-density screens)
       // The playing area is always H tall; it is as wide as the screen's shape asks (within limits), so a wide screen sees further ahead.
@@ -480,7 +514,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
       if (demoMode) {
         const pt = pointer.current;
         const gp = pt.on ? { x: ((pt.x - (bx - cw) / 2) / cw) * W, y: ((pt.y - (by - ch) / 2) / ch) * H } : null;
-        drawMenuScene(ctx, { w: W, dt, time: now / 1000, buddy: buddy.current, pointer: gp });
+        drawMenuScene(ctx, { w: W, dt, time: now / 1000, buddy: buddy.current, pointer: gp, tony: sc === "attract" || sc === "menu", unit: cw / W, light: lightRef.current });
         return;
       }
       if (!r || !s) return;
@@ -637,6 +671,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
             : { left: `${levelIdx + 1}  ${lv?.title ?? ""}`, right: `${s.gotCount} / ${r.coins.length}`, center },
         sync: survival && s.syncUntil > s.time ? { amount: Math.min(1, (s.syncUntil - s.time) / 1.4), label: s.syncLabel } : undefined,
         w: W,
+        light: lightRef.current,
         speed: survival ? levRef.current : 1,
         timeline,
         fonts: fonts.current,
@@ -644,9 +679,9 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
       };
       drawFrame(ctx, frame);
       if (pausedRef.current) {
-        ctx.fillStyle = "rgba(3,9,11,0.6)";
+        ctx.fillStyle = lightRef.current ? "rgba(234,246,243,0.7)" : "rgba(3,9,11,0.6)";
         ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = "#f3f8f8";
+        ctx.fillStyle = lightRef.current ? "#0b2b2c" : "#f3f8f8";
         ctx.font = `700 22px ${fonts.current.head}`;
         ctx.textAlign = "center";
         ctx.fillText("PAUSED", W / 2, H / 2);
@@ -687,8 +722,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
   const btn = "cut-btn cut-btn-solid h-10 px-6 text-sm font-bold";
   const ghost = "h-9 border border-primary/50 px-4 text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:bg-primary/10";
   const panel = "cut-card pulse-ring flex w-full max-w-sm flex-col items-center gap-3 border border-border bg-card p-5 text-center sm:gap-4 sm:p-6";
-  const bgStory = "bg-[radial-gradient(ellipse_at_center,#0c2a30_0%,#050c0f_80%)]";
-  const showCanvas = screen === "play" || screen === "clear" || screen === "gameover" || screen === "attract" || screen === "menu";
+  const showCanvas = screen === "play" || screen === "clear" || screen === "gameover" || screen === "attract" || screen === "menu" || screen === "intro" || screen === "name" || screen === "board";
   const inRun = screen === "play";
 
   const boardTable = (entries: BoardEntry[], me: string | null, compact = false) =>
@@ -701,7 +735,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
             <span className="w-5 text-right text-muted-foreground">{i + 1}</span>
             <span className="min-w-0 flex-1 truncate font-bold">{e.username}</span>
             <span className="hidden truncate text-[0.7rem] text-muted-foreground sm:inline">{e.asset ? `${e.asset.split(" ")[0]}, ${e.reached}` : ""}</span>
-            <span className="text-[#f5c451] tabular-nums">{e.score}</span>
+            <span className="text-[var(--game-gold)] tabular-nums">{e.score}</span>
           </li>
         ))}
       </ol>
@@ -712,13 +746,20 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
   const barBtn = "grid size-8 place-items-center border border-primary/30 text-foreground/90 transition-colors hover:bg-primary/10 disabled:opacity-40";
 
   return (
-    <div ref={root} className="fixed inset-0 z-40 flex flex-col bg-[#03090b]">
+    <div ref={root} className={cn("game-theme flex flex-col bg-background", embedded ? "absolute inset-0" : "fixed inset-0 z-40")}>
       {/* The top bar: the way back, the desk, leverage while playing Survival, and the sound, pause and full screen controls. */}
-      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-primary/20 bg-[#040d10] px-2 sm:gap-3 sm:px-3">
-        <Link href="/" aria-label="Back to the Replay site" className="flex h-8 items-center gap-2 pr-2 font-heading text-base font-bold text-foreground/90 transition-colors hover:text-primary">
-          <BrandMark size={28} className="size-7 shrink-0 object-contain" />
-          Replay
-        </Link>
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-primary/20 bg-card px-2 sm:gap-3 sm:px-3" style={{ zoom: Math.min(uiScale, 1.4) }}>
+        {embedded ? (
+          <span className="flex h-8 items-center gap-2 pr-2 font-heading text-base font-bold text-foreground/90">
+            <BrandMark size={28} className="size-7 shrink-0 object-contain" />
+            Tony Stonk
+          </span>
+        ) : (
+          <Link href="/" aria-label="Back to the Replay site" className="flex h-8 items-center gap-2 pr-2 font-heading text-base font-bold text-foreground/90 transition-colors hover:text-primary">
+            <BrandMark size={28} className="size-7 shrink-0 object-contain" />
+            Replay
+          </Link>
+        )}
         {screen !== "attract" && screen !== "intro" && screen !== "menu" && (
           <button type="button" onClick={goMenu} className="h-8 border border-primary/30 px-3 text-xs font-bold tracking-widest text-primary uppercase transition-colors hover:bg-primary/10">
             Main menu
@@ -728,8 +769,8 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
           {showLev && (
             <label className="flex items-center gap-2 text-xs font-bold">
               <span className="hidden tracking-widest text-muted-foreground uppercase sm:inline">Leverage</span>
-              <input type="range" min={1} max={10} step={1} value={leverage} onChange={(e) => setLev(Number(e.target.value))} aria-label="Leverage" className="h-1.5 w-24 cursor-pointer accent-[#39d6a3] sm:w-40" />
-              <span className={cn("w-9 tabular-nums", leverage >= 7 ? "text-[#fb7185]" : leverage > 1 ? "text-[#f5c451]" : "text-foreground/90")}>{leverage}x</span>
+              <input type="range" min={1} max={10} step={1} value={leverage} onChange={(e) => setLev(Number(e.target.value))} aria-label="Leverage" className="h-1.5 w-24 cursor-pointer accent-primary sm:w-40" />
+              <span className={cn("w-9 tabular-nums", leverage >= 7 ? "text-[var(--game-red)]" : leverage > 1 ? "text-[var(--game-gold)]" : "text-foreground/90")}>{leverage}x</span>
             </label>
           )}
         </div>
@@ -740,16 +781,35 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
           <button type="button" onClick={toggleMute} aria-label={muted ? "Unmute" : "Mute"} aria-pressed={muted} className={barBtn}>
             {muted || volume === 0 ? <VolumeX className="size-4" aria-hidden /> : <Volume2 className="size-4" aria-hidden />}
           </button>
-          <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => changeVolume(Number(e.target.value))} aria-label="Volume" className="hidden h-1.5 w-20 cursor-pointer accent-[#39d6a3] sm:block" />
+          <input type="range" min={0} max={1} step={0.05} value={muted ? 0 : volume} onChange={(e) => changeVolume(Number(e.target.value))} aria-label="Volume" className="hidden h-1.5 w-20 cursor-pointer accent-primary sm:block" />
           {canFull && (
             <button type="button" onClick={() => void toggleFull()} aria-label={isFull ? "Exit full screen" : "Full screen"} aria-pressed={isFull} className={barBtn}>
               {isFull ? <Minimize2 className="size-4" aria-hidden /> : <Maximize2 className="size-4" aria-hidden />}
             </button>
           )}
+          {embedded && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  window.open("/game", "_blank", "noopener");
+                  onClose?.();
+                }}
+                aria-label="Open in a new tab"
+                title="Open in a new tab"
+                className={barBtn}
+              >
+                <ExternalLink className="size-4" aria-hidden />
+              </button>
+              <button type="button" onClick={onClose} aria-label="Close" title="Close" className={barBtn}>
+                <X className="size-4" aria-hidden />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="relative min-h-0 flex-1 bg-[#050c0f]">
+      <div className="relative min-h-0 flex-1 bg-background">
       <div
         ref={box}
         onPointerMove={(e) => {
@@ -778,13 +838,15 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
         ))}
         <canvas ref={canvas} className={cn("absolute", !showCanvas && "invisible")} aria-label="Tony Stonk flying through a price chart. Tap, click or press space to jetpack." role="img" />
 
+        {/* Everything drawn over the game: scaled up on big screens, so the text and buttons keep their size against the scene behind. */}
+        <div className="absolute inset-0" style={{ zoom: uiScale }}>
         {/* Attract: waiting for a coin */}
         {screen === "attract" && (
           <div className={"absolute inset-0 flex items-center justify-center p-4"}>
             <div className="flex max-w-lg flex-col items-center gap-3 text-center sm:gap-4">
               <p className="font-heading text-3xl font-bold tracking-tight sm:text-6xl">{STORY.title}</p>
               <p className="text-xs text-muted-foreground sm:text-base">{STORY.tagline}</p>
-              <button type="button" onClick={pressStart} className="font-heading animate-pulse text-sm font-bold tracking-[0.3em] text-[#f5c451] uppercase sm:text-lg">
+              <button type="button" onClick={pressStart} className="font-heading animate-pulse text-sm font-bold tracking-[0.3em] text-[var(--game-gold)] uppercase sm:text-lg">
                 Start
               </button>
               {save.username && <p className="text-[0.7rem] text-muted-foreground">Welcome back, {save.username}. Best: {save.best}</p>}
@@ -794,7 +856,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
 
         {/* Before the first game: play the tutorial or skip it */}
         {screen === "intro" && (
-          <div className={cn("absolute inset-0 flex items-center justify-center p-4", bgStory)}>
+          <div className={"absolute inset-0 flex items-center justify-center p-4"}>
             <div className="flex w-full max-w-xs flex-col items-center gap-5 text-center">
               <div>
                 <p className="font-heading text-2xl font-bold sm:text-3xl">Play the tutorial?</p>
@@ -860,7 +922,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
           <div className="absolute inset-0 flex items-center justify-center bg-background/60 p-3 backdrop-blur-sm">
             <div className={panel}>
               <p className="font-heading text-lg font-bold sm:text-2xl">{isLast ? "Tutorial complete" : "Level cleared"}</p>
-              <p aria-label={`${result.stars} of 3 stars`} className="text-xl tracking-widest text-[#f5c451] sm:text-2xl">
+              <p aria-label={`${result.stars} of 3 stars`} className="text-xl tracking-widest text-[var(--game-gold)] sm:text-2xl">
                 {"★".repeat(result.stars)}
                 <span className="text-muted-foreground/40">{"★".repeat(3 - result.stars)}</span>
               </p>
@@ -917,41 +979,45 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
 
         {/* Choosing a name for Survival */}
         {screen === "name" && (
-          <div className={cn("absolute inset-0 flex items-center justify-center p-4", bgStory)}>
+          <div className={"absolute inset-0 flex items-center justify-center p-4"}>
             <form onSubmit={claim} className="flex w-full max-w-sm flex-col items-center gap-3 text-center">
               <p className="font-heading text-lg font-bold sm:text-2xl">Choose a name</p>
               <p className="text-[0.7rem] leading-snug text-muted-foreground sm:text-xs">Other traders are in there. Pick the name they will see on the leaderboard.</p>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16))}
-                placeholder="Your name"
-                aria-label="Your name"
-                maxLength={16}
-                autoComplete="off"
-                autoFocus
-                spellCheck={false}
-                className="form-control-h w-full border border-primary/50 bg-background/70 px-3 text-center text-base font-bold tracking-wider outline-none focus-visible:border-primary"
-              />
+              <div className="flex w-full text-left">
+                {/* The name box and the button meet with no gap, like the waitlist form: the box has its bottom-left corner cut, the button its top-right. */}
+                <div className="cut-bl h-11 min-w-0 flex-1">
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 16))}
+                    placeholder="Your name"
+                    aria-label="Your name"
+                    maxLength={16}
+                    autoComplete="off"
+                    autoFocus
+                    spellCheck={false}
+                    aria-invalid={!!nameError}
+                    className="h-full w-full rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
+                  />
+                </div>
+                <Button type="submit" disabled={busy || name.trim().length < 3} className="cut-tr cut-primary h-11 shrink-0 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground">
+                  {busy ? "Saving" : "Save"}
+                </Button>
+              </div>
               {nameError && (
                 <p role="alert" className="text-[0.7rem] font-bold text-destructive sm:text-xs">
                   {nameError}
                 </p>
               )}
-              <div className="flex items-center gap-3">
-                <button type="submit" disabled={busy || name.trim().length < 3} className={cn(btn, "disabled:opacity-60")}>
-                  {busy ? "Checking" : "Enter"}
-                </button>
-                <button type="button" className={ghost} onClick={() => setScreen("menu")}>
-                  Back
-                </button>
-              </div>
+              <button type="button" className="text-xs text-muted-foreground underline underline-offset-4 hover:text-primary" onClick={() => setScreen("menu")}>
+                Back to the main menu
+              </button>
             </form>
           </div>
         )}
 
         {/* The board */}
         {screen === "board" && (
-          <div className={cn("absolute inset-0 flex items-center justify-center p-3", bgStory)}>
+          <div className={"absolute inset-0 flex items-center justify-center p-3"}>
             <div className="flex max-h-full w-full max-w-md flex-col items-center gap-2 overflow-y-auto sm:gap-3">
               <p className="font-heading text-lg font-bold sm:text-2xl">Leaderboard</p>
               <p className="text-[0.65rem] text-muted-foreground sm:text-xs">Every trader&apos;s best run in Survival</p>
@@ -968,7 +1034,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
           <div className="absolute inset-0 flex items-center justify-center overflow-y-auto bg-background/70 p-3 backdrop-blur-sm">
             <div className="cut-card pulse-ring flex w-full max-w-sm flex-col gap-4 border border-border bg-card p-5 sm:gap-5 sm:p-6" style={{ "--pulse": "#fb7185" } as React.CSSProperties}>
               <div>
-                <p className="font-heading text-xl font-bold text-[#fb7185] sm:text-2xl">Liquidated</p>
+                <p className="font-heading text-xl font-bold text-[var(--game-red)] sm:text-2xl">Liquidated</p>
                 <p className="text-xs text-muted-foreground">
                   Reached {final.asset}, {final.reached}
                 </p>
@@ -976,7 +1042,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
               <div className="flex items-end justify-between gap-4 border-y border-border/70 py-3">
                 <div>
                   <p className="text-[0.65rem] text-muted-foreground">Score</p>
-                  <p className="font-heading text-4xl leading-none font-bold text-[#f5c451] tabular-nums sm:text-5xl">{final.score}</p>
+                  <p className="font-heading text-4xl leading-none font-bold text-[var(--game-gold)] tabular-nums sm:text-5xl">{final.score}</p>
                 </div>
                 <div className="text-right text-xs">
                   <p className="text-muted-foreground">{final.newBest ? "New best" : "Best"}</p>
@@ -1008,6 +1074,7 @@ export function TonyGame({ levels, segments }: { levels: Level[]; segments: Endl
             </div>
           </div>
         )}
+        </div>
       </div>
       </div>
     </div>

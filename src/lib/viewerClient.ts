@@ -16,6 +16,22 @@ export const OPEN_WAITLIST_EVENT = "replay:open-waitlist";
 export function openWaitlist() {
   window.dispatchEvent(new Event(OPEN_WAITLIST_EVENT));
 }
+export const OPEN_GAME_EVENT = "replay:open-game";
+
+/** Opens Tony Stonk in a box over the current page. */
+export function openGame() {
+  window.dispatchEvent(new Event(OPEN_GAME_EVENT));
+}
+
+/**
+ * The click handler for a link to /game: a plain click opens the game in the box over the page, while a click that asks for another
+ * tab or window (middle button, Ctrl, Cmd or Shift) is left alone so the link works as a link.
+ */
+export function openGameFromLink(e: { defaultPrevented: boolean; button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean; preventDefault: () => void }) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  openGame();
+}
 export const AUTH_CHANGED_EVENT = "replay:auth-changed";
 
 /** Opens the sign-in box from anywhere. `reason` is shown above the form, e.g. when the day's free checks have run out. */

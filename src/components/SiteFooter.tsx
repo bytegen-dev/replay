@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { BrandMark } from "@/components/BrandMark";
 import { FooterScrub } from "@/components/FooterScrub";
+import { GameLink } from "@/components/GameLink";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ThemeSelector } from "@/components/ThemeSelector";
 
 const PAGES = [
   { label: "Wayback", href: "/wayback" },
-  { label: "Play", href: "/play" },
+  { label: "Game", href: "/game" },
   { label: "Docs", href: "/docs" },
 ];
 const LINKS = [
@@ -29,11 +30,17 @@ export function SiteFooter() {
             <span className="font-heading text-lg font-bold">Replay</span>
           </div>
           <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            {PAGES.map((l) => (
-              <Link key={l.href} href={l.href} className={link}>
-                {l.label}
-              </Link>
-            ))}
+            {PAGES.map((l) =>
+              l.href === "/game" ? (
+                <GameLink key={l.href} className={link}>
+                  {l.label}
+                </GameLink>
+              ) : (
+                <Link key={l.href} href={l.href} className={link}>
+                  {l.label}
+                </Link>
+              ),
+            )}
             {LINKS.map((l) => (
               <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer" className={link}>
                 {l.label}

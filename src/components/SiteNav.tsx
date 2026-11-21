@@ -4,11 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { openGameFromLink } from "@/lib/viewerClient.ts";
 
 const LINKS = [
   { href: "/#trade", label: "Trade" },
   { href: "/wayback", label: "Wayback" },
-  { href: "/play", label: "Play" },
+  { href: "/game", label: "Game" },
   { href: "/docs", label: "Docs" },
 ];
 
@@ -70,6 +71,7 @@ export function SiteNav() {
             key={l.href}
             href={l.href}
             aria-current={active ? "page" : undefined}
+            onClick={l.href === "/game" ? openGameFromLink : undefined}
             {...hoverProps(l.href)}
             className={cn("transition-colors hover:text-foreground", active ? "font-bold text-foreground" : "text-muted-foreground", hovered === l.href && "text-foreground")}
           >
