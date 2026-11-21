@@ -25,6 +25,8 @@ export interface ApiSell {
   peakAt?: number;
   peakMultiple?: number;
   fumbleUsd?: number;
+  /** The same fumble in SOL, at the SOL price of the sale. */
+  fumbleSol?: number;
   /** Which price source measured it. */
   source?: string | null;
 }
@@ -78,8 +80,9 @@ export interface ApiPosition {
   finalProfitSol?: number;
   peakProfitSol?: number;
   peakAt?: number;
-  /** The profit given back, and the share of the peak profit that was (0 to 1). */
+  /** The profit given back, in SOL and in dollars (at the SOL price when the position closed), and the share of the peak profit that was (0 to 1). */
   roundTripSol?: number;
+  roundTripUsd?: number;
   gaveBack?: number;
   source?: string | null;
 }
@@ -88,7 +91,7 @@ export function toApiPosition(p: ScannedPosition): ApiPosition {
   const { position: pos, roundTrip: rt } = p;
   const base = { token: pos.mint, openedAt: pos.openedAt, closedAt: pos.closedAt, closedBy: pos.closedBy, costSol: pos.costSol, proceedsSol: pos.proceedsSol };
   if (rt.status !== "ok") return { ...base, status: "unknown", reason: rt.reason };
-  return { ...base, status: "ok", finalProfitSol: rt.finalProfitSol, peakProfitSol: rt.peakProfitSol, peakAt: rt.peakAt, roundTripSol: rt.roundTripSol, gaveBack: rt.gaveBack, source: p.source };
+  return { ...base, status: "ok", finalProfitSol: rt.finalProfitSol, peakProfitSol: rt.peakProfitSol, peakAt: rt.peakAt, roundTripSol: rt.roundTripSol, roundTripUsd: rt.roundTripUsd, gaveBack: rt.gaveBack, source: p.source };
 }
 
 export interface ApiResult extends ApiTrades {
@@ -98,9 +101,11 @@ export interface ApiResult extends ApiTrades {
   measured: number;
   unknown: number;
   totalFumbleUsd: number;
+  totalFumbleSol: number;
   /** The closed positions: measured ones first, biggest round-trip first, then the ones with no price history, oldest first. */
   positions: ApiPosition[];
   totalRoundTripSol: number;
+  totalRoundTripUsd: number;
   ranOutOfTime: boolean;
 }
 
@@ -117,7 +122,7 @@ export function toApiSell(s: ScannedSell): ApiSell {
     profitSol: lot.profitSol,
   };
   if (fumble.status !== "ok") return { ...base, status: "unknown", reason: fumble.reason };
-  return { ...base, status: "ok", soldUsd: fumble.soldUsd, peakAt: fumble.peakAt, peakMultiple: fumble.peakMultiple, fumbleUsd: fumble.fumbleUsd, source: s.source };
+  return { ...base, status: "ok", soldUsd: fumble.soldUsd, peakAt: fumble.peakAt, peakMultiple: fumble.peakMultiple, fumbleUsd: fumble.fumbleUsd, fumbleSol: fumble.fumbleSol, source: s.source };
 }
 
 function orderPositions(all: ApiPosition[]): ApiPosition[] {
@@ -141,8 +146,10 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     measured: measured.length,
     unknown: unknown.length,
     totalFumbleUsd: r.totalFumbleUsd,
+    totalFumbleSol: r.totalFumbleSol,
     positions: orderPositions(r.positions.map(toApiPosition)),
     totalRoundTripSol: r.totalRoundTripSol,
+    totalRoundTripUsd: r.totalRoundTripUsd,
     ranOutOfTime: r.ranOutOfTime,
   };
 }

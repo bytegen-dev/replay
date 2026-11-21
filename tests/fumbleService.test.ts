@@ -33,9 +33,11 @@ const empty = (wallet: string): ScanResult => ({
   tradeList: [],
   positions: [],
   totalRoundTripSol: 0,
+  totalRoundTripUsd: 0,
   sells: [],
   unpriced: 0,
   totalFumbleUsd: 0,
+  totalFumbleSol: 0,
   worst: null,
   ranOutOfTime: false,
 });
@@ -270,5 +272,10 @@ test("the response lists measured positions first, biggest round-trip first, the
   assert.ok(api.trades.some((t) => t.signature === ok.closedBy), "the position's closing sell is one of the listed trades");
   assert.equal(api.positions[1].roundTripSol, undefined);
   assert.equal(api.totalRoundTripSol, ok.roundTripSol);
+  assert.equal(api.totalRoundTripUsd, ok.roundTripUsd);
+  const measuredSells = api.sells.filter((x) => x.status === "ok");
+  assert.ok(Math.abs(api.totalFumbleSol - measuredSells.reduce((n, x) => n + x.fumbleSol!, 0)) < 1e-9, "the SOL total is the sum of the sells' SOL fumbles");
+  assert.ok(api.totalFumbleSol > 40 && api.totalFumbleSol < 60, `about 49 SOL, got ${api.totalFumbleSol}`);
+  assert.ok(Math.abs(ok.roundTripUsd! - ok.roundTripSol! * 67) < 1e-6, "dollars are the SOL amount at the SOL price when the position closed (the fake SOL price is $67)");
   assert.deepEqual(JSON.parse(JSON.stringify(api)), api);
 });

@@ -82,6 +82,8 @@ export type RoundTrip =
       peakAt: number;
       /** The profit given back: the peak profit minus the profit kept (never below zero). Zero when the position only ever rose to where it was closed. */
       roundTripSol: number;
+      /** The same in dollars, at the SOL price when the position was closed, which is when that profit was lost. */
+      roundTripUsd: number;
       /** The share of the peak profit that was given back, 0 to 1. Zero when there was never a profit. */
       gaveBack: number;
       heldSeconds: number;
@@ -152,6 +154,7 @@ export function roundTripFor(pos: Position, candles: Candle[], solCandles: Candl
   // profit it had (the loss is a separate fact, the final profit).
   const peakProfit = Math.max(peak, 0);
   const roundTrip = Math.max(0, peakProfit - Math.max(final, 0));
+  const solAtClose = priceAt(solCandles, pos.closedAt) ?? 0;
   return {
     status: "ok",
     costSol: pos.costSol,
@@ -160,6 +163,7 @@ export function roundTripFor(pos: Position, candles: Candle[], solCandles: Candl
     peakProfitSol: peak,
     peakAt,
     roundTripSol: roundTrip,
+    roundTripUsd: roundTrip * solAtClose,
     gaveBack: peak > 0 ? roundTrip / peak : 0,
     heldSeconds: pos.closedAt - pos.openedAt,
   };

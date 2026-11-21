@@ -75,7 +75,7 @@ export function times(x: number): string {
 export type FumbleCell =
   | { kind: "none" } // a buy: nothing to fumble
   | { kind: "pricing" } // a sell the scan has not priced yet
-  | { kind: "fumbled"; usd: number; peakMultiple: number }
+  | { kind: "fumbled"; usd: number; sol: number; peakMultiple: number }
   | { kind: "sold-well" } // the price never went meaningfully higher
   | { kind: "unknown"; reason: string };
 
@@ -88,13 +88,13 @@ export function fumbleCell(row: Row, scanDone: boolean): FumbleCell {
   if (!s) return scanDone ? { kind: "unknown", reason: "This sale was not priced." } : { kind: "pricing" };
   if (s.status === "unknown") return { kind: "unknown", reason: s.reason ?? "No price history." };
   if ((s.fumbleUsd ?? 0) < MIN_FUMBLE_USD) return { kind: "sold-well" };
-  return { kind: "fumbled", usd: s.fumbleUsd!, peakMultiple: s.peakMultiple! };
+  return { kind: "fumbled", usd: s.fumbleUsd!, sol: s.fumbleSol ?? 0, peakMultiple: s.peakMultiple! };
 }
 
 /** What the "gave back" column says for a row. Only the sell that closed a position has one. */
 export type RoundTripCell =
   | { kind: "none" }
-  | { kind: "gave-back"; sol: number; share: number }
+  | { kind: "gave-back"; usd: number; sol: number; share: number }
   | { kind: "kept" } // the position was closed at or near its peak profit
   | { kind: "unknown"; reason: string };
 
@@ -106,7 +106,7 @@ export function roundTripCell(row: Row): RoundTripCell {
   if (!p) return { kind: "none" };
   if (p.status === "unknown") return { kind: "unknown", reason: p.reason ?? "No price history." };
   if ((p.roundTripSol ?? 0) < MIN_ROUND_TRIP_SOL) return { kind: "kept" };
-  return { kind: "gave-back", sol: p.roundTripSol!, share: p.gaveBack ?? 0 };
+  return { kind: "gave-back", usd: p.roundTripUsd ?? 0, sol: p.roundTripSol!, share: p.gaveBack ?? 0 };
 }
 
 /** SOL to two decimals under ten, one decimal from ten up, whole from a hundred. */

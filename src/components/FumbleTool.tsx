@@ -188,48 +188,51 @@ function ProgressLine({ progress, hasTrades }: { progress: Progress | null; hasT
   );
 }
 
+/** One headline number: dollars big, SOL under it, and what it means in a line. */
+function Stat({ label, dollars, sols, pending, empty, about, className }: { label: string; dollars: number; sols: number; pending: boolean; empty?: boolean; about: string; className?: string }) {
+  return (
+    <div className={cn("flex flex-col gap-1 p-5 sm:p-6", className)}>
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className={cn("font-heading text-4xl leading-none font-bold tabular-nums sm:text-5xl", pending && "text-muted-foreground")}>{pending ? "\u2026" : empty ? "\u2014" : usd(dollars)}</p>
+      <p className="h-5 text-sm tabular-nums text-muted-foreground">{pending || empty ? "" : sol(sols)}</p>
+      <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{about}</p>
+    </div>
+  );
+}
+
 function Summary({ trades, result }: { trades: ApiTrades; result: ApiResult | null }) {
   const unknown = result?.unknown ?? 0;
   const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
   const cov = trades.coverage;
-  const big = "font-heading text-4xl font-bold tabular-nums sm:text-5xl";
+  const notes = [
+    !cov.complete && cov.oldest ? `Trades since ${when(cov.oldest)}. Older ones weren\u2019t read.` : null,
+    unknown > 0 ? `${unknown === 1 ? "1 sell has" : `${unknown} sells have`} no price history, so ${unknown === 1 ? "it isn't" : "they aren't"} counted.` : null,
+    unknownPositions > 0 ? `${unknownPositions === 1 ? "1 position has" : `${unknownPositions} positions have`} no price history, so ${unknownPositions === 1 ? "its" : "their"} round-trip isn\u2019t counted.` : null,
+    result?.ranOutOfTime ? "The scan ran out of time before pricing every coin." : null,
+  ].filter((n): n is string => n !== null);
   return (
-    <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card p-5 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
-        <div className="flex flex-wrap gap-x-12 gap-y-4">
-          <div>
-            <p className="text-sm text-muted-foreground">Fumbled</p>
-            {result ? <p className={big}>{usd(result.totalFumbleUsd)}</p> : <p className={cn(big, "text-muted-foreground")}>&hellip;</p>}
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Gave back</p>
-            {result ? <p className={big}>{result.positions.length ? sol(result.totalRoundTripSol) : "\u2014"}</p> : <p className={cn(big, "text-muted-foreground")}>&hellip;</p>}
-          </div>
-        </div>
-        <dl className="flex gap-8 text-sm">
-          <div>
-            <dt className="text-muted-foreground">Trades</dt>
-            <dd className="font-bold tabular-nums">{trades.trades.length}</dd>
-          </div>
-          <div>
-            <dt className="text-muted-foreground">Sells</dt>
-            <dd className="font-bold tabular-nums">{sells}</dd>
-          </div>
-        </dl>
+    <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card">
+      <div className="grid sm:grid-cols-2">
+        <Stat label="Fumbled" dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="What your sells left on the table: each coin's highest price since you sold, minus what you sold it for." />
+        <Stat
+          label="Gave back"
+          dollars={result?.totalRoundTripUsd ?? 0}
+          sols={result?.totalRoundTripSol ?? 0}
+          pending={!result}
+          empty={!!result && result.positions.length === 0}
+          about="Profit you were up on a coin and gave back: its peak profit, minus the profit you kept."
+          className="border-t border-border sm:border-t-0 sm:border-l"
+        />
       </div>
-      <div className="mt-4 flex max-w-2xl flex-col gap-1 text-sm leading-relaxed text-muted-foreground">
-        <p>Fumbled: what the coins sold would be worth at their highest price since the sale, minus what they sold for.</p>
-        <p>Gave back: the most profit a coin showed while it was held, minus the profit kept.</p>
+      <div className="flex flex-col gap-1 border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-6">
+        <p>
+          <span className="font-bold text-foreground tabular-nums">{trades.trades.length}</span> trades, <span className="font-bold text-foreground tabular-nums">{sells}</span> sells
+        </p>
+        {notes.map((n) => (
+          <p key={n}>{n}</p>
+        ))}
       </div>
-      {(unknown > 0 || unknownPositions > 0 || !cov.complete || result?.ranOutOfTime) && (
-        <ul className="mt-3 flex flex-col gap-1 text-sm text-muted-foreground">
-          {!cov.complete && cov.oldest && <li>Trades since {when(cov.oldest)}. Older ones weren&rsquo;t read.</li>}
-          {unknown > 0 && <li>{unknown === 1 ? "1 sell has" : `${unknown} sells have`} no price history, so {unknown === 1 ? "it isn't" : "they aren't"} counted.</li>}
-          {unknownPositions > 0 && <li>{unknownPositions === 1 ? "1 position has" : `${unknownPositions} positions have`} no price history, so {unknownPositions === 1 ? "its" : "their"} round-trip isn&rsquo;t counted.</li>}
-          {result?.ranOutOfTime && <li>The scan ran out of time before pricing every coin.</li>}
-        </ul>
-      )}
     </section>
   );
 }
@@ -278,7 +281,9 @@ function TradeRow({ row, done }: { row: Row; done: boolean }) {
         {cell.kind === "fumbled" && (
           <>
             <span className="font-bold tabular-nums text-destructive">{usd(cell.usd)}</span>
-            <span className="ml-2 text-xs text-muted-foreground">{times(cell.peakMultiple)} after</span>
+            <span className="ml-2 text-xs text-muted-foreground">
+              {sol(cell.sol)}, {times(cell.peakMultiple)} after
+            </span>
           </>
         )}
       </span>
@@ -294,8 +299,10 @@ function TradeRow({ row, done }: { row: Row; done: boolean }) {
           )}
           {trip.kind === "gave-back" && (
             <>
-              <span className="font-bold tabular-nums text-destructive">{sol(trip.sol)}</span>
-              <span className="ml-2 text-xs text-muted-foreground">{Math.round(trip.share * 100)}% of its profit</span>
+              <span className="font-bold tabular-nums text-destructive">{usd(trip.usd)}</span>
+              <span className="ml-2 text-xs text-muted-foreground">
+                {sol(trip.sol)}, {Math.round(trip.share * 100)}% of its profit
+              </span>
             </>
           )}
         </span>

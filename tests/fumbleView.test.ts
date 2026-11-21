@@ -45,11 +45,11 @@ test("each trade is put next to its sell result, and buys and unpriced sells hav
 test("what the fumble column says: nothing for a buy, pricing while it waits, then the result", () => {
   const [buy, waiting, ok, tiny, unknown] = buildRows(
     [trade("b", "buy"), trade("w", "sell"), trade("o", "sell"), trade("t", "sell"), trade("u", "sell")],
-    [sell("o", { fumbleUsd: 3270, peakMultiple: 8.1 }), sell("t", { fumbleUsd: 0.2 }), sell("u", { status: "unknown", reason: "no price history for this token" })],
+    [sell("o", { fumbleUsd: 3270, fumbleSol: 49, peakMultiple: 8.1 }), sell("t", { fumbleUsd: 0.2 }), sell("u", { status: "unknown", reason: "no price history for this token" })],
   );
   assert.deepEqual(fumbleCell(buy, false), { kind: "none" });
   assert.deepEqual(fumbleCell(waiting, false), { kind: "pricing" });
-  assert.deepEqual(fumbleCell(ok, true), { kind: "fumbled", usd: 3270, peakMultiple: 8.1 });
+  assert.deepEqual(fumbleCell(ok, true), { kind: "fumbled", usd: 3270, sol: 49, peakMultiple: 8.1 });
   assert.deepEqual(fumbleCell(tiny, true), { kind: "sold-well" });
   assert.deepEqual(fumbleCell(unknown, true), { kind: "unknown", reason: "no price history for this token" });
   assert.equal(fumbleCell(waiting, true).kind, "unknown", "a sell still unpriced once the scan is done is unknown, not pending forever");
@@ -67,7 +67,7 @@ test("numbers are written the way a person reads them", () => {
   assert.equal(shortMint("short"), "short");
 });
 
-const position = (closedBy: string, extra: Partial<ApiPosition> = {}): ApiPosition => ({ token: "M".repeat(44), openedAt: 1, closedAt: 2, closedBy, costSol: 1, proceedsSol: 1.5, status: "ok", finalProfitSol: 0.5, peakProfitSol: 9, peakAt: 1, roundTripSol: 8.5, gaveBack: 8.5 / 9, ...extra });
+const position = (closedBy: string, extra: Partial<ApiPosition> = {}): ApiPosition => ({ token: "M".repeat(44), openedAt: 1, closedAt: 2, closedBy, costSol: 1, proceedsSol: 1.5, status: "ok", finalProfitSol: 0.5, peakProfitSol: 9, peakAt: 1, roundTripSol: 8.5, roundTripUsd: 850, gaveBack: 8.5 / 9, ...extra });
 
 test("the position a sell closed is put on that sell's row, and only that row", () => {
   const rows = buildRows([trade("a", "sell"), trade("b", "buy"), trade("c", "sell")], [sell("a"), sell("c")], [position("c")]);
@@ -83,7 +83,7 @@ test("what the gave-back column says: the round-trip, nothing near the peak, unk
   );
   assert.deepEqual(roundTripCell(plain), { kind: "none" });
   assert.equal(roundTripCell(big).kind, "gave-back");
-  assert.deepEqual(roundTripCell(big), { kind: "gave-back", sol: 8.5, share: 8.5 / 9 });
+  assert.deepEqual(roundTripCell(big), { kind: "gave-back", usd: 850, sol: 8.5, share: 8.5 / 9 });
   assert.deepEqual(roundTripCell(small), { kind: "kept" });
   assert.deepEqual(roundTripCell(unknown), { kind: "unknown", reason: "no price history for this token" });
 });

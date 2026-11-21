@@ -25,6 +25,7 @@ test("put in 1 SOL, up to 10 SOL at the top, sold at 1.5 SOL: 8.5 SOL round-trip
   assert.ok(Math.abs(rt.peakProfitSol - 9) < 1e-9, `peak ${rt.peakProfitSol}`);
   assert.ok(Math.abs(rt.finalProfitSol - 0.5) < 1e-9);
   assert.ok(Math.abs(rt.roundTripSol - 8.5) < 1e-9, `round trip ${rt.roundTripSol}`);
+  assert.ok(Math.abs(rt.roundTripUsd - 850) < 1e-6, `in dollars ${rt.roundTripUsd}`); // 8.5 SOL at $100
   assert.ok(Math.abs(rt.gaveBack - 8.5 / 9) < 1e-9);
   assert.equal(rt.peakAt, 220);
   assert.equal(rt.heldSeconds, 300);

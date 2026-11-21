@@ -69,14 +69,16 @@ export interface ScanResult {
   sells: ScannedSell[];
   /** Sells whose price history could not be found: their fumble is unknown, and they add nothing to the total. */
   unpriced: number;
-  /** The sum of the fumbles that could be measured, in dollars. */
+  /** The sum of the fumbles that could be measured, in dollars and in SOL (each at the SOL price of its own sale). */
   totalFumbleUsd: number;
+  totalFumbleSol: number;
   /** The biggest single fumble, if any sell was measured. */
   worst: ScannedSell | null;
   /** Closed positions, each with the profit it gave back, oldest first. */
   positions: ScannedPosition[];
-  /** The sum of the round-trips that could be measured, in SOL. */
+  /** The sum of the round-trips that could be measured, in SOL and in dollars. */
   totalRoundTripSol: number;
+  totalRoundTripUsd: number;
   /** True when pricing stopped early because time ran out; the sells left unpriced say so. */
   ranOutOfTime: boolean;
 }
@@ -137,13 +139,20 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
     return { position, roundTrip: roundTripFor(position, s.candles, solSeries?.candles ?? []), source: s.source };
   });
   let totalRoundTrip = 0;
-  for (const p of scannedPositions) if (p.roundTrip.status === "ok") totalRoundTrip += p.roundTrip.roundTripSol;
+  let totalRoundTripUsd = 0;
+  for (const p of scannedPositions) {
+    if (p.roundTrip.status !== "ok") continue;
+    totalRoundTrip += p.roundTrip.roundTripSol;
+    totalRoundTripUsd += p.roundTrip.roundTripUsd;
+  }
 
   let total = 0;
+  let totalSol = 0;
   let worst: ScannedSell | null = null;
   for (const s of sells) {
     if (s.fumble.status !== "ok") continue;
     total += s.fumble.fumbleUsd;
+    totalSol += s.fumble.fumbleSol;
     if (!worst || s.fumble.fumbleUsd > (worst.fumble as { fumbleUsd: number }).fumbleUsd) worst = s;
   }
   deps.onProgress?.({ stage: "done", done: order.length, total: order.length });
@@ -156,8 +165,10 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
     sells,
     positions: scannedPositions,
     totalRoundTripSol: totalRoundTrip,
+    totalRoundTripUsd,
     unpriced: sells.filter((s) => s.fumble.status !== "ok").length,
     totalFumbleUsd: total,
+    totalFumbleSol: totalSol,
     worst,
     ranOutOfTime: timedOut.size > 0,
   };
