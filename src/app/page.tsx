@@ -46,7 +46,7 @@ const faqs = (anon: number, user: number) => [
   {
     q: "Where do the prices come from?",
     topic: "Data",
-    a: "Daily closing prices come from Yahoo Finance for stocks and ETFs, with Nasdaq as a backup, from Bitstamp and CoinGecko for coins, from GeckoTerminal and DexHunter for newer tokens, from Yahoo Finance futures prices for commodities like gold, silver and oil, and from the Federal Reserve, the European Central Bank and the IMF for currencies. Every result names the source it used.",
+    a: "Daily closing prices come from Yahoo Finance for stocks and ETFs, with Nasdaq as a backup, from Bitstamp and CoinGecko for coins, from Birdeye, GeckoTerminal and DexHunter for newer tokens, from Yahoo Finance futures prices for commodities like gold, silver and oil, and from the Federal Reserve, the European Central Bank and the IMF for currencies. Every result names the source it used.",
   },
   {
     q: "How accurate are the results?",
@@ -71,7 +71,7 @@ const faqs = (anon: number, user: number) => [
   {
     q: "What is coming next?",
     topic: "Coming",
-    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. Wallet analysis, for reading what a wallet has bought and held, is coming too. None of them is open yet. Join the waitlist to hear when each one is.",
+    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. None of them is open yet. Join the waitlist to hear when each one is.",
   },
   {
     q: "Do you keep my searches?",
@@ -119,7 +119,7 @@ export default function LandingPage() {
             <SpotlightText
               className="enter-up max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
               style={{ "--base": "650ms", "--i": 1 } as React.CSSProperties}
-              text="Pick a stock, a coin, a commodity or a currency and a date. Replay uses real daily prices to show what one buy, or a monthly habit, would have turned into."
+              text="Pick a stock, coin, commodity or currency and a date to see what a buy would be worth today. Or paste a Solana wallet to see what its sells left on the table and how much profit it gave back."
             />
             <div className="enter-up flex flex-wrap items-center gap-x-6 gap-y-3" style={{ "--base": "650ms", "--i": 2 } as React.CSSProperties}>
               <WaitlistButton />
@@ -128,7 +128,7 @@ export default function LandingPage() {
               </a>
             </div>
             <p className="enter-up max-w-xl text-xs leading-relaxed text-muted-foreground" style={{ "--base": "650ms", "--i": 3 } as React.CSSProperties}>
-              Prices from Yahoo Finance, Bitstamp, CoinGecko, Nasdaq, the ECB and the Federal Reserve.
+              Prices from Yahoo Finance, Bitstamp, CoinGecko, Birdeye, Nasdaq, the ECB and the Federal Reserve.
             </p>
           </div>
           {hero.length > 0 && <HeroChart checks={hero} />}
@@ -146,8 +146,8 @@ export default function LandingPage() {
                 className="mt-0"
                 intro={
                   <div className="flex max-w-2xl flex-col gap-2">
-                    <h2 className={h2}>What did you sell too early?</h2>
-                    <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table." />
+                    <h2 className={h2}>What did your wallet miss?</h2>
+                    <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table, and how much of its profit it gave back." />
                   </div>
                 }
                 aside={<FumbleVisual />}
@@ -231,7 +231,7 @@ export default function LandingPage() {
             </ul>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <WaitlistButton />
-              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with up to thousands of checks daily, saved checks and exports, and wallet analysis.</p>
+              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with up to thousands of checks daily, saved checks and exports.</p>
             </div>
           </LineCard>
         </section>
