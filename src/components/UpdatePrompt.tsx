@@ -45,7 +45,7 @@ export function UpdatePrompt() {
 
   if (!latest || dismissed === latest) return null;
   return (
-    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+    <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-0 z-[90] flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="pointer-events-auto flex w-full max-w-md items-center gap-3 border border-primary bg-card px-4 py-3 shadow-lg animate-in fade-in-0 slide-in-from-bottom-4 duration-300">
         <RefreshCw className="size-5 shrink-0 text-primary" aria-hidden />
         <p className="min-w-0 flex-1 text-sm leading-snug">
