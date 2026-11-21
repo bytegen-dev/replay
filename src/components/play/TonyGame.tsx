@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, GraduationCap, House, Maximize2, Minimize2, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X } from "lucide-react";
+import { GraduationCap, House, Maximize2, Minimize2, Pause, Play, RotateCcw, Trophy, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BrandMark } from "@/components/BrandMark";
@@ -126,7 +126,7 @@ const monthLabel = (ms: number) => new Date(ms).toLocaleDateString("en-US", { mo
 
 /**
  * The whole game. On its own page it fills the screen; with `embedded` it fills the box it is put in (the dialog that opens over other
- * pages), where the top bar has buttons to open it in a new tab and to close it in place of the link back to the site.
+ * pages), where the top bar has a button to close it in place of the link back to the site.
  */
 export function TonyGame({ levels, segments, embedded = false, onClose }: { levels: Level[]; segments: EndlessSegment[]; embedded?: boolean; onClose?: () => void }) {
   const [screen, setScreen] = useState<Screen>("attract");
@@ -788,23 +788,9 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
             </button>
           )}
           {embedded && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  window.open("/game", "_blank", "noopener");
-                  onClose?.();
-                }}
-                aria-label="Open in a new tab"
-                title="Open in a new tab"
-                className={barBtn}
-              >
-                <ExternalLink className="size-4" aria-hidden />
-              </button>
-              <button type="button" onClick={onClose} aria-label="Close" title="Close" className={barBtn}>
-                <X className="size-4" aria-hidden />
-              </button>
-            </>
+            <button type="button" onClick={onClose} aria-label="Close" title="Close" className={barBtn}>
+              <X className="size-4" aria-hidden />
+            </button>
           )}
         </div>
       </div>
