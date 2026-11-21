@@ -1,6 +1,7 @@
-import { fumbleFor, MIN_TRADE_SOL, type Fumble } from "./fumble.ts";
+import { fumbleFor, MIN_TRADE_SOL, priceAt, type Fumble } from "./fumble.ts";
 import type { History } from "./helius.ts";
 import { matchLots, type SellLot } from "./lots.ts";
+import type { TokenInfo } from "./tokens.ts";
 import { SOL_MINT, type PriceSeries } from "./prices.ts";
 import { findPositions, roundTripFor, type Position, type RoundTrip } from "./roundtrip.ts";
 import { parseTrades } from "./trades.ts";
@@ -21,19 +22,22 @@ export interface ScanDeps {
   now?: () => number;
   /** Asked before each token is priced: true means there is no time left, and the tokens not yet priced are reported unknown. */
   outOfTime?: () => boolean;
+  /** Names and tickers for a list of coins. Optional, and a failure is fine: the trade list is shown with addresses instead. */
+  tokens?: (mints: string[]) => Promise<Map<string, TokenInfo>>;
   /** Called as the scan moves along, so a page can show progress. */
   onProgress?: (p: ScanProgress) => void;
   /** Called once the history is read and the trades are known, before any price lookups: the trade list can be shown at once. */
   onTrades?: (t: TradeList) => void;
 }
 
-/** A wallet's trades of a meaningful size, newest first. */
+/** A wallet's trades of a meaningful size, newest first, with the name and ticker of each coin traded where they are known. */
 export interface TradeList {
   history: { transactions: number; pages: number; complete: boolean; oldest: number | null };
   dropped: Dropped;
   /** Every trade found, before the size filter. */
   tradeCount: number;
   trades: Trade[];
+  tokens: Record<string, TokenInfo>;
 }
 
 export interface ScanProgress {
@@ -46,6 +50,8 @@ export interface ScanProgress {
 export interface ScannedSell {
   lot: SellLot;
   fumble: Fumble;
+  /** The profit on this sell in dollars (its SOL profit at the SOL price of the sale), or null when no SOL price was found. Only the part of the sell traced to buys counts. */
+  profitUsd: number | null;
   /** Which provider priced it, when one did. */
   source: string | null;
 }
@@ -65,6 +71,8 @@ export interface ScanResult {
   trades: number;
   /** The buys and sells of at least the minimum size, newest first. */
   tradeList: Trade[];
+  /** The name and ticker of each coin in the trade list, where known. */
+  tokens: Record<string, TokenInfo>;
   /** Sells of at least the minimum size, oldest first, each with its fumble. */
   sells: ScannedSell[];
   /** Sells whose price history could not be found: their fumble is unknown, and they add nothing to the total. */
@@ -76,6 +84,11 @@ export interface ScanResult {
   worst: ScannedSell | null;
   /** Closed positions, each with the profit it gave back, oldest first. */
   positions: ScannedPosition[];
+  /** The wallet's realized profit: every scanned sell's proceeds minus what those coins cost, in SOL and in dollars. Only the part of each sell traced to buys counts. */
+  totalProfitSol: number;
+  totalProfitUsd: number;
+  /** Sells that included coins bought before the history starts, so their profit covers only part of the sale. */
+  partialSells: number;
   /** The sum of the round-trips that could be measured, in SOL and in dollars. */
   totalRoundTripSol: number;
   totalRoundTripUsd: number;
@@ -95,7 +108,21 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
   // The trade list goes out now, before the slow price lookups.
   const tradeList = trades.filter((t) => t.sol >= MIN_TRADE_SOL).sort((a, b) => b.time - a.time);
   const historySummary = { transactions: history.txs.length, pages: history.pages, complete: history.complete, oldest: history.oldest };
-  deps.onTrades?.({ history: historySummary, dropped, tradeCount: trades.length, trades: tradeList });
+  // The names are looked up while the prices are, and the list goes out as soon as they are in, so it never waits on the slow part. With
+  // no name lookup there is nothing to wait for and the list goes out at once.
+  const sendList = (tokens: Record<string, TokenInfo>) => deps.onTrades?.({ history: historySummary, dropped, tradeCount: trades.length, trades: tradeList, tokens });
+  const mints = [...new Set(tradeList.map((t) => t.mint))];
+  let listSent: Promise<Record<string, TokenInfo>>;
+  if (deps.tokens && mints.length) {
+    listSent = deps
+      .tokens(mints)
+      .then((m) => Object.fromEntries(m))
+      .catch(() => ({}) as Record<string, TokenInfo>) // the list is shown with addresses instead
+      .then((tokens) => (sendList(tokens), tokens));
+  } else {
+    sendList({});
+    listSent = Promise.resolve({});
+  }
 
   // One price lookup per token, from its earliest sale or the buy that opened a position in it, shared by everything about that token: the
   // fumbles of its sells and the round-trips of its positions. The tokens with the most money in them go first, so if time runs out it is
@@ -112,8 +139,10 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
   const order = [...earliest.keys()].sort((a, b) => biggest.get(b)! - biggest.get(a)!);
   const series = new Map<string, PriceSeries | null>();
   const timedOut = new Set<string>();
-  // The SOL price through every position, in one lookup, so each position's holdings can be valued in SOL.
-  const solSeries = positions.length && !deps.outOfTime?.() ? await deps.prices(SOL_MINT, Math.min(...positions.map((p) => p.openedAt)), now) : null;
+  // The SOL price through every position and sale, in one lookup, so holdings can be valued in SOL and profits in dollars.
+  const solTimes = [...positions.map((p) => p.openedAt), ...lots.map((l) => l.sell.time)];
+  const solSeries = solTimes.length && !deps.outOfTime?.() ? await deps.prices(SOL_MINT, Math.min(...solTimes), now) : null;
+  const solAt = (time: number) => (solSeries ? priceAt(solSeries.candles, time) : null);
   let done = 0;
   for (const mint of order) {
     deps.onProgress?.({ stage: "prices", done, total: order.length });
@@ -122,14 +151,23 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
     done++;
   }
 
+  const tokens = await listSent;
   const sells: ScannedSell[] = [];
   for (const lot of lots) {
     const s = series.get(lot.sell.mint) ?? null;
     const solUsd = s ? await deps.solUsd(lot.sell.time) : null;
-    if (timedOut.has(lot.sell.mint)) sells.push({ lot, fumble: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null });
-    else if (!s) sells.push({ lot, fumble: { status: "no-price", reason: "no price history for this token" }, source: null });
-    else if (solUsd === null) sells.push({ lot, fumble: { status: "no-price", reason: "no SOL price at the time of the sale" }, source: s.source });
-    else sells.push({ lot, fumble: fumbleFor(lot.sell, s.candles, { solUsd }), source: s.source });
+    const rate = solAt(lot.sell.time);
+    const profitUsd = rate ? lot.profitSol * rate : null;
+    if (timedOut.has(lot.sell.mint)) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null });
+    else if (!s) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "no price history for this token" }, source: null });
+    else if (solUsd === null) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "no SOL price at the time of the sale" }, source: s.source });
+    else sells.push({ lot, profitUsd, fumble: fumbleFor(lot.sell, s.candles, { solUsd }), source: s.source });
+  }
+  let totalProfitSol = 0;
+  let totalProfitUsd = 0;
+  for (const x of sells) {
+    totalProfitSol += x.lot.profitSol;
+    totalProfitUsd += x.profitUsd ?? 0;
   }
 
   const scannedPositions: ScannedPosition[] = positions.map((position) => {
@@ -162,8 +200,12 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
     dropped,
     trades: trades.length,
     tradeList,
+    tokens,
     sells,
     positions: scannedPositions,
+    totalProfitSol,
+    totalProfitUsd,
+    partialSells: lots.filter((l) => l.unmatchedTokens > 0).length,
     totalRoundTripSol: totalRoundTrip,
     totalRoundTripUsd,
     unpriced: sells.filter((s) => s.fumble.status !== "ok").length,

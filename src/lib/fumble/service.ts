@@ -1,3 +1,4 @@
+import type { TokenInfo } from "./tokens.ts";
 import type { ScanProgress, ScanResult, ScannedPosition, ScannedSell, TradeList } from "./scan.ts";
 import type { Trade } from "./types.ts";
 
@@ -14,10 +15,12 @@ export interface ApiSell {
   soldAt: number;
   tokens: number;
   soldSol: number;
-  /** How many of the tokens sold had a known buy, and what those cost (SOL). Cost is only known for the matched part. */
+  /** How many of the tokens sold had a known buy, and what those cost (SOL). Cost is only known for the matched part, and the profit covers only that part. With none matched there is no profit to show. */
   matchedTokens: number;
   costSol: number;
   profitSol: number;
+  /** The profit in dollars, at the SOL price of the sale, when that price was found. */
+  profitUsd?: number;
   /** "ok" when the fumble was measured, "unknown" when no price history could be found (the fumble is not zero, it is not known). */
   status: "ok" | "unknown";
   reason?: string;
@@ -54,12 +57,14 @@ export interface ApiTrades {
   ignored: { noTokenMove: number; multiToken: number; noSolLeg: number };
   /** The trades of at least the minimum size, newest first. */
   trades: ApiTrade[];
+  /** The ticker and name of each coin traded, where the chain has them. A coin with no entry is shown by its address. */
+  tokens: Record<string, TokenInfo>;
 }
 
 const toApiTrade = (t: Trade): ApiTrade => ({ signature: t.signature, side: t.side, token: t.mint, tokens: t.tokens, sol: t.sol, time: t.time, ...(t.source ? { source: t.source } : {}) });
 
 export function toApiTrades(wallet: string, t: TradeList): ApiTrades {
-  return { wallet, coverage: t.history, tradeCount: t.tradeCount, ignored: t.dropped, trades: t.trades.map(toApiTrade) };
+  return { wallet, coverage: t.history, tradeCount: t.tradeCount, ignored: t.dropped, trades: t.trades.map(toApiTrade), tokens: t.tokens };
 }
 
 /** What a scan sends while it runs: progress, and once the history is read the trade list. */
@@ -102,6 +107,10 @@ export interface ApiResult extends ApiTrades {
   unknown: number;
   totalFumbleUsd: number;
   totalFumbleSol: number;
+  /** The wallet's realized profit over the sells scanned, and how many of those sells include coins whose purchase the history does not show. */
+  totalProfitSol: number;
+  totalProfitUsd: number;
+  partialSells: number;
   /** The closed positions: measured ones first, biggest round-trip first, then the ones with no price history, oldest first. */
   positions: ApiPosition[];
   totalRoundTripSol: number;
@@ -120,6 +129,7 @@ export function toApiSell(s: ScannedSell): ApiSell {
     matchedTokens: lot.matchedTokens,
     costSol: lot.costSol,
     profitSol: lot.profitSol,
+    ...(s.profitUsd !== null ? { profitUsd: s.profitUsd } : {}),
   };
   if (fumble.status !== "ok") return { ...base, status: "unknown", reason: fumble.reason };
   return { ...base, status: "ok", soldUsd: fumble.soldUsd, peakAt: fumble.peakAt, peakMultiple: fumble.peakMultiple, fumbleUsd: fumble.fumbleUsd, fumbleSol: fumble.fumbleSol, source: s.source };
@@ -142,11 +152,15 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     tradeCount: r.trades,
     ignored: r.dropped,
     trades: r.tradeList.map(toApiTrade),
+    tokens: r.tokens,
     sells: [...measured, ...unknown],
     measured: measured.length,
     unknown: unknown.length,
     totalFumbleUsd: r.totalFumbleUsd,
     totalFumbleSol: r.totalFumbleSol,
+    totalProfitSol: r.totalProfitSol,
+    totalProfitUsd: r.totalProfitUsd,
+    partialSells: r.partialSells,
     positions: orderPositions(r.positions.map(toApiPosition)),
     totalRoundTripSol: r.totalRoundTripSol,
     totalRoundTripUsd: r.totalRoundTripUsd,

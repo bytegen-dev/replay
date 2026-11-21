@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ApiPosition, ApiSell, ApiTrade } from "../src/lib/fumble/service.ts";
-import { buildRows, fumbleCell, makeEventReader, roundTripCell, shortMint, sol, times, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
+import { buildRows, fumbleCell, makeEventReader, pnlCell, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
 
 const trade = (signature: string, side: "buy" | "sell", time = 1): ApiTrade => ({ signature, side, token: "M".repeat(44), tokens: 100, sol: 1, time });
 const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
@@ -92,4 +92,35 @@ test("SOL amounts are written with sensible digits", () => {
   assert.equal(sol(8.5), "8.50 SOL");
   assert.equal(sol(12.46), "12.5 SOL");
   assert.equal(sol(250.4), "250 SOL");
+});
+
+test("a coin is written by its ticker, with its name beside it when the name says something more", () => {
+  const mint = "9msk9ehERMECbvsp3mvNabSXy2k7GNcrxJgdWfh7pump";
+  const tokens = { [mint]: { symbol: "win", name: "it only takes one win" }, same: { symbol: "iNu", name: "INU" } };
+  assert.deepEqual(tokenLabel(mint, tokens), { ticker: "win", name: "it only takes one win" });
+  assert.deepEqual(tokenLabel("same", tokens), { ticker: "iNu", name: null }, "a name that only repeats the ticker is dropped");
+  assert.deepEqual(tokenLabel(mint, {}), { ticker: "9msk\u2026pump", name: null }, "no metadata: the address");
+  assert.deepEqual(tokenLabel(mint, { [mint]: { name: "Only a name" } }), { ticker: "9msk\u2026pump", name: "Only a name" });
+  assert.deepEqual(tokenLabel(mint, undefined), { ticker: "9msk\u2026pump", name: null });
+});
+
+test("what the PnL column says: nothing for a buy, pricing while it waits, unknown when no buy was seen, else the profit", () => {
+  const [buy, waiting, traced, partial, untraced] = buildRows(
+    [trade("b", "buy"), trade("w", "sell"), trade("t", "sell"), trade("p", "sell"), trade("u", "sell")],
+    [sell("t", { profitSol: -2, profitUsd: -134, matchedTokens: 100 }), sell("p", { profitSol: 1, matchedTokens: 40 }), sell("u", { matchedTokens: 0, profitSol: 0 })],
+  );
+  assert.deepEqual(pnlCell(buy, false), { kind: "none" });
+  assert.deepEqual(pnlCell(waiting, false), { kind: "pending" });
+  assert.equal(pnlCell(waiting, true).kind, "unknown", "a sell still missing once the scan is done is unknown");
+  assert.deepEqual(pnlCell(traced, true), { kind: "profit", usd: -134, sol: -2, partial: false });
+  assert.deepEqual(pnlCell(partial, true), { kind: "profit", usd: null, sol: 1, partial: true }, "only 40 of 100 tokens traced to a buy; no dollar rate");
+  assert.deepEqual(pnlCell(untraced, true), { kind: "unknown" });
+});
+
+test("gains and losses are written with their sign", () => {
+  assert.equal(signedUsd(903.4), "+$903");
+  assert.equal(signedUsd(-1385.9), "-$1,386");
+  assert.equal(signedUsd(0), "$0.00");
+  assert.equal(signedSol(-20.43), "-20.4 SOL");
+  assert.equal(signedSol(0.5), "+0.50 SOL");
 });

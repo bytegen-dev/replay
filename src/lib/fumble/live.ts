@@ -2,6 +2,7 @@ import { fetchHistory } from "./helius.ts";
 import { birdeyeProvider, firstOf, geckoProvider, solPriceAt } from "./prices.ts";
 import { scanWallet } from "./scan.ts";
 import { createScanner, toApiTrades } from "./service.ts";
+import { heliusTokens } from "./tokens.ts";
 
 /**
  * The live scanner: the real Helius and price APIs, built from the server's environment.
@@ -29,6 +30,7 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   const birdeyeKey = process.env.BIRDEYE_API_KEY;
   const prices = firstOf([...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]);
   const solUsd = solPriceAt(prices);
+  const tokens = heliusTokens(heliusKey);
   const maxPages = intEnv("FUMBLE_MAX_PAGES", 30);
   const budgetMs = intEnv("FUMBLE_BUDGET_SECONDS", 50) * 1000;
   const historyMs = intEnv("FUMBLE_HISTORY_SECONDS", 20) * 1000;
@@ -40,6 +42,7 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
         history: (w) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs }),
         prices,
         solUsd,
+        tokens,
         outOfTime: () => Date.now() > deadline,
         onProgress: (p) => emit({ type: "progress", ...p }),
         onTrades: (t) => emit({ type: "trades", data: toApiTrades(wallet, t) }),

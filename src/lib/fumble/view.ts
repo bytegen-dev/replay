@@ -1,3 +1,4 @@
+import type { TokenInfo } from "./tokens.ts";
 import type { ApiPosition, ApiResult, ApiSell, ApiTrade, ScanEvent } from "./service.ts";
 
 /**
@@ -91,6 +92,30 @@ export function fumbleCell(row: Row, scanDone: boolean): FumbleCell {
   return { kind: "fumbled", usd: s.fumbleUsd!, sol: s.fumbleSol ?? 0, peakMultiple: s.peakMultiple! };
 }
 
+/** What the PnL column says for a row: the profit on a sell, from the buys it was traced to. */
+export type PnlCell =
+  | { kind: "none" } // a buy
+  | { kind: "pending" } // a sell the scan has not reached yet
+  | { kind: "unknown" } // none of the coins sold were bought in the part of the history that was read, so the cost is not known
+  | { kind: "profit"; usd: number | null; sol: number; partial: boolean }; // partial: part of the sale could not be traced to a buy
+
+export function pnlCell(row: Row, scanDone: boolean): PnlCell {
+  if (row.trade.side === "buy") return { kind: "none" };
+  const s = row.sell;
+  if (!s) return scanDone ? { kind: "unknown" } : { kind: "pending" };
+  if (s.matchedTokens <= 0) return { kind: "unknown" };
+  return { kind: "profit", usd: s.profitUsd ?? null, sol: s.profitSol, partial: s.matchedTokens < s.tokens * 0.999 };
+}
+
+/** Dollars with a sign when it is a gain or a loss: +$903, -$1,370. */
+export function signedUsd(x: number): string {
+  return `${x > 0 ? "+" : x < 0 ? "-" : ""}${usd(Math.abs(x))}`;
+}
+
+export function signedSol(x: number): string {
+  return `${x > 0 ? "+" : x < 0 ? "-" : ""}${sol(Math.abs(x))}`;
+}
+
 /** What the "gave back" column says for a row. Only the sell that closed a position has one. */
 export type RoundTripCell =
   | { kind: "none" }
@@ -112,6 +137,14 @@ export function roundTripCell(row: Row): RoundTripCell {
 /** SOL to two decimals under ten, one decimal from ten up, whole from a hundred. */
 export function sol(x: number): string {
   return `${x >= 100 ? Math.round(x) : x.toFixed(x >= 10 ? 1 : 2)} SOL`;
+}
+
+/** How a coin is written in a row: its ticker, and its name when that says something more. With no metadata the ticker is the shortened address. */
+export function tokenLabel(mint: string, tokens: Record<string, TokenInfo> | undefined): { ticker: string; name: string | null } {
+  const info = tokens?.[mint];
+  const ticker = info?.symbol ?? shortMint(mint);
+  const name = info?.name && info.name.toLowerCase() !== ticker.toLowerCase() ? info.name : null;
+  return { ticker, name };
 }
 
 export const explorerUrl = (mint: string) => `https://dexscreener.com/solana/${mint}`;

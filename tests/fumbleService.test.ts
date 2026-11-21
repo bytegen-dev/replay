@@ -31,6 +31,7 @@ const empty = (wallet: string): ScanResult => ({
   dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 },
   trades: 0,
   tradeList: [],
+  tokens: {},
   positions: [],
   totalRoundTripSol: 0,
   totalRoundTripUsd: 0,
@@ -38,6 +39,9 @@ const empty = (wallet: string): ScanResult => ({
   unpriced: 0,
   totalFumbleUsd: 0,
   totalFumbleSol: 0,
+  totalProfitSol: 0,
+  totalProfitUsd: 0,
+  partialSells: 0,
   worst: null,
   ranOutOfTime: false,
 });
@@ -208,7 +212,7 @@ test("the trade list is newest first, buys and sells of a meaningful size, and g
 
 test("someone who joins a scan that already sent its trade list is sent it straight away", async () => {
   const gate = deferred<void>();
-  const list = toApiTrades(WALLET, { history: { transactions: 1, pages: 1, complete: true, oldest: 1 }, dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 }, tradeCount: 0, trades: [] });
+  const list = toApiTrades(WALLET, { history: { transactions: 1, pages: 1, complete: true, oldest: 1 }, dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 }, tradeCount: 0, trades: [], tokens: {} });
   const s = createScanner({
     run: async (w, emit) => {
       emit({ type: "trades", data: list });
@@ -277,5 +281,77 @@ test("the response lists measured positions first, biggest round-trip first, the
   assert.ok(Math.abs(api.totalFumbleSol - measuredSells.reduce((n, x) => n + x.fumbleSol!, 0)) < 1e-9, "the SOL total is the sum of the sells' SOL fumbles");
   assert.ok(api.totalFumbleSol > 40 && api.totalFumbleSol < 60, `about 49 SOL, got ${api.totalFumbleSol}`);
   assert.ok(Math.abs(ok.roundTripUsd! - ok.roundTripSol! * 67) < 1e-6, "dollars are the SOL amount at the SOL price when the position closed (the fake SOL price is $67)");
+  assert.deepEqual(JSON.parse(JSON.stringify(api)), api);
+});
+
+/* ------------------------------- coin names in the scan ------------------------------- */
+
+const names = new Map([[WIN, { symbol: "win", name: "it only takes one win" }]]);
+
+test("the trade list carries each coin's name and ticker, and the finished scan does too", async () => {
+  const got: { list?: ReturnType<typeof toApiTrades> } = {};
+  const result = await realScan(WALLET, { tokens: async () => names, onTrades: (t) => (got.list = toApiTrades(WALLET, t)) });
+  assert.deepEqual(got.list?.tokens[WIN], names.get(WIN));
+  assert.equal(got.list?.tokens["JAgJqo5Xxz55b51Zod2Pun21PnoLQDKZmyonxVvGjZJV"], undefined, "no metadata, no entry");
+  assert.deepEqual(toApiResult(result, 1).tokens, got.list?.tokens);
+});
+
+test("the name lookup runs alongside the price lookups: the trade list waits for its names, the prices do not", async () => {
+  const gate = deferred<void>();
+  const seen: string[] = [];
+  const scan = realScan(WALLET, {
+    tokens: async () => (await gate.promise, names),
+    onTrades: () => seen.push("trades"),
+    prices: async (m) => (seen.push("price"), m === WIN ? { candles: winPrices.candles, source: "fake" } : null),
+  });
+  for (let i = 0; i < 40; i++) await Promise.resolve();
+  assert.ok(seen.filter((e) => e === "price").length >= 3, "the coins were priced while the names were still out");
+  assert.ok(!seen.includes("trades"), "the list waits for its names");
+  gate.resolve();
+  const result = await scan;
+  assert.deepEqual(seen.filter((e) => e === "trades"), ["trades"]);
+  assert.deepEqual(result.tokens[WIN], names.get(WIN));
+});
+
+test("a failed name lookup does not stop the scan: the list goes out with no names", async () => {
+  const got: { list?: ReturnType<typeof toApiTrades> } = {};
+  const result = await realScan(WALLET, {
+    tokens: async () => {
+      throw new Error("helius down");
+    },
+    onTrades: (t) => (got.list = toApiTrades(WALLET, t)),
+  });
+  assert.deepEqual(got.list?.tokens, {});
+  assert.equal(result.sells.length, 3);
+});
+
+/* ------------------------------- profit in the scan ------------------------------- */
+
+test("the wallet's realized profit is what its sells brought in minus what those coins cost, in SOL and in dollars", async () => {
+  const result = await realScan(WALLET, { prices: async (m) => priceSol(m) });
+  // win: paid 27.29 SOL, sold for 6.86; iNu: paid 5.01, sold for 4.75; the third sale's coins were bought before the history, so it adds nothing.
+  assert.ok(result.totalProfitSol < -20.5 && result.totalProfitSol > -20.9, `profit ${result.totalProfitSol} SOL`);
+  assert.ok(Math.abs(result.totalProfitUsd - result.totalProfitSol * 67) < 1e-6, "dollars are the SOL profit at the SOL price of the sale (the fake price is $67)");
+  const byMint = new Map(result.sells.map((x) => [x.lot.sell.mint, x]));
+  const win = byMint.get(WIN)!;
+  assert.ok(win.lot.profitSol < -20 && win.profitUsd !== null && Math.abs(win.profitUsd - win.lot.profitSol * 67) < 1e-6);
+  assert.equal(result.partialSells, 1, "one sale had no buy in the history at all");
+});
+
+test("without a SOL price the profit is still known in SOL, and the dollar figures are left out, not guessed", async () => {
+  const result = await realScan(WALLET, { prices: async (m) => (m === WIN ? { candles: winPrices.candles, source: "fake" } : null) });
+  assert.ok(result.totalProfitSol < -20);
+  assert.equal(result.totalProfitUsd, 0);
+  assert.ok(result.sells.every((x) => x.profitUsd === null));
+  const api = toApiResult(result, 1);
+  assert.ok(api.sells.every((x) => x.profitUsd === undefined));
+});
+
+test("the response carries each sell's profit and the wallet's totals", async () => {
+  const api = toApiResult(await realScan(WALLET, { prices: async (m) => priceSol(m) }), 1);
+  assert.equal(api.totalProfitSol, api.sells.reduce((n, x) => n + x.profitSol, 0));
+  const win = api.sells.find((x) => x.token === WIN)!;
+  assert.ok(win.profitSol < -20 && win.profitUsd! < -1300 && win.matchedTokens > 0);
+  assert.equal(api.partialSells, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(api)), api);
 });
