@@ -1,6 +1,10 @@
 /**
  * Leveraged buying, modeled like a perpetual futures long on an exchange (Hyperliquid, Binance and the like).
  *
+ * What holding costs depends on the kind of asset (see funding.ts). Crypto perps charge "funding" on the whole position, typically
+ * 10.95% a year (0.01% every 8 hours). Stocks and commodities are financed like margin: interest on the borrowed part only, at about
+ * the going cost of borrowing. The model supports both through `fundingBase`.
+ *
  * Each buy opens its own isolated position: `amount` is the margin you put up, the position controls `amount x leverage` of the
  * asset, and the rest is borrowed from the exchange. While it is open the position pays funding (a yearly rate charged on its
  * value, quoted here the way exchanges do, 10.95% a year being the usual 0.01% every 8 hours) and a trading fee on the way in
@@ -13,13 +17,18 @@
 
 export type Side = "long" | "short";
 
+/** What the yearly funding rate is charged on: the whole position's value (a crypto perp), or only the borrowed part (margin lending). */
+export type FundingBase = "position" | "borrowed";
+
 export interface LeverageSettings {
   /** 1 to 100. 1 means no leverage. */
   leverage: number;
   /** Long gains when the price rises (the default); short gains when it falls and is liquidated when it rises. */
   side?: Side;
-  /** Funding charged on the position's value, as a yearly rate in percent. Default 10.95. */
+  /** Funding charged each year, in percent, on the base below. Default 10.95. */
   fundingApr?: number;
+  /** What the rate is charged on. "position" (the default here) is the position's whole value, as a crypto perpetual does; "borrowed" is only the part that was borrowed (notional less margin), as margin lending on a stock or commodity does. */
+  fundingBase?: FundingBase;
   /** Add margin when a position gets close to liquidation, to keep it at its starting leverage. */
   topUp?: boolean;
   /** The most extra margin one position may be given, in dollars. Blank means no limit. */
@@ -95,7 +104,7 @@ export interface LeverageSeriesPoint {
 }
 
 export interface LeverageResult {
-  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr" | "side">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "topUpBudget" | "maxLoss" | "maxLossPct">;
+  settings: Required<Pick<LeverageSettings, "leverage" | "fundingApr" | "fundingBase" | "side">> & Pick<LeverageSettings, "topUp" | "topUpMax" | "topUpBudget" | "maxLoss" | "maxLossPct">;
   positions: Position[];
   summary: LeverageSummary;
   /** About one point a week, for the chart. */
@@ -129,7 +138,7 @@ export function liquidationDropPct(leverage: number, side: Side = "long"): numbe
   return Math.abs(liquidationPrice(1, leverage, side) - 1) * 100;
 }
 
-type Full = Required<Pick<LeverageSettings, "leverage" | "fundingApr" | "side">> & LeverageSettings;
+type Full = Required<Pick<LeverageSettings, "leverage" | "fundingApr" | "fundingBase" | "side">> & LeverageSettings;
 
 /** One position while the run is under way. */
 interface Live {
@@ -185,7 +194,13 @@ function stepDay(p: Live, day: DailyClose, s: Full, budgetLeft: number): number 
   // +1 for a long, -1 for a short: it flips which way a price move pays, and funding is paid by longs and received by shorts
   // (when the rate is positive, as it usually is), so a short's funding is a credit.
   const dir = s.side === "short" ? -1 : 1;
-  p.funding += dir * p.size * day.price * (s.fundingApr / 100) * ((ms - p.prevMs) / DAY_MS / 365);
+  const years = (ms - p.prevMs) / DAY_MS / 365;
+  if (s.fundingBase === "borrowed") {
+    // Margin lending: interest on what was borrowed (the position less the margin put up), a cost whichever way the bet goes.
+    p.funding += Math.max(0, p.notional - p.margin) * (s.fundingApr / 100) * years;
+  } else {
+    p.funding += dir * p.size * day.price * (s.fundingApr / 100) * years;
+  }
   p.prevMs = ms;
   p.lastPrice = day.price;
   p.lastDate = day.date;
@@ -252,7 +267,7 @@ function finish(p: Live, s: Full): Position {
  */
 export function simulateLeverage(opts: { buys: LeverageBuy[]; daily: DailyClose[]; endDate: string; settings: LeverageSettings }): LeverageResult {
   const leverage = Math.min(MAX_LEVERAGE, Math.max(1, opts.settings.leverage));
-  const settings = { ...opts.settings, leverage, side: opts.settings.side ?? "long", fundingApr: opts.settings.fundingApr ?? DEFAULT_FUNDING_APR } as Full;
+  const settings = { ...opts.settings, leverage, side: opts.settings.side ?? "long", fundingApr: opts.settings.fundingApr ?? DEFAULT_FUNDING_APR, fundingBase: opts.settings.fundingBase ?? "position" } as Full;
   // The positions run side by side, day by day, so a top-up budget shared by all of them is spent in the order things happened.
   const live = opts.buys.map((b) => openPosition(b, settings));
   let spent = 0;
@@ -294,7 +309,7 @@ export function simulateLeverage(opts: { buys: LeverageBuy[]; daily: DailyClose[
     tip.invested = invested;
   }
   return {
-    settings: { leverage, side: settings.side, fundingApr: settings.fundingApr, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.topUpBudget !== undefined ? { topUpBudget: settings.topUpBudget } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
+    settings: { leverage, side: settings.side, fundingApr: settings.fundingApr, fundingBase: settings.fundingBase, ...(settings.topUp ? { topUp: true } : {}), ...(settings.topUpMax !== undefined ? { topUpMax: settings.topUpMax } : {}), ...(settings.topUpBudget !== undefined ? { topUpBudget: settings.topUpBudget } : {}), ...(settings.maxLoss !== undefined ? { maxLoss: settings.maxLoss } : {}), ...(settings.maxLossPct !== undefined ? { maxLossPct: settings.maxLossPct } : {}) },
     positions,
     series,
     summary: {

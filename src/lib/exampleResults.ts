@@ -8,4 +8,4 @@ export interface ExampleSnapshot {
   response: DcaResponse;
 }
 
-export const exampleSnapshot = (id: string): ExampleSnapshot | null => ((saved as Record<string, ExampleSnapshot>)[id] ?? null);
+export const exampleSnapshot = (id: string): ExampleSnapshot | null => ((saved as unknown as Record<string, ExampleSnapshot>)[id] ?? null);

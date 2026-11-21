@@ -176,7 +176,7 @@ export const EXAMPLES: Example[] = [
     basis: "month-end",
     plan: "once",
     leverage: { leverage: 3 },
-    note: "One 3x long position in Coca-Cola stock opened at the end of January 2021, with funding and fees. Dividends don't apply to leveraged runs.",
+    note: "One 3x long position in Coca-Cola stock opened at the end of January 2021. Holding it costs 5% a year interest on the borrowed part, plus trading fees. Dividends don't apply to leveraged runs.",
   },
   {
     id: "bitcoin-5x",
@@ -190,7 +190,7 @@ export const EXAMPLES: Example[] = [
     basis: "month-end",
     plan: "once",
     leverage: { leverage: 5 },
-    note: "One 5x long position opened at the end of January 2023, with funding and fees. It is closed if the price falls far enough to wipe out its margin.",
+    note: "One 5x long position opened at the end of January 2023. Holding it costs funding of 10.95% a year on the whole position, plus trading fees. It is closed if the price falls far enough to wipe out its margin.",
   },
   {
     id: "ethereum-3x-short",
@@ -204,7 +204,7 @@ export const EXAMPLES: Example[] = [
     basis: "month-end",
     plan: "once",
     leverage: { leverage: 3, side: "short" },
-    note: "One 3x short position opened at the end of November 2021, near Ethereum's peak. A short gains when the price falls and is closed if it rises far enough.",
+    note: "One 3x short position opened at the end of November 2021, near Ethereum's peak. Funding of 10.95% a year on the whole position is received by a short. A short gains when the price falls and is closed if it rises far enough.",
   },
   {
     id: "gold-5x",
@@ -218,7 +218,7 @@ export const EXAMPLES: Example[] = [
     basis: "month-end",
     plan: "once",
     leverage: { leverage: 5 },
-    note: "One 5x long position in gold futures opened at the end of January 2020, with funding and fees.",
+    note: "One 5x long position in gold futures opened at the end of January 2020. Holding it costs 5% a year interest on the borrowed part, plus trading fees.",
   },
 ];
 

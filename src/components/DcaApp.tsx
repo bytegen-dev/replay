@@ -43,7 +43,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { downloadFile } from "@/lib/download.ts";
 import { EXAMPLES, exampleRequest, type Example } from "@/lib/examples.ts";
 import { exampleSnapshot } from "@/lib/exampleResults.ts";
-import { DEFAULT_FUNDING_APR, DEFAULT_LEVERAGE, liquidationDropPct, MAX_LEVERAGE } from "@/lib/leverage.ts";
+import { CRYPTO_FUNDING, describeFunding, TRADITIONAL_FUNDING } from "@/lib/funding.ts";
+import { DEFAULT_LEVERAGE, liquidationDropPct, MAX_LEVERAGE } from "@/lib/leverage.ts";
 import { LeverageCard } from "@/components/LeverageCard";
 import { xlsxFileName, type ExportPayload } from "@/lib/exportData.ts";
 import { fmtNum, fmtPct, fmtPrice, fmtSigned, fmtUsd, NA } from "@/lib/format.ts";
@@ -175,7 +176,8 @@ export function DcaApp() {
   // Leverage, futures style. 1 means plain buying. The other settings only matter above 1x.
   const [lev, setLev] = useState("1");
   const [side, setSide] = useState<"long" | "short">("long");
-  const [fundingApr, setFundingApr] = useState(String(DEFAULT_FUNDING_APR));
+  // Blank means "the asset's own default" (see funding.ts): crypto pays funding on the whole position, stocks and commodities interest on the borrowed part.
+  const [fundingApr, setFundingApr] = useState("");
   const [topUp, setTopUp] = useState(false);
   const [topUpMax, setTopUpMax] = useState("");
   const [topUpBudget, setTopUpBudget] = useState("");
@@ -347,7 +349,7 @@ export function DcaApp() {
       plan: plan !== START_PLAN && plan,
       lev: leveraged && String(levNum),
       side: leveraged && side === "short" && "short",
-      fund: leveraged && fundingApr !== String(DEFAULT_FUNDING_APR) && fundingApr,
+      fund: leveraged && fundingApr.trim() !== "" && fundingApr,
       topup: leveraged && topUp && "1",
       topmax: leveraged && topUp && cleanAmount(topUpMax),
       topbudget: leveraged && topUp && cleanAmount(topUpBudget),
@@ -513,7 +515,7 @@ export function DcaApp() {
   /** Validates the form, then runs the calculation. */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, ...(side === "short" ? { side: "short" as const } : {}), fundingApr: Number(fundingApr), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(topUp && parseAmount(topUpBudget) > 0 ? { topUpBudget: parseAmount(topUpBudget) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
+    const common = { amount: parseAmount(amount), ...(currency !== "USD" ? { currency } : {}), ...(plan !== DEFAULT_PLAN ? { plan } : {}), ...(leveraged ? { leverage: { leverage: levNum, ...(side === "short" ? { side: "short" as const } : {}), ...(fundingApr.trim() !== "" ? { fundingApr: Number(fundingApr) } : {}), ...(topUp ? { topUp: true } : {}), ...(topUp && parseAmount(topUpMax) > 0 ? { topUpMax: parseAmount(topUpMax) } : {}), ...(topUp && parseAmount(topUpBudget) > 0 ? { topUpBudget: parseAmount(topUpBudget) } : {}), ...(parseAmount(maxLoss) > 0 ? (stopUnit === "%" ? { maxLossPct: parseAmount(maxLoss) } : { maxLoss: parseAmount(maxLoss) }) : {}) }, ...(sellAtEnd ? { sellAtEnd: true } : {}) } : {}), startMonth, endMonth, basis, ...(basis === "day-of-month" ? { basisDay } : {}) };
     const input: Omit<DcaRequest, "unit"> =
       usesYahoo
         ? { address: isMajor ? major : ticker.trim(), chain: "equity", ...common, ...(reinvest && !isMajor && !leveraged ? { reinvest: true } : {}) }
@@ -1121,8 +1123,8 @@ export function DcaApp() {
                     <div className="grid gap-4 border border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
                             <label className="flex flex-col gap-1.5 text-sm text-muted-foreground">
                               Funding (% a year)
-                              <input inputMode="decimal" value={fundingApr} onChange={(e) => setFundingApr(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))} className="form-control-h border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                              <span className="text-xs">{DEFAULT_FUNDING_APR}% is the usual exchange rate</span>
+                              <input inputMode="decimal" value={fundingApr} placeholder={String(mode === "token" ? CRYPTO_FUNDING.apr : TRADITIONAL_FUNDING.apr)} onChange={(e) => setFundingApr(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))} className="form-control-h border border-input bg-transparent px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                              <span className="text-xs">{mode === "token" ? `Left blank: ${describeFunding(CRYPTO_FUNDING.apr, CRYPTO_FUNDING.base)}, the usual rate on crypto exchanges.` : `Left blank: ${describeFunding(TRADITIONAL_FUNDING.apr, TRADITIONAL_FUNDING.base)}, about what borrowing to hold it costs.`}</span>
                             </label>
                             <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
                               <label className="flex cursor-pointer items-center gap-2 transition-colors hover:text-foreground">

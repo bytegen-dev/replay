@@ -32,7 +32,7 @@ export interface DemoCheck {
   /** "since January 2020" for a monthly habit, "in November 2021" for a single buy. */
   timing: string;
   /** Set for a leveraged example: how many times, long or short, and how many of its positions were closed out. */
-  leverage?: { times: number; side: "long" | "short"; liquidated: number; positions: number };
+  leverage?: { times: number; side: "long" | "short"; liquidated: number; positions: number; fundingApr: number; fundingBase: "position" | "borrowed" };
   invested: number;
   value: number;
   gainPct: number;
@@ -42,7 +42,7 @@ export interface DemoCheck {
 }
 
 /** Fund tickers read better as what they track. */
-const FRIENDLY: Record<string, string> = { SPY: "the S&P 500 (SPY)", QQQ: "the Nasdaq-100 (QQQ)" };
+const FRIENDLY: Record<string, string> = { SPY: "the S&P 500 (SPY)", QQQ: "the Nasdaq-100 (QQQ)", KO: "Coca-Cola (KO)" };
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -85,7 +85,7 @@ function build(list: Example[]): DemoCheck[] {
       buying: ex.plan === "once" ? `${money(ex.amount)} once` : `${money(ex.amount)} a month`,
       since: `${MONTHS[m - 1]} ${y}`,
       timing: ex.plan === "once" ? `in ${MONTHS[m - 1]} ${y}` : `since ${MONTHS[m - 1]} ${y}`,
-      ...(lev ? { leverage: { times: lev.settings.leverage, side: lev.settings.side, liquidated: lev.summary.liquidated, positions: lev.summary.positions } } : {}),
+      ...(lev ? { leverage: { times: lev.settings.leverage, side: lev.settings.side, liquidated: lev.summary.liquidated, positions: lev.summary.positions, fundingApr: lev.settings.fundingApr, fundingBase: lev.settings.fundingBase ?? "position" } } : {}),
       invested: lev ? lev.summary.invested : s.invested,
       value: lev ? lev.summary.value : s.valueToday,
       gainPct: lev ? (lev.summary.gainPct ?? s.gainPct) : s.gainPct,

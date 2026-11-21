@@ -128,6 +128,8 @@ function cleanLeverage(x: unknown): LeverageResult | null {
       leverage: lev,
       side: l.settings.side === "short" ? "short" : "long",
       fundingApr: apr,
+      // Results saved before the funding base existed charged on the whole position.
+      fundingBase: l.settings.fundingBase === "borrowed" ? ("borrowed" as const) : ("position" as const),
       ...(l.settings.topUp === true ? { topUp: true } : {}),
       ...(opt(l.settings.topUpMax) !== undefined ? { topUpMax: opt(l.settings.topUpMax) } : {}),
       ...(opt(l.settings.topUpBudget) !== undefined ? { topUpBudget: opt(l.settings.topUpBudget) } : {}),

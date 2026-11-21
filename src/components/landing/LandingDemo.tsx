@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { DrawChart } from "@/components/landing/DrawChart";
 import type { ExampleGroup } from "@/lib/examples.ts";
+import { describeFunding } from "@/lib/funding.ts";
 import type { DemoCheck } from "@/lib/landingData.ts";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +75,13 @@ export function LandingDemo({ checks }: { checks: DemoCheck[] }) {
             )}
             .
           </p>
+          {check.leverage && (
+            <p className="-mt-2 text-sm text-muted-foreground">
+              {check.leverage.side === "short" && check.leverage.fundingBase === "position"
+                ? `Funding is ${describeFunding(check.leverage.fundingApr, check.leverage.fundingBase)}, received by a short, and there is a 0.045% trading fee each way.`
+                : `Holding it costs ${describeFunding(check.leverage.fundingApr, check.leverage.fundingBase)}, plus a 0.045% trading fee each way.`}
+            </p>
+          )}
           <DrawChart points={check.points} runKey={check.id} height={280} ariaLabel={`${check.question} ${usd(check.invested)} put in, worth ${usd(check.value)} today.`} />
         </div>
       ) : (

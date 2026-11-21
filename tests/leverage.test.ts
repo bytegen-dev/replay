@@ -114,3 +114,16 @@ test("a short gains when the price falls and is liquidated when it rises", () =>
   assert.ok(up.positions[0].liquidationPrice > 100 && up.positions[0].liquidationPrice < 125);
   assert.equal(up.settings.side, "short");
 });
+
+test("funding on the borrowed part only is charged on what was lent, not on the whole position, and it is a cost for a short too", () => {
+  // One year, flat price, 3x: 1,000 of margin controls 3,000 and 2,000 of it is borrowed.
+  const flat = px(["2024-01-02", 100], ["2025-01-02", 100]);
+  const whole = simulateLeverage({ buys: [buy(1000, 100)], daily: flat, endDate: "2025-01-02", settings: { leverage: 3, fundingApr: 10 } });
+  const borrowed = simulateLeverage({ buys: [buy(1000, 100)], daily: flat, endDate: "2025-01-02", settings: { leverage: 3, fundingApr: 10, fundingBase: "borrowed" } });
+  assert.ok(Math.abs(whole.positions[0].funding - 300.8) < 1, `whole position: ${whole.positions[0].funding}`);
+  assert.ok(Math.abs(borrowed.positions[0].funding - 200.5) < 1, `borrowed part: ${borrowed.positions[0].funding}`);
+  assert.equal(borrowed.settings.fundingBase, "borrowed");
+  assert.equal(whole.settings.fundingBase, "position");
+  const short = simulateLeverage({ buys: [buy(1000, 100)], daily: flat, endDate: "2025-01-02", settings: { leverage: 3, side: "short", fundingApr: 10, fundingBase: "borrowed" } });
+  assert.ok(short.positions[0].funding > 190, "a short pays interest on the borrowed part too");
+});

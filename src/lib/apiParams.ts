@@ -7,7 +7,7 @@ import { cardanoUnit, normalizeAddress, validateRequest } from "./validate.ts";
  *   market   "stock" or a chain: cardano, ethereum, solana, base, bsc, arbitrum, hyperevm
  *   asset    the ticker (stocks) or the contract / mint / Cardano policy id (tokens)
  *   amount   invested each month, in `currency` (US dollars unless currency is given)
- *   leverage optional 1 to 100: buy like a perpetual futures position (`side` long, the default, or short), with `funding` (yearly percent, default 10.95), `topup` (true adds margin near liquidation), `topupMax` (dollars per buy), `topupBudget` (dollars across all buys) and `maxLoss` (dollars per buy) or `maxLossPct` (percent of each buy)
+ *   leverage optional 1 to 100: buy like a perpetual futures position (`side` long, the default, or short), with `funding` (yearly percent; by default 10.95 on the whole position for crypto, 5 on the borrowed part for stocks and commodities), `topup` (true adds margin near liquidation), `topupMax` (dollars per buy), `topupBudget` (dollars across all buys) and `maxLoss` (dollars per buy) or `maxLossPct` (percent of each buy)
  *   plan     optional how often to buy: monthly (default), quarterly, semiannual, yearly or once (a single buy at `from`)
  *   currency optional ISO code the amount is in (NGN, EUR, GBP ...); each buy is converted at that day's rate
  *   from     first month, YYYY-MM         to  last month, YYYY-MM (default: last full month)

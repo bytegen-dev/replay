@@ -11,6 +11,7 @@ import {
 } from "./providers.ts";
 import { dexhunterSeries } from "./dexhunter.ts";
 import { fillGaps, gtCardanoSeries, resolveCardanoUnit } from "./gtCardano.ts";
+import { fundingDefaultFor } from "./funding.ts";
 import { simulateLeverage } from "./leverage.ts";
 import { buildBuys, chooseDecimals } from "./math.ts";
 import { isBuyMonth } from "./plan.ts";
@@ -46,7 +47,9 @@ function addLeverage(req: DcaRequest, res: DcaResponse): DcaResponse {
   const buys = bought.map((b) => ({ month: b.month, date: b.priceDate ?? b.targetDate, price: b.price as number, amount: b.amount }));
   const lastBuyDate = res.rows.filter((r) => r.price !== null).map((r) => r.priceDate ?? r.targetDate).sort().pop();
   const endDate = req.sellAtEnd && lastBuyDate ? lastBuyDate : res.currentPriceDate;
-  const leverage = simulateLeverage({ buys, daily, endDate, settings: req.leverage! });
+  // What holding costs follows the asset: crypto pays funding on the whole position, stocks and commodities interest on the borrowed part.
+  const funding = fundingDefaultFor(req.chain, req.address);
+  const leverage = simulateLeverage({ buys, daily, endDate, settings: { ...req.leverage!, fundingApr: req.leverage!.fundingApr ?? funding.apr, fundingBase: req.leverage!.fundingBase ?? funding.base } });
   const warnings = [...res.warnings];
   if (daily.length === 0) warnings.push("Daily prices weren't available for this asset, so the leveraged result can't check for liquidation between buys.");
   return { ...stripDaily(res), warnings, leverage };
