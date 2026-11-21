@@ -77,11 +77,10 @@ export function LandingDemo({ checks }: { checks: DemoCheck[] }) {
           <DrawChart points={check.points} runKey={check.id} height={280} ariaLabel={`${check.question} ${usd(check.invested)} put in, worth ${usd(check.value)} today.`} />
         </div>
       ) : (
-        <p className="min-h-48 border-l-2 border-border pl-4 text-sm leading-relaxed text-muted-foreground sm:text-base">Ready-made examples for this tab are on their way. You can already run your own on the Wayback page.</p>
+        <p className="min-h-48 border-l-2 border-border pl-4 text-base text-muted-foreground sm:text-lg">Coming soon</p>
       )}
 
       <p className="text-sm text-muted-foreground">
-        Saved results show instantly.{" "}
         <Link href="/wayback" className="underline underline-offset-4 hover:text-foreground">
           Run your own on Wayback
         </Link>

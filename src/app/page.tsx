@@ -143,7 +143,7 @@ export default function LandingPage() {
           <div className={section}>
             <div className="mb-6 flex max-w-2xl flex-col gap-2 sm:mb-8" data-reveal-on-scroll style={later()}>
               <h2 className={h2}>What if you had bought it back then?</h2>
-              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Pick a kind of asset and an example. Each answers from a saved result, so it appears at once." />
+              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Pick a kind of asset and an example." />
             </div>
             <div data-reveal-on-scroll style={later(120)}>
               <LandingDemo checks={checks} />

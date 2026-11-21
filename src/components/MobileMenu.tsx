@@ -12,7 +12,7 @@ import { AUTH_CHANGED_EVENT, openSignIn, useViewer } from "@/lib/viewerClient.ts
 
 const TOOLS = [
   { href: "/#trade", label: "Trade", note: "Paper and live trading, coming soon", Icon: ArrowLeftRight },
-  { href: "/wayback", label: "Wayback", note: "What a past buy would be worth, or the price on any day", Icon: History },
+  { href: "/wayback", label: "Wayback", note: "Past buys and the price on any day", Icon: History },
   { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },
 ];
 const LINKS = [
