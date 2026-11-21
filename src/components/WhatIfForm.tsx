@@ -7,7 +7,7 @@ import { StockLogo } from "@/components/StockLogo";
 import { AlertTriangle, Check, ChevronDown, Copy, FileSpreadsheet, History, Settings, Share2, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
-import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/DcaSkeletons";
+import { ParametersFormSkeleton, ResultsLoadingSkeleton } from "@/components/WhatIfSkeletons";
 import { MonthPicker, formatMonth } from "@/components/MonthPicker";
 import { CommodityPicker } from "@/components/CommodityPicker";
 import { EquitySearchInput } from "@/components/EquitySearch";
@@ -149,7 +149,7 @@ function Field({ id, label, error, children, className }: { id: string; label: s
   );
 }
 
-export function DcaApp() {
+export function WhatIfForm() {
   const [address, setAddress] = useState("");
   const [chain, setChain] = useState<Chain>("ethereum");
   // "equity" is an ordinary listed stock or ETF, looked up by ticker. It is the default; "token" is an on-chain token.

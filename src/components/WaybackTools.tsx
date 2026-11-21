@@ -2,7 +2,7 @@
 
 import { Clock, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { DcaApp } from "@/components/DcaApp";
+import { WhatIfForm } from "@/components/WhatIfForm";
 import { PricePanel } from "@/components/PricePanel";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +69,7 @@ export function WaybackTools() {
           );
         })}
       </div>
-      {view === "buy" ? <DcaApp /> : <PricePanel />}
+      {view === "buy" ? <WhatIfForm /> : <PricePanel />}
     </div>
   );
 }
