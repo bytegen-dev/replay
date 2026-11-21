@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,16 @@ const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { month: 
  * Paste a wallet, see its trades as soon as they are read, and watch each sell's fumble fill in as the prices come. One request
  * streams everything: progress, then the trades, then the finished scan.
  */
-export function FumbleTool() {
+export function FumbleTool({ launch = false, className, intro, aside }: {
+  /** Opens the Fumble page with the wallet instead of scanning here, for use on another page. Nothing is scanned or shown in this mode, and the address bar is left alone. */
+  launch?: boolean;
+  className?: string;
+  /** A heading block shown above the field, inside the same column. */
+  intro?: React.ReactNode;
+  /** Something shown beside the heading and field on wide screens, on their left. */
+  aside?: React.ReactNode;
+}) {
+  const router = useRouter();
   const [value, setValue] = useState("");
   const [status, setStatus] = useState<"idle" | "scanning" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -85,11 +95,18 @@ export function FumbleTool() {
       setStatus("error");
       return;
     }
+    if (launch) {
+      setError(null);
+      setStatus("scanning"); // the button shows it is working until the Fumble page opens
+      router.push(`/fumble?wallet=${wallet}`);
+      return;
+    }
     void scan(wallet);
   }
 
   // A link with ?wallet= opens straight into that wallet's scan.
   useEffect(() => {
+    if (launch) return;
     const id = setTimeout(() => {
       const w = new URLSearchParams(window.location.search).get("wallet")?.trim() ?? "";
       if (isWalletAddress(w)) {
@@ -101,45 +118,51 @@ export function FumbleTool() {
       clearTimeout(id);
       abort.current?.abort();
     };
-  }, [scan]);
+  }, [scan, launch]);
 
   const scanning = status === "scanning";
   const rows = trades ? buildRows(trades.trades, result?.sells ?? null) : [];
 
   return (
-    <div className="mt-6 flex flex-col gap-6">
-      <form onSubmit={submit} noValidate className="max-w-2xl">
-        <Label htmlFor="fumble-wallet" className="sr-only">
-          Solana wallet address
-        </Label>
-        <div className="flex">
-          {/* The box and the button meet with no gap, like the waitlist form: the box has its bottom-left corner cut, the button its top-right. */}
-          <div className="cut-bl h-11 min-w-0 flex-1 sm:h-12">
-            <Input
-              id="fumble-wallet"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="Solana wallet address"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              aria-invalid={status === "error" && !trades}
-              className="h-full w-full rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
-            />
-          </div>
-          <Button type="submit" disabled={scanning} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">
-            {scanning && <MarkLoader className="size-4" />}
-            {scanning ? "Scanning" : "Scan"}
-          </Button>
-        </div>
-        {error && (
-          <p role="alert" className="mt-2 text-sm font-bold">
-            {error}
-          </p>
-        )}
-      </form>
+    <div className={cn("flex flex-col gap-6", className ?? "mt-6")}>
+      <div className={cn(aside && "cut-card pulse-hover grid items-center gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-12")}>
+        <div className="flex flex-col gap-6">
+          {intro}
+              <form onSubmit={submit} noValidate className="max-w-2xl">
+                <Label htmlFor="fumble-wallet" className="sr-only">
+                  Solana wallet address
+                </Label>
+                <div className="flex">
+                  {/* The box and the button meet with no gap, like the waitlist form: the box has its bottom-left corner cut, the button its top-right. */}
+                  <div className="cut-bl h-11 min-w-0 flex-1 sm:h-12">
+                    <Input
+                      id="fumble-wallet"
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
+                      placeholder="Solana wallet address"
+                      autoComplete="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      aria-invalid={status === "error" && !trades}
+                      className="h-full w-full rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
+                    />
+                  </div>
+                  <Button type="submit" disabled={scanning} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">
+                    {scanning && <MarkLoader className="size-4" />}
+                    {scanning ? "Scanning" : "Scan"}
+                  </Button>
+                </div>
+                {error && (
+                  <p role="alert" className="mt-2 text-sm font-bold">
+                    {error}
+                  </p>
+                )}
+              </form>
 
-      {scanning && <ProgressLine progress={progress} hasTrades={!!trades} />}
+              {scanning && !launch && <ProgressLine progress={progress} hasTrades={!!trades} />}
+        </div>
+        {aside && <div className="hidden lg:order-first lg:block">{aside}</div>}
+      </div>
 
       {trades && (
         <>

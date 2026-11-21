@@ -77,3 +77,41 @@ export function ShareVisual() {
     </div>
   );
 }
+
+/**
+ * Fumble: the hourly highs of a real memecoin on 21 Nov 2026. Someone sold in the third hour, at the bottom; the price was back near
+ * its high five hours later. The line draws, the sale is marked, then the gap between the two is labelled.
+ */
+const FUMBLE_HIGHS = [2.25e-4, 1.92e-4, 5.16e-5, 8.95e-5, 7.77e-5, 7.51e-5, 8.58e-5, 1.56e-4, 2.24e-4, 2.12e-4, 1.38e-4, 1.29e-4, 1.36e-4];
+const fumblePoint = (i: number, v: number): [number, number] => [(i * 400) / (FUMBLE_HIGHS.length - 1), 184 - (v / 2.3e-4) * 160];
+const FUMBLE_PATH = FUMBLE_HIGHS.map((v, i) => fumblePoint(i, v)).map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+const [SOLD_X, SOLD_Y] = fumblePoint(2, FUMBLE_HIGHS[2]);
+const [PEAK_X, PEAK_Y] = fumblePoint(8, FUMBLE_HIGHS[8]);
+
+export function FumbleVisual() {
+  const pct = (n: number, of: number) => `${((n / of) * 100).toFixed(1)}%`;
+  return (
+    <div className="relative h-60 overflow-hidden border border-border bg-background/50 sm:h-72" aria-hidden>
+      <div className={grid} />
+      <svg viewBox="0 0 400 200" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" fill="none">
+        {/* The price the sale was made at, and the highest price after it. */}
+        <path d={`M${SOLD_X} ${SOLD_Y} H400`} stroke="var(--muted-foreground)" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" vectorEffect="non-scaling-stroke" />
+        <path d={`M${PEAK_X} ${PEAK_Y} H400`} stroke="var(--muted-foreground)" strokeWidth="1" strokeDasharray="4 4" opacity="0.6" vectorEffect="non-scaling-stroke" />
+        <path className="fx-area" d={`${FUMBLE_PATH} L400 200 L0 200 Z`} fill="var(--primary)" opacity="0.1" />
+        <path className="fx-draw" pathLength="1" d={FUMBLE_PATH} stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+        {/* The gap between them. */}
+        <path className="fx-pop" d={`M370 ${PEAK_Y} V${SOLD_Y}`} stroke="var(--destructive)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+      </svg>
+      <span className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-foreground bg-background" style={{ left: pct(SOLD_X, 400), top: pct(SOLD_Y, 200) }} />
+      <span className="absolute text-[11px] font-bold" style={{ left: pct(SOLD_X, 400), top: `calc(${pct(SOLD_Y, 200)} + 12px)`, transform: "translateX(-50%)" }}>
+        You sold
+      </span>
+      <span className="absolute text-[11px] text-muted-foreground" style={{ left: pct(PEAK_X, 400), top: `calc(${pct(PEAK_Y, 200)} - 20px)`, transform: "translateX(-50%)" }}>
+        Peak
+      </span>
+      <span className="fx-pop absolute bg-destructive px-2 py-1 text-xs font-bold whitespace-nowrap text-white" style={{ right: "calc(7.5% + 10px)", top: `calc(${pct((PEAK_Y + SOLD_Y) / 2, 200)} - 12px)` }}>
+        Left on the table
+      </span>
+    </div>
+  );
+}

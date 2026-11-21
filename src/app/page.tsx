@@ -3,20 +3,20 @@ import { Bot, FlaskConical, Wallet } from "lucide-react";
 import Link from "next/link";
 import { BandDots } from "@/components/landing/BandDots";
 import { Faq } from "@/components/landing/Faq";
-import { HindsightVisual, LeverageVisual, ShareVisual } from "@/components/landing/FeatureVisuals";
+import { FumbleVisual, HindsightVisual, LeverageVisual, ShareVisual } from "@/components/landing/FeatureVisuals";
 import { HeroChart } from "@/components/landing/HeroChart";
-import { LandingDemo } from "@/components/landing/LandingDemo";
 import { LineCard } from "@/components/landing/LineCard";
 import { RotatingWord } from "@/components/landing/RotatingWord";
 import { RevealObserver } from "@/components/landing/RevealObserver";
 import { SmoothScroll } from "@/components/landing/SmoothScroll";
 import { StepVisual } from "@/components/landing/StepVisuals";
 import { WaitlistButton } from "@/components/landing/WaitlistButton";
+import { FumbleTool } from "@/components/FumbleTool";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SpotlightText } from "@/components/SpotlightText";
 import { SiteHeader } from "@/components/SiteHeader";
 import { CURRENCIES } from "@/lib/fxCurrencies.ts";
-import { demoChecks, heroChecks } from "@/lib/landingData.ts";
+import { heroChecks } from "@/lib/landingData.ts";
 import { limitsFor } from "@/lib/limits.ts";
 import { DESCRIPTION, pageMeta, SITE_NAME, TAGLINE } from "@/lib/site.ts";
 
@@ -91,7 +91,6 @@ const faqs = (anon: number, user: number) => [
 ];
 
 export default function LandingPage() {
-  const checks = demoChecks();
   const hero = heroChecks();
   const anon = limitsFor("anonymous").day;
   const user = limitsFor("user").day;
@@ -124,7 +123,7 @@ export default function LandingPage() {
             />
             <div className="enter-up flex flex-wrap items-center gap-x-6 gap-y-3" style={{ "--base": "650ms", "--i": 2 } as React.CSSProperties}>
               <WaitlistButton />
-              <a href="#demo" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+              <a href="#fumble" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
                 Try it first
               </a>
             </div>
@@ -135,18 +134,24 @@ export default function LandingPage() {
           {hero.length > 0 && <HeroChart checks={hero} />}
         </section>
 
-        {/* The live demo, on a band that runs the full width of the screen: a dot grid with a sweep of light across it
+        {/* The fumble checker, on a band that runs the full width of the screen: a dot grid with a sweep of light across it
             and hairlines top and bottom, so it reads as a place of its own. */}
-        <section id="demo" className="relative isolate scroll-mt-20 overflow-hidden border-y border-border py-14 sm:py-24">
+        <section id="fumble" className="relative isolate scroll-mt-20 overflow-hidden border-y border-border py-14 sm:py-24">
           <div aria-hidden className="band-surface pointer-events-none absolute inset-0 -z-10" />
           <BandDots className="pointer-events-none absolute -z-10" />
           <div className={section}>
-            <div className="mb-6 flex max-w-2xl flex-col gap-2 sm:mb-8" data-reveal-on-scroll style={later()}>
-              <h2 className={h2}>What if you had bought it back then?</h2>
-              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Pick a kind of asset and an example." />
-            </div>
-            <div data-reveal-on-scroll style={later(120)}>
-              <LandingDemo checks={checks} />
+            <div data-reveal-on-scroll style={later()}>
+              <FumbleTool
+                launch
+                className="mt-0"
+                intro={
+                  <div className="flex max-w-2xl flex-col gap-2">
+                    <h2 className={h2}>What did you sell too early?</h2>
+                    <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table." />
+                  </div>
+                }
+                aside={<FumbleVisual />}
+              />
             </div>
           </div>
         </section>
