@@ -7,7 +7,7 @@ import { SpotlightText } from "@/components/SpotlightText";
 import { pageMeta } from "@/lib/site.ts";
 
 const TITLE = "Fumble check: what your Solana sells left on the table";
-const DESCRIPTION = "Paste a Solana wallet. See every coin it sold, and how much more those coins were worth at their highest price afterwards.";
+const DESCRIPTION = "Paste a Solana wallet. See every coin it sold, how much more those coins were worth afterwards, and how much profit it gave back.";
 
 export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} | Replay`, description: DESCRIPTION, path: "/fumble" });
 
@@ -20,7 +20,7 @@ export default function FumblePage() {
         <h1 className="font-heading text-4xl font-medium tracking-tight sm:text-6xl">
           <RollText text="Fumble check" introDelay={60} />
         </h1>
-        <SpotlightText className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table." />
+        <SpotlightText className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table, and how much of its profit it gave back." />
         <FumbleTool />
       </main>
 

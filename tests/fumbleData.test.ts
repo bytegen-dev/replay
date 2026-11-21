@@ -312,8 +312,10 @@ test("a whole wallet: its sells are found, the ones with prices get a fumble, th
   assert.equal(result.sells.length, 3);
   assert.deepEqual(result.sells.map((s) => s.fumble.status), ["no-price", "no-price", "ok"]); // oldest first
   assert.equal(result.unpriced, 2);
-  assert.equal(new Set(priced).size, 3, "one price lookup per token");
-  assert.equal(priced.length, 3);
+  const coins = priced.filter((m) => m !== SOL_MINT);
+  assert.equal(new Set(coins).size, 3, "one price lookup per token");
+  assert.equal(coins.length, 3);
+  assert.equal(priced.length - coins.length, 1, "and one for the SOL price, shared by all the positions");
   assert.ok(result.totalFumbleUsd > 3250 && result.totalFumbleUsd < 3450, `total ${result.totalFumbleUsd}`);
   assert.equal(result.worst?.lot.sell.mint, WIN);
   assert.equal(result.worst?.source, "fake");
@@ -327,7 +329,7 @@ test("a sale that cannot be valued because there is no SOL price is unknown, and
   let lookups = 0;
   const result = await scanWallet(WALLET, {
     history,
-    prices: async () => (lookups++, { candles: winPrices.candles, source: "fake" }),
+    prices: async (mint) => (mint !== SOL_MINT && lookups++, { candles: winPrices.candles, source: "fake" }),
     solUsd: async () => null,
     now: () => 1_795_300_000,
   });

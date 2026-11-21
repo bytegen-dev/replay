@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
-import { buildRows, explorerUrl, fumbleCell, makeEventReader, shortMint, times, usd, type Row, type StreamEvent } from "@/lib/fumble/view.ts";
+import { buildRows, explorerUrl, fumbleCell, makeEventReader, roundTripCell, shortMint, sol, times, usd, type Row, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -121,7 +121,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   }, [scan, launch]);
 
   const scanning = status === "scanning";
-  const rows = trades ? buildRows(trades.trades, result?.sells ?? null) : [];
+  const rows = trades ? buildRows(trades.trades, result?.sells ?? null, result?.positions ?? null) : [];
 
   return (
     <div className={cn("flex flex-col gap-6", className ?? "mt-6")}>
@@ -190,14 +190,22 @@ function ProgressLine({ progress, hasTrades }: { progress: Progress | null; hasT
 
 function Summary({ trades, result }: { trades: ApiTrades; result: ApiResult | null }) {
   const unknown = result?.unknown ?? 0;
+  const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
   const cov = trades.coverage;
+  const big = "font-heading text-4xl font-bold tabular-nums sm:text-5xl";
   return (
     <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card p-5 sm:p-6">
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
-        <div>
-          <p className="text-sm text-muted-foreground">Fumbled</p>
-          {result ? <p className="font-heading text-4xl font-bold tabular-nums sm:text-6xl">{usd(result.totalFumbleUsd)}</p> : <p className="font-heading text-4xl font-bold text-muted-foreground sm:text-6xl">…</p>}
+      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
+        <div className="flex flex-wrap gap-x-12 gap-y-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Fumbled</p>
+            {result ? <p className={big}>{usd(result.totalFumbleUsd)}</p> : <p className={cn(big, "text-muted-foreground")}>&hellip;</p>}
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Gave back</p>
+            {result ? <p className={big}>{result.positions.length ? sol(result.totalRoundTripSol) : "\u2014"}</p> : <p className={cn(big, "text-muted-foreground")}>&hellip;</p>}
+          </div>
         </div>
         <dl className="flex gap-8 text-sm">
           <div>
@@ -210,11 +218,15 @@ function Summary({ trades, result }: { trades: ApiTrades; result: ApiResult | nu
           </div>
         </dl>
       </div>
-      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-muted-foreground">What the coins sold would be worth at their highest price since the sale, minus what they sold for.</p>
-      {(unknown > 0 || !cov.complete || result?.ranOutOfTime) && (
+      <div className="mt-4 flex max-w-2xl flex-col gap-1 text-sm leading-relaxed text-muted-foreground">
+        <p>Fumbled: what the coins sold would be worth at their highest price since the sale, minus what they sold for.</p>
+        <p>Gave back: the most profit a coin showed while it was held, minus the profit kept.</p>
+      </div>
+      {(unknown > 0 || unknownPositions > 0 || !cov.complete || result?.ranOutOfTime) && (
         <ul className="mt-3 flex flex-col gap-1 text-sm text-muted-foreground">
           {!cov.complete && cov.oldest && <li>Trades since {when(cov.oldest)}. Older ones weren&rsquo;t read.</li>}
           {unknown > 0 && <li>{unknown === 1 ? "1 sell has" : `${unknown} sells have`} no price history, so {unknown === 1 ? "it isn't" : "they aren't"} counted.</li>}
+          {unknownPositions > 0 && <li>{unknownPositions === 1 ? "1 position has" : `${unknownPositions} positions have`} no price history, so {unknownPositions === 1 ? "its" : "their"} round-trip isn&rsquo;t counted.</li>}
           {result?.ranOutOfTime && <li>The scan ran out of time before pricing every coin.</li>}
         </ul>
       )}
@@ -226,11 +238,12 @@ function TradeTable({ rows, done }: { rows: Row[]; done: boolean }) {
   if (rows.length === 0) return <p className="text-sm text-muted-foreground">No token trades of 0.1 SOL or more in the part of the history that was read.</p>;
   return (
     <section aria-label="Trades">
-      <div role="row" className="hidden grid-cols-[10rem_minmax(0,1fr)_7rem_12rem] gap-x-4 border-b border-border px-3 pb-2 text-sm text-muted-foreground sm:grid">
+      <div role="row" className="hidden grid-cols-[10rem_minmax(0,1fr)_7rem_12rem_10rem] gap-x-4 border-b border-border px-3 pb-2 text-sm text-muted-foreground sm:grid">
         <span>When</span>
         <span>Coin</span>
         <span className="text-right">Size</span>
         <span className="text-right">Fumble</span>
+        <span className="text-right">Gave back</span>
       </div>
       <ul>
         {rows.map((r) => (
@@ -244,8 +257,9 @@ function TradeTable({ rows, done }: { rows: Row[]; done: boolean }) {
 function TradeRow({ row, done }: { row: Row; done: boolean }) {
   const { trade } = row;
   const cell = fumbleCell(row, done);
+  const trip = roundTripCell(row);
   return (
-    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 border-b border-border/60 px-3 py-3 text-sm sm:grid-cols-[10rem_minmax(0,1fr)_7rem_12rem] sm:items-center">
+    <li className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 border-b border-border/60 px-3 py-3 text-sm sm:grid-cols-[10rem_minmax(0,1fr)_7rem_12rem_10rem] sm:items-center">
       <span className="flex min-w-0 items-center gap-2 sm:order-2">
         <span className={cn("inline-flex h-5 w-10 shrink-0 items-center justify-center border text-xs font-bold", trade.side === "buy" ? "border-primary text-primary" : "border-foreground/40 text-foreground")}>{trade.side === "buy" ? "Buy" : "Sell"}</span>
         <a href={explorerUrl(trade.token)} target="_blank" rel="noreferrer" className="truncate font-bold underline-offset-4 hover:text-primary hover:underline" title={trade.token}>
@@ -270,6 +284,22 @@ function TradeRow({ row, done }: { row: Row; done: boolean }) {
       </span>
       <span className="text-muted-foreground sm:order-1">{when(trade.time)}</span>
       <span className="text-right tabular-nums sm:order-3">{trade.sol.toFixed(2)} SOL</span>
+      {trip.kind !== "none" && (
+        <span className="col-span-2 text-right sm:order-5 sm:col-span-1">
+          {trip.kind === "kept" && <span className="text-muted-foreground">Sold near the peak</span>}
+          {trip.kind === "unknown" && (
+            <span className="text-muted-foreground" title={trip.reason}>
+              No price data
+            </span>
+          )}
+          {trip.kind === "gave-back" && (
+            <>
+              <span className="font-bold tabular-nums text-destructive">{sol(trip.sol)}</span>
+              <span className="ml-2 text-xs text-muted-foreground">{Math.round(trip.share * 100)}% of its profit</span>
+            </>
+          )}
+        </span>
+      )}
     </li>
   );
 }

@@ -1,4 +1,4 @@
-import type { ScanProgress, ScanResult, ScannedSell, TradeList } from "./scan.ts";
+import type { ScanProgress, ScanResult, ScannedPosition, ScannedSell, TradeList } from "./scan.ts";
 import type { Trade } from "./types.ts";
 
 /**
@@ -63,6 +63,34 @@ export function toApiTrades(wallet: string, t: TradeList): ApiTrades {
 /** What a scan sends while it runs: progress, and once the history is read the trade list. */
 export type ScanEvent = ({ type: "progress" } & ScanProgress) | { type: "trades"; data: ApiTrades };
 
+/** One closed position: a coin bought and then sold out of, with the profit it gave back. Money is SOL; times are seconds since 1970. */
+export interface ApiPosition {
+  token: string;
+  openedAt: number;
+  closedAt: number;
+  /** The sell that closed it (the signature of a trade in the list), so the page can show the result on that row. */
+  closedBy: string;
+  costSol: number;
+  proceedsSol: number;
+  status: "ok" | "unknown";
+  reason?: string;
+  /** The profit kept, the most it ever showed, and when. */
+  finalProfitSol?: number;
+  peakProfitSol?: number;
+  peakAt?: number;
+  /** The profit given back, and the share of the peak profit that was (0 to 1). */
+  roundTripSol?: number;
+  gaveBack?: number;
+  source?: string | null;
+}
+
+export function toApiPosition(p: ScannedPosition): ApiPosition {
+  const { position: pos, roundTrip: rt } = p;
+  const base = { token: pos.mint, openedAt: pos.openedAt, closedAt: pos.closedAt, closedBy: pos.closedBy, costSol: pos.costSol, proceedsSol: pos.proceedsSol };
+  if (rt.status !== "ok") return { ...base, status: "unknown", reason: rt.reason };
+  return { ...base, status: "ok", finalProfitSol: rt.finalProfitSol, peakProfitSol: rt.peakProfitSol, peakAt: rt.peakAt, roundTripSol: rt.roundTripSol, gaveBack: rt.gaveBack, source: p.source };
+}
+
 export interface ApiResult extends ApiTrades {
   scannedAt: number;
   /** The sells with their fumbles. Measured sells first, biggest fumble first; then the ones with no price history, oldest first. */
@@ -70,6 +98,9 @@ export interface ApiResult extends ApiTrades {
   measured: number;
   unknown: number;
   totalFumbleUsd: number;
+  /** The closed positions: measured ones first, biggest round-trip first, then the ones with no price history, oldest first. */
+  positions: ApiPosition[];
+  totalRoundTripSol: number;
   ranOutOfTime: boolean;
 }
 
@@ -89,6 +120,12 @@ export function toApiSell(s: ScannedSell): ApiSell {
   return { ...base, status: "ok", soldUsd: fumble.soldUsd, peakAt: fumble.peakAt, peakMultiple: fumble.peakMultiple, fumbleUsd: fumble.fumbleUsd, source: s.source };
 }
 
+function orderPositions(all: ApiPosition[]): ApiPosition[] {
+  const measured = all.filter((p) => p.status === "ok").sort((a, b) => b.roundTripSol! - a.roundTripSol!);
+  const unknown = all.filter((p) => p.status === "unknown").sort((a, b) => a.openedAt - b.openedAt);
+  return [...measured, ...unknown];
+}
+
 export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
   const all = r.sells.map(toApiSell);
   const measured = all.filter((s) => s.status === "ok").sort((a, b) => b.fumbleUsd! - a.fumbleUsd!);
@@ -104,6 +141,8 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     measured: measured.length,
     unknown: unknown.length,
     totalFumbleUsd: r.totalFumbleUsd,
+    positions: orderPositions(r.positions.map(toApiPosition)),
+    totalRoundTripSol: r.totalRoundTripSol,
     ranOutOfTime: r.ranOutOfTime,
   };
 }

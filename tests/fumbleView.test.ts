@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { ApiSell, ApiTrade } from "../src/lib/fumble/service.ts";
-import { buildRows, fumbleCell, makeEventReader, shortMint, times, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
+import type { ApiPosition, ApiSell, ApiTrade } from "../src/lib/fumble/service.ts";
+import { buildRows, fumbleCell, makeEventReader, roundTripCell, shortMint, sol, times, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
 
 const trade = (signature: string, side: "buy" | "sell", time = 1): ApiTrade => ({ signature, side, token: "M".repeat(44), tokens: 100, sol: 1, time });
 const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
@@ -65,4 +65,31 @@ test("numbers are written the way a person reads them", () => {
   assert.equal(times(1.174), "1.17x");
   assert.equal(shortMint("9msk9ehERMECbvsp3mvNabSXy2k7GNcrxJgdWfh7pump"), "9msk…pump");
   assert.equal(shortMint("short"), "short");
+});
+
+const position = (closedBy: string, extra: Partial<ApiPosition> = {}): ApiPosition => ({ token: "M".repeat(44), openedAt: 1, closedAt: 2, closedBy, costSol: 1, proceedsSol: 1.5, status: "ok", finalProfitSol: 0.5, peakProfitSol: 9, peakAt: 1, roundTripSol: 8.5, gaveBack: 8.5 / 9, ...extra });
+
+test("the position a sell closed is put on that sell's row, and only that row", () => {
+  const rows = buildRows([trade("a", "sell"), trade("b", "buy"), trade("c", "sell")], [sell("a"), sell("c")], [position("c")]);
+  assert.deepEqual(rows.map((r) => r.position?.closedBy ?? null), [null, null, "c"]);
+  assert.deepEqual(buildRows([trade("a", "sell")], [sell("a")]).map((r) => r.position), [null], "no positions yet: nothing on any row");
+});
+
+test("what the gave-back column says: the round-trip, nothing near the peak, unknown, or nothing for rows that closed no position", () => {
+  const [plain, big, small, unknown] = buildRows(
+    [trade("p", "sell"), trade("b", "sell"), trade("s", "sell"), trade("u", "sell")],
+    null,
+    [position("b"), position("s", { roundTripSol: 0.01, gaveBack: 0.1 }), position("u", { status: "unknown", reason: "no price history for this token" })],
+  );
+  assert.deepEqual(roundTripCell(plain), { kind: "none" });
+  assert.equal(roundTripCell(big).kind, "gave-back");
+  assert.deepEqual(roundTripCell(big), { kind: "gave-back", sol: 8.5, share: 8.5 / 9 });
+  assert.deepEqual(roundTripCell(small), { kind: "kept" });
+  assert.deepEqual(roundTripCell(unknown), { kind: "unknown", reason: "no price history for this token" });
+});
+
+test("SOL amounts are written with sensible digits", () => {
+  assert.equal(sol(8.5), "8.50 SOL");
+  assert.equal(sol(12.46), "12.5 SOL");
+  assert.equal(sol(250.4), "250 SOL");
 });

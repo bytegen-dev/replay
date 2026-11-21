@@ -31,6 +31,8 @@ const empty = (wallet: string): ScanResult => ({
   dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 },
   trades: 0,
   tradeList: [],
+  positions: [],
+  totalRoundTripSol: 0,
   sells: [],
   unpriced: 0,
   totalFumbleUsd: 0,
@@ -150,18 +152,16 @@ test("the cache is bounded: the oldest scan goes when it is full", async () => {
 
 /* ------------------------------- the scan's time limit ------------------------------- */
 
-test("when time runs out the tokens not yet priced are reported unknown, and the biggest sells are priced first", async () => {
+test("when time runs out the tokens not yet priced are reported unknown, and the coins with the most money in them are priced first", async () => {
   const order: string[] = [];
   let calls = 0;
   const result = await realScan(WALLET, {
-    prices: async (mint) => (order.push(mint), { candles: winPrices.candles, source: "fake" }),
-    outOfTime: () => calls++ >= 1, // time is up after the first token
+    prices: async (mint) => (mint !== SOL_MINT && order.push(mint), { candles: winPrices.candles, source: "fake" }),
+    outOfTime: () => calls++ >= 2, // asked once before the SOL price and once before each coin: time is up after the first coin
   });
   assert.equal(order.length, 1);
   assert.equal(result.ranOutOfTime, true);
-  const sellsByMint = new Map(result.sells.map((s) => [s.lot.sell.mint, s]));
-  const priced = sellsByMint.get(order[0])!;
-  assert.ok(priced.lot.sell.sol >= Math.max(...result.sells.map((s) => s.lot.sell.sol)) - 1e-9, "the first token priced has the biggest sell");
+  assert.equal(order[0], WIN, "the first coin priced is the one with the most money in it: a 27 SOL position, bigger than any single sale");
   const late = result.sells.filter((s) => s.lot.sell.mint !== order[0]);
   assert.equal(late.length, 2);
   assert.ok(late.every((s) => s.fumble.status === "no-price" && /ran out of time/.test((s.fumble as { reason: string }).reason)));
@@ -221,4 +221,54 @@ test("someone who joins a scan that already sent its trade list is sent it strai
   assert.deepEqual(seen, ["trades"]);
   gate.resolve();
   await Promise.all([first, second]);
+});
+
+/* ------------------------------- round-trips in the scan ------------------------------- */
+
+import { SOL_MINT } from "../src/lib/fumble/prices.ts";
+
+const priceSol = (m: string) => (m === SOL_MINT ? { candles: [{ t: 0, h: 67, l: 67, c: 67 }], source: "fake" } : m === WIN ? { candles: winPrices.candles, source: "fake" } : null);
+
+test("the scan finds the wallet's closed positions and measures the round-trip of the ones it can price", async () => {
+  const lookups: string[] = [];
+  const result = await realScan(WALLET, { prices: async (m) => (lookups.push(m), priceSol(m)) });
+  assert.equal(result.positions.length, 2, "the coin bought 20 times and the one bought once; the third sale has no buy in the history");
+  const win = result.positions.find((p) => p.position.mint === WIN)!;
+  assert.equal(win.roundTrip.status, "ok");
+  if (win.roundTrip.status === "ok") {
+    assert.ok(win.roundTrip.finalProfitSol < -15, `final ${win.roundTrip.finalProfitSol}`); // paid about 27 SOL, got 6.86 back
+    assert.equal(win.roundTrip.roundTripSol, win.roundTrip.peakProfitSol, "it ended at a loss, so all of its peak profit was given back");
+  }
+  const other = result.positions.find((p) => p.position.mint !== WIN)!;
+  assert.equal(other.roundTrip.status, "no-price");
+  assert.ok(result.totalRoundTripSol >= 0);
+  assert.equal(lookups.filter((m) => m === SOL_MINT).length, 1, "the SOL price is fetched once for all positions");
+  assert.equal(new Set(lookups.filter((m) => m !== SOL_MINT)).size, lookups.filter((m) => m !== SOL_MINT).length, "one lookup per coin, shared by its fumbles and its round-trips");
+});
+
+test("a coin is priced from its first buy, so the hold is covered, not only what came after the sale", async () => {
+  const from: Record<string, number> = {};
+  const result = await realScan(WALLET, { prices: async (m, f) => ((from[m] = f), priceSol(m)) });
+  const win = result.positions.find((p) => p.position.mint === WIN)!;
+  assert.equal(from[WIN], win.position.openedAt);
+  assert.ok(win.position.openedAt < result.sells.find((s) => s.lot.sell.mint === WIN)!.lot.sell.time);
+});
+
+test("positions of coins not priced in time are unknown, with the reason", async () => {
+  const result = await realScan(WALLET, { prices: async (m) => priceSol(m), outOfTime: () => true });
+  assert.ok(result.positions.length > 0);
+  assert.ok(result.positions.every((p) => p.roundTrip.status === "no-price" && /ran out of time/.test((p.roundTrip as { reason: string }).reason)));
+  assert.equal(result.totalRoundTripSol, 0);
+});
+
+test("the response lists measured positions first, biggest round-trip first, then the unknown ones", async () => {
+  const api = toApiResult(await realScan(WALLET, { prices: async (m) => priceSol(m) }), 1);
+  assert.deepEqual(api.positions.map((p) => p.status), ["ok", "unknown"]);
+  const [ok] = api.positions;
+  assert.equal(ok.token, WIN);
+  assert.ok(ok.roundTripSol! >= 0 && ok.peakProfitSol! >= ok.roundTripSol! && ok.gaveBack! >= 0 && ok.gaveBack! <= 1);
+  assert.ok(api.trades.some((t) => t.signature === ok.closedBy), "the position's closing sell is one of the listed trades");
+  assert.equal(api.positions[1].roundTripSol, undefined);
+  assert.equal(api.totalRoundTripSol, ok.roundTripSol);
+  assert.deepEqual(JSON.parse(JSON.stringify(api)), api);
 });

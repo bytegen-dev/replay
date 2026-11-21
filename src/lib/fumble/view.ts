@@ -1,4 +1,4 @@
-import type { ApiResult, ApiSell, ApiTrade, ScanEvent } from "./service.ts";
+import type { ApiPosition, ApiResult, ApiSell, ApiTrade, ScanEvent } from "./service.ts";
 
 /**
  * What the Fumble page needs that is not drawing: reading the scan's stream, putting each trade next to its fumble, and writing
@@ -44,12 +44,15 @@ export interface Row {
   trade: ApiTrade;
   /** The sell's fumble, once the scan has priced it. Null for buys, and for sells not priced yet. */
   sell: ApiSell | null;
+  /** The position this sell closed, once the scan has finished. Null for every other trade. */
+  position: ApiPosition | null;
 }
 
-/** The trades, in the order given, each with its sell result when there is one (matched by transaction). */
-export function buildRows(trades: ApiTrade[], sells: ApiSell[] | null): Row[] {
+/** The trades, in the order given, each with its sell result and the position it closed, when there are any (matched by transaction). */
+export function buildRows(trades: ApiTrade[], sells: ApiSell[] | null, positions: ApiPosition[] | null = null): Row[] {
   const bySignature = new Map((sells ?? []).map((s) => [s.signature, s]));
-  return trades.map((trade) => ({ trade, sell: trade.side === "sell" ? (bySignature.get(trade.signature) ?? null) : null }));
+  const closing = new Map((positions ?? []).map((p) => [p.closedBy, p]));
+  return trades.map((trade) => ({ trade, sell: trade.side === "sell" ? (bySignature.get(trade.signature) ?? null) : null, position: closing.get(trade.signature) ?? null }));
 }
 
 /** A token address shortened to its ends: 9msk…pump. */
@@ -86,6 +89,29 @@ export function fumbleCell(row: Row, scanDone: boolean): FumbleCell {
   if (s.status === "unknown") return { kind: "unknown", reason: s.reason ?? "No price history." };
   if ((s.fumbleUsd ?? 0) < MIN_FUMBLE_USD) return { kind: "sold-well" };
   return { kind: "fumbled", usd: s.fumbleUsd!, peakMultiple: s.peakMultiple! };
+}
+
+/** What the "gave back" column says for a row. Only the sell that closed a position has one. */
+export type RoundTripCell =
+  | { kind: "none" }
+  | { kind: "gave-back"; sol: number; share: number }
+  | { kind: "kept" } // the position was closed at or near its peak profit
+  | { kind: "unknown"; reason: string };
+
+/** Under this much SOL a round-trip is rounding. */
+export const MIN_ROUND_TRIP_SOL = 0.05;
+
+export function roundTripCell(row: Row): RoundTripCell {
+  const p = row.position;
+  if (!p) return { kind: "none" };
+  if (p.status === "unknown") return { kind: "unknown", reason: p.reason ?? "No price history." };
+  if ((p.roundTripSol ?? 0) < MIN_ROUND_TRIP_SOL) return { kind: "kept" };
+  return { kind: "gave-back", sol: p.roundTripSol!, share: p.gaveBack ?? 0 };
+}
+
+/** SOL to two decimals under ten, one decimal from ten up, whole from a hundred. */
+export function sol(x: number): string {
+  return `${x >= 100 ? Math.round(x) : x.toFixed(x >= 10 ? 1 : 2)} SOL`;
 }
 
 export const explorerUrl = (mint: string) => `https://dexscreener.com/solana/${mint}`;
