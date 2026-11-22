@@ -1,5 +1,5 @@
 import type { TokenInfo } from "./tokens.ts";
-import type { ScanProgress, ScanResult, ScannedPosition, ScannedSell, TradeList } from "./scan.ts";
+import type { HistorySummary, ScanProgress, ScanResult, ScannedPosition, ScannedSell, TradeList } from "./scan.ts";
 import type { Trade } from "./types.ts";
 
 /**
@@ -50,7 +50,7 @@ export interface ApiTrade {
 export interface ApiTrades {
   wallet: string;
   /** How much of the wallet's history was read. When `complete` is false only the newest part was, back to `oldest`. */
-  coverage: { transactions: number; pages: number; complete: boolean; oldest: number | null };
+  coverage: HistorySummary;
   /** Token-for-SOL trades found, of any size. */
   tradeCount: number;
   /** Transactions left out because they were not a token-for-SOL swap, by why. */
@@ -182,7 +182,7 @@ export class BusyError extends Error {
 }
 
 export interface ScannerOptions {
-  run: (wallet: string, emit: (e: ScanEvent) => void) => Promise<ScanResult>;
+  run: (wallet: string, emit: (e: ScanEvent) => void, opts: { more: boolean }) => Promise<ScanResult>;
   /** Seconds since 1970. */
   now?: () => number;
   /** How long a finished scan is reused, in seconds. Default 20 minutes. */
@@ -216,11 +216,14 @@ export function createScanner(opts: ScannerOptions) {
    * Scans a wallet, or returns the fresh scan already done, or joins the one already running for it (and so also gets its events,
    * including the trade list if that was already sent). `cached` says whether the result came from a previous scan.
    */
-  async function scan(wallet: string, onEvent?: (e: ScanEvent) => void): Promise<{ result: ApiResult; cached: boolean }> {
-    const hit = peek(wallet);
+  async function scan(wallet: string, onEvent?: (e: ScanEvent) => void, scanOpts: { more?: boolean } = {}): Promise<{ result: ApiResult; cached: boolean }> {
+    const more = scanOpts.more === true;
+    // Reading further back is new work: it never takes a finished scan, and it runs apart from an ordinary scan of the same wallet.
+    const key = more ? `${wallet}#more` : wallet;
+    const hit = more ? null : peek(wallet);
     if (hit) return { result: hit, cached: true };
 
-    const joined = running.get(wallet);
+    const joined = running.get(key);
     if (joined) {
       if (onEvent) {
         if (joined.trades) onEvent(joined.trades);
@@ -239,16 +242,16 @@ export function createScanner(opts: ScannerOptions) {
     };
     entry.promise = (async () => {
       try {
-        const raw = await opts.run(wallet, emit);
+        const raw = await opts.run(wallet, emit, { more });
         const result = toApiResult(raw, now());
         cache.set(wallet, result);
         if (cache.size > maxCached) cache.delete(cache.keys().next().value as string); // the oldest entry goes first
         return result;
       } finally {
-        running.delete(wallet);
+        running.delete(key);
       }
     })();
-    running.set(wallet, entry);
+    running.set(key, entry);
     return { result: await entry.promise, cached: false };
   }
 

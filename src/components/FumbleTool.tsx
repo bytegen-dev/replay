@@ -38,7 +38,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const [result, setResult] = useState<ApiResult | null>(null);
   const abort = useRef<AbortController | null>(null);
 
-  const scan = useCallback(async (wallet: string) => {
+  const scan = useCallback(async (wallet: string, more = false) => {
     abort.current?.abort();
     const ctl = new AbortController();
     abort.current = ctl;
@@ -67,7 +67,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     });
 
     try {
-      const res = await fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet }), signal: ctl.signal });
+      const res = await fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, ...(more ? { more: true } : {}) }), signal: ctl.signal });
       if (!res.ok || !res.body) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
         return fail(j?.error ?? "The scan could not start. Try again shortly.");
@@ -167,7 +167,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
 
       {trades && (
         <>
-          <Summary trades={trades} result={result} />
+          <Summary trades={trades} result={result} onMore={() => void scan(trades.wallet, true)} />
           <TradeTable rows={rows} tokens={trades.tokens} pnl={trades.pnl} done={status === "done"} />
         </>
       )}
@@ -203,7 +203,7 @@ function Stat({ label, dollars, sols, pending, empty, signed, about, className }
   );
 }
 
-function Summary({ trades, result }: { trades: ApiTrades; result: ApiResult | null }) {
+function Summary({ trades, result, onMore }: { trades: ApiTrades; result: ApiResult | null; onMore?: () => void }) {
   const unknown = result?.unknown ?? 0;
   const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
@@ -239,6 +239,14 @@ function Summary({ trades, result }: { trades: ApiTrades; result: ApiResult | nu
         {notes.map((n) => (
           <p key={n}>{n}</p>
         ))}
+        {/* The history is saved and stopped short of the wallet's first trade: another scan reads on from there. Only once this scan has finished. */}
+        {result && cov.extendable && onMore && (
+          <p>
+            <button type="button" onClick={onMore} className="underline underline-offset-4 transition-colors hover:text-primary">
+              Scan further back
+            </button>
+          </p>
+        )}
       </div>
     </section>
   );

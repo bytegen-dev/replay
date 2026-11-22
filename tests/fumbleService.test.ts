@@ -437,3 +437,19 @@ test("the per-sale lookup is still the fallback when the series cannot give a pr
   assert.ok(hourly >= 1);
   assert.ok(result.sells.some((s) => s.fumble.status === "ok"));
 });
+
+test("reading further back never takes a cached scan and runs apart from an ordinary one", async () => {
+  const runs: boolean[] = [];
+  const scanner = createScanner({
+    run: async (wallet, _emit, opts) => {
+      runs.push(opts.more);
+      return empty(wallet);
+    },
+    now: () => 1000,
+  });
+  await scanner.scan(WALLET);
+  assert.equal((await scanner.scan(WALLET)).cached, true, "an ordinary rescan uses the cache");
+  const more = await scanner.scan(WALLET, undefined, { more: true });
+  assert.equal(more.cached, false);
+  assert.deepEqual(runs, [false, true]);
+});

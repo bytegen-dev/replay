@@ -34,6 +34,8 @@ export interface HistoryOptions {
    * cut-off, which could skip a transaction landing in the same second.
    */
   untilSignature?: string;
+  /** Start reading just older than this transaction instead of at the newest one, to continue a history that stopped part of the way back. */
+  before?: string;
   /** Called after each page with everything read so far (newest first) and how many pages that took, so a caller can show trades while the rest loads. Only for a single list: with several lists nothing is partial yet. */
   onPage?: (txs: HeliusTx[], pages: number) => void;
   /** Stop reading once this many milliseconds have passed. What was read is kept, and the history is reported incomplete. */
@@ -65,7 +67,7 @@ interface TypeRead {
 async function readType(wallet: string, type: string, opts: HistoryOptions, fetchImpl: Fetch, sleep: Sleep, outOfTime: () => boolean, onPage?: HistoryOptions["onPage"]): Promise<TypeRead> {
   const maxPages = opts.maxPages ?? 30;
   const txs: HeliusTx[] = [];
-  let before = "";
+  let before = opts.before ?? "";
   let pages = 0;
   let complete = false;
   while (pages < maxPages && !outOfTime()) {

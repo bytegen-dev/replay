@@ -11,7 +11,7 @@ export const maxDuration = 60;
 /**
  * Scan a Solana wallet for fumbles.
  *
- *   POST { "wallet": "<address>" }
+ *   POST { "wallet": "<address>", "more": true }     "more" is optional: read further back than the saved history reaches (see ApiTrades.coverage.extendable)
  *
  * Problems with the request come back as ordinary JSON errors (400 bad address, 429 too many scans, 503 not set up). A scan that
  * starts answers 200 with a stream of newline-separated JSON events:
@@ -24,15 +24,17 @@ export const maxDuration = 60;
  * Finished scans are reused for 20 minutes, so asking again is free and does not count against the limit.
  */
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { wallet?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { wallet?: unknown; more?: unknown } | null;
   const wallet = typeof body?.wallet === "string" ? body.wallet.trim() : "";
   if (!isWalletAddress(wallet)) return NextResponse.json({ error: "That doesn't look like a Solana wallet address." }, { status: 400 });
 
+  // "more" reads further back into a wallet whose history was only read part of the way: it is new work, so it never takes a cached scan.
+  const more = body?.more === true;
   const scanner = getScanner();
   if (!scanner) return NextResponse.json({ error: "The fumble scanner isn't set up yet." }, { status: 503 });
 
   // Only a scan that has to do real work costs anything, so only that counts against the limits.
-  if (!scanner.peek(wallet)) {
+  if (more || !scanner.peek(wallet)) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
     const perPerson = await hitRateLimit(`fumble:${hashSecret(ip).slice(0, 16)}`, 6, 600);
     if (!perPerson.ok) return NextResponse.json({ error: "You've scanned a lot of wallets. Try again in a few minutes." }, { status: 429, headers: { "retry-after": String(perPerson.resetSeconds) } });
@@ -52,7 +54,7 @@ export async function POST(request: Request) {
         }
       };
       try {
-        const { result, cached } = await scanner.scan(wallet, send);
+        const { result, cached } = await scanner.scan(wallet, send, { more });
         send({ type: "result", cached, data: result });
       } catch (e) {
         if (!(e instanceof BusyError)) console.error("fumble scan failed:", e instanceof Error ? e.message : "unknown error");

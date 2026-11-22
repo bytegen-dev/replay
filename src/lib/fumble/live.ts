@@ -40,10 +40,10 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   const store = sqlStore() ?? undefined;
 
   scanner = createScanner({
-    run: (wallet, emit) => {
+    run: (wallet, emit, opts) => {
       const deadline = Date.now() + budgetMs;
       return scanWallet(wallet, {
-        history: (w, onPage, until) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs, onPage, untilSignature: until }),
+        history: (w, onPage, until, before) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs, onPage, untilSignature: until, before }),
         store,
         prices,
         solUsd,
@@ -51,7 +51,7 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
         outOfTime: () => Date.now() > deadline,
         onProgress: (p) => emit({ type: "progress", ...p }),
         onTrades: (t) => emit({ type: "trades", data: toApiTrades(wallet, t) }),
-      });
+      }, opts);
     },
   });
   return scanner;

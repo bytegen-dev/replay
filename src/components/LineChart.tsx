@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { formatChartTime, niceScale, thinTicks, timeTicks } from "@/lib/charts.ts";
 
 /**
@@ -72,12 +72,18 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
   const box = useRef<HTMLDivElement>(null);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const [width, setWidth] = useState(320);
+  // False until the box has been measured. The server (and the first paint) can only guess the width, and drawing the chart at the guess
+  // makes it show short and then widen, so the drawing stays out of sight until the real width is known.
+  const [measured, setMeasured] = useState(false);
   const [hover, setHover] = useState<number | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(280, Math.floor(entry.contentRect.width))));
+    const fit = (w: number) => setWidth(Math.max(280, Math.floor(w)));
+    fit(el.getBoundingClientRect().width);
+    setMeasured(true);
+    const ro = new ResizeObserver(([entry]) => fit(entry.contentRect.width));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
@@ -171,6 +177,7 @@ export function LineChart({ series, yFormat, zeroBaseline = true, marker, withCl
         onPointerLeave={() => setHover(null)}
         onBlur={() => setHover(null)}
         onKeyDown={onKey}
+        style={measured ? undefined : { visibility: "hidden" }}
         className="block touch-pan-y text-foreground focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
       >
         <title>{ariaLabel}</title>
