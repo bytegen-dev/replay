@@ -153,3 +153,25 @@ export function tokenLabel(mint: string, tokens: Record<string, TokenInfo> | und
 }
 
 export const explorerUrl = (mint: string) => `https://dexscreener.com/solana/${mint}`;
+
+/** A wallet that does this many transactions a day (counting everything, not only trades) takes a long time to read. */
+export const VERY_ACTIVE_PER_DAY = 300;
+/** Below this many transactions read there is too little to judge by. */
+const VERY_ACTIVE_MIN_READ = 300;
+
+/**
+ * Whether the history read so far says the wallet is very active: bots and heavy traders, where one day alone can be a thousand transactions. It
+ * is judged on how many transactions were read against how far back they reach, so it shows up a few pages in. `now` is seconds since 1970.
+ */
+export function veryActive(coverage: { transactions: number; oldest: number | null }, now: number): boolean {
+  if (coverage.oldest === null || coverage.transactions < VERY_ACTIVE_MIN_READ) return false;
+  // A history that reaches back less than an hour counts as an hour, so a burst does not read as an endless rate.
+  const days = Math.max(now - coverage.oldest, 3600) / 86400;
+  return coverage.transactions / days >= VERY_ACTIVE_PER_DAY;
+}
+
+/** replay-fumble-9msk…-2026-11-22.xlsx: the wallet's ends and the day of the scan. */
+export function fumbleFileName(r: { wallet: string; scannedAt: number }): string {
+  const day = new Date(r.scannedAt * 1000).toISOString().slice(0, 10);
+  return `replay-fumble-${r.wallet.slice(0, 4)}-${r.wallet.slice(-4)}-${day}.xlsx`.toLowerCase();
+}

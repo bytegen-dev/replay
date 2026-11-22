@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
-import { buildRows, explorerUrl, fumbleCell, makeEventReader, pnlCell, roundTripCell, signedSol, signedUsd, sol, times, tokenLabel, usd, type FumbleCell, type PnlCell, type Row, type RoundTripCell, type StreamEvent } from "@/lib/fumble/view.ts";
+import { downloadFile } from "@/lib/download.ts";
+import { buildRows, explorerUrl, fumbleCell, makeEventReader, pnlCell, roundTripCell, signedSol, signedUsd, sol, times, tokenLabel, usd, veryActive, fumbleFileName, type FumbleCell, type PnlCell, type Row, type RoundTripCell, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -36,6 +37,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [trades, setTrades] = useState<ApiTrades | null>(null);
   const [result, setResult] = useState<ApiResult | null>(null);
+  // Set once the history read so far shows a wallet that does hundreds of transactions a day; it stays set for the rest of the scan.
+  const [active, setActive] = useState(false);
   const abort = useRef<AbortController | null>(null);
 
   const scan = useCallback(async (wallet: string, more = false) => {
@@ -47,6 +50,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     setProgress({ stage: "history", done: 0, total: 0 });
     setTrades(null);
     setResult(null);
+    setActive(false);
     window.history.replaceState(null, "", `/fumble?wallet=${wallet}`);
 
     let finished = false;
@@ -57,7 +61,10 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     };
     const reader = makeEventReader((e: StreamEvent) => {
       if (e.type === "progress") setProgress({ stage: e.stage, done: e.done, total: e.total });
-      else if (e.type === "trades") setTrades(e.data);
+      else if (e.type === "trades") {
+        setTrades(e.data);
+        if (veryActive(e.data.coverage, Math.floor(Date.now() / 1000))) setActive(true);
+      }
       else if (e.type === "result") {
         finished = true;
         setTrades(e.data);
@@ -160,7 +167,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                 )}
               </form>
 
-              {scanning && !launch && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} />}
+              {scanning && !launch && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} active={active} />}
         </div>
         {aside && <div className="hidden lg:order-first lg:block">{aside}</div>}
       </div>
@@ -175,7 +182,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   );
 }
 
-function ProgressLine({ progress, hasTrades, reading }: { progress: Progress | null; hasTrades: boolean; reading: boolean }) {
+function ProgressLine({ progress, hasTrades, reading, active }: { progress: Progress | null; hasTrades: boolean; reading: boolean; active: boolean }) {
   const prices = progress?.stage === "prices" && progress.total > 0;
   const read = progress?.stage === "history" && progress.done > 0 ? ` (${progress.done.toLocaleString("en-US")} transactions read)` : "";
   const label = reading ? `${hasTrades ? "Reading older trades" : "Reading trades"}${read}` : prices ? `Pricing coins, ${Math.min(progress!.done + 1, progress!.total)} of ${progress!.total}` : "Pricing coins";
@@ -183,6 +190,7 @@ function ProgressLine({ progress, hasTrades, reading }: { progress: Progress | n
   return (
     <div role="status" aria-live="polite" className="max-w-2xl">
       <p className="text-sm text-muted-foreground">{label}</p>
+      {active && <p className="mt-1 text-sm text-foreground">This wallet is very active, so this can take a while.</p>}
       <div className="mt-2 h-0.5 w-full overflow-hidden bg-border">
         <div className={cn("h-full bg-primary transition-[width] duration-500", pct === null && "w-1/3 animate-pulse")} style={pct === null ? undefined : { width: `${Math.max(pct, 4)}%` }} />
       </div>
@@ -210,6 +218,20 @@ function Summary({ trades, result, onMore }: { trades: ApiTrades; result: ApiRes
   const tracedSells = result ? result.sells.filter((x) => x.matchedTokens > 0).length : 0;
   const partial = result?.partialSells ?? 0;
   const cov = trades.coverage;
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  async function exportSheet() {
+    if (!result) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      await downloadFile("/api/fumble/export", result, fumbleFileName(result));
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "The spreadsheet could not be made. Try again.");
+    } finally {
+      setExporting(false);
+    }
+  }
   const notes = [
     !cov.complete && cov.oldest ? `Trades since ${when(cov.oldest)}. Older ones weren\u2019t read.` : null,
     partial > 0 ? `${partial === 1 ? "1 sell includes" : `${partial} sells include`} coins bought before that, so ${partial === 1 ? "its" : "their"} profit covers only part of the sale.` : null,
@@ -240,13 +262,19 @@ function Summary({ trades, result, onMore }: { trades: ApiTrades; result: ApiRes
           <p key={n}>{n}</p>
         ))}
         {/* The history is saved and stopped short of the wallet's first trade: another scan reads on from there. Only once this scan has finished. */}
-        {result && cov.extendable && onMore && (
-          <p>
-            <button type="button" onClick={onMore} className="underline underline-offset-4 transition-colors hover:text-primary">
-              Scan further back
+        {result && (
+          <p className="flex flex-wrap gap-x-5 gap-y-1">
+            {cov.extendable && onMore && (
+              <button type="button" onClick={onMore} className="underline underline-offset-4 transition-colors hover:text-primary">
+                Scan further back
+              </button>
+            )}
+            <button type="button" onClick={exportSheet} disabled={exporting} className="underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60">
+              {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
             </button>
           </p>
         )}
+        {exportError && <p className="text-destructive">{exportError}</p>}
       </div>
     </section>
   );

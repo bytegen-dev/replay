@@ -129,7 +129,19 @@ export default function LandingPage() {
               </a>
             </div>
             <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
-              Data from Yahoo Finance, CoinGecko, Birdeye.
+              Data from{" "}
+              {[
+                { name: "Yahoo Finance", href: "https://finance.yahoo.com" },
+                { name: "CoinGecko", href: "https://www.coingecko.com" },
+                { name: "Birdeye", href: "https://birdeye.so" },
+              ].map((l, i, all) => (
+                <span key={l.name}>
+                  <a href={l.href} target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-foreground hover:underline hover:decoration-primary hover:underline-offset-4">
+                    {l.name}
+                  </a>
+                  {i < all.length - 1 ? ", " : "."}
+                </span>
+              ))}
             </p>
           </div>
           {hero.length > 0 && <HeroChart checks={hero} />}
