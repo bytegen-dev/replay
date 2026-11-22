@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ApiPosition, ApiSell, ApiTrade } from "../src/lib/fumble/service.ts";
-import { buildRows, fumbleCell, makeEventReader, pnlCell, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
+import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
 
 const trade = (signature: string, side: "buy" | "sell", time = 1): ApiTrade => ({ signature, side, token: "M".repeat(44), tokens: 100, sol: 1, time });
 const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
@@ -135,4 +135,33 @@ test("the profit that came with the trade list is shown before the result, in SO
   assert.equal(pnlCell(rows[0], false, {}).kind, "pending", "no profit yet (history still being read)");
   const withResult = buildRows([trade("a", "sell")], [sell("a", { profitSol: -2, profitUsd: -134, matchedTokens: 100 })]);
   assert.deepEqual(pnlCell(withResult[0], true, early), { kind: "profit", usd: -134, sol: -2, partial: false });
+});
+
+/* ----------------------------------- recent wallets ----------------------------------- */
+
+const W1 = "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj";
+const W2 = "4cXnf2z85UiZ5cyKsPMEULq1yufAtpkatmX4j4DBZqj2";
+
+test("a scanned wallet goes to the front of the recent list, once", () => {
+  let list = rememberWallet([], W1, 100);
+  list = rememberWallet(list, W2, 200);
+  assert.deepEqual(list.map((r) => r.wallet), [W2, W1]);
+  list = rememberWallet(list, W1, 300);
+  assert.deepEqual(list.map((r) => r.wallet), [W1, W2], "scanned again: moved up, not listed twice");
+  assert.equal(list[0].at, 300);
+});
+
+test("only the latest few wallets are kept", () => {
+  let list: ReturnType<typeof rememberWallet> = [];
+  for (let i = 0; i < RECENT_MAX + 3; i++) list = rememberWallet(list, `${W1.slice(0, -2)}${String(i).padStart(2, "1")}`, i);
+  assert.equal(list.length, RECENT_MAX);
+  assert.equal(list[0].at, RECENT_MAX + 2);
+});
+
+test("what was stored is checked on the way back: junk is dropped, the rest comes back newest first", () => {
+  const raw = JSON.stringify([{ wallet: W1, at: 5 }, { wallet: "not a wallet", at: 9 }, { wallet: W2, at: 7 }, { wallet: W2 }, null, 3]);
+  assert.deepEqual(parseRecent(raw).map((r) => r.wallet), [W2, W1]);
+  assert.deepEqual(parseRecent("{not json"), []);
+  assert.deepEqual(parseRecent(null), []);
+  assert.deepEqual(parseRecent('{"wallet":"x"}'), []);
 });

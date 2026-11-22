@@ -431,6 +431,30 @@
     opacity: 1;
   }
 }
+/* The scan's progress bar: the track draws itself in from the left, and while the length of the work is not known a short bar runs along it. */
+@keyframes progress-track {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes progress-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.progress-track {
+  transform-origin: left;
+  animation: progress-track 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.progress-sweep {
+  animation: progress-sweep 1.5s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
 @keyframes lift {
   from {
     transform: translate3d(0, 16px, 0);
@@ -982,6 +1006,8 @@ html[data-motion="reduce"] :is(.fx-draw, .fx-draw-fall, .fx-area, .fx-pop, .fx-s
 
 /* Reduced motion: everything is simply there. */
 html[data-motion="reduce"] .enter-up,
+html[data-motion="reduce"] .progress-track,
+html[data-motion="reduce"] .progress-sweep,
 html[data-motion="reduce"] .enter-card,
 html[data-motion="reduce"] .word-rise {
   animation: none !important;
@@ -992,6 +1018,8 @@ html[data-motion="reduce"] [data-reveal] {
   transition: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
+  .progress-track,
+  .progress-sweep,
   .enter-up,
   .enter-card,
   .word-rise {

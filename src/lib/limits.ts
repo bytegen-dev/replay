@@ -1,3 +1,4 @@
+import { accountsOpen } from "./features.ts";
 import { userFor } from "./accounts.ts";
 import { grantFor } from "./accessStore.ts";
 import { hitRateLimit } from "./rateLimit.ts";
@@ -66,6 +67,7 @@ export function limitMessage(r: LimitResult): string {
   const wait = r.resetSeconds ?? 60;
   const when = wait >= 3600 ? `${Math.ceil(wait / 3600)} hours` : wait >= 120 ? `${Math.ceil(wait / 60)} minutes` : "a minute";
   if (r.code === "minute") return `You're going a bit fast. Wait ${when} and try again.`;
-  if (r.kind === "anonymous") return `You've used today's ${r.limit} free checks. Sign in to keep going, or come back in ${when}.`;
+  // Signing in is only offered while accounts are open; until then the allowance simply comes back.
+  if (r.kind === "anonymous") return accountsOpen() ? `You've used today's ${r.limit} free checks. Sign in to keep going, or come back in ${when}.` : `You've used today's ${r.limit} free checks. They come back in ${when}.`;
   return `You've reached today's limit of ${r.limit} checks. It comes back in ${when}.`;
 }

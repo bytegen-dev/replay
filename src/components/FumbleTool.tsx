@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
 import { downloadFile } from "@/lib/download.ts";
-import { buildRows, explorerUrl, fumbleCell, makeEventReader, pnlCell, roundTripCell, signedSol, signedUsd, sol, times, tokenLabel, usd, veryActive, fumbleFileName, type FumbleCell, type PnlCell, type Row, type RoundTripCell, type StreamEvent } from "@/lib/fumble/view.ts";
+import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
+import { buildRows, explorerUrl, fumbleCell, makeEventReader, pnlCell, roundTripCell, signedSol, signedUsd, sol, times, tokenLabel, usd, veryActive, fumbleFileName, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type FumbleCell, type PnlCell, type Row, type RoundTripCell, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -40,6 +41,18 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   // Set once the history read so far shows a wallet that does hundreds of transactions a day; it stays set for the rest of the scan.
   const [active, setActive] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  // The wallets last scanned in this browser, offered again when the page is empty. Read after the page loads, so the server's page and the first paint agree.
+  const [recent, setRecent] = useState<RecentWallet[]>([]);
+  useEffect(() => {
+    const id = setTimeout(() => {
+      try {
+        setRecent(parseRecent(localStorage.getItem(RECENT_KEY)));
+      } catch {
+        /* storage is blocked: no recent wallets */
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  }, []);
 
   const scan = useCallback(async (wallet: string, more = false) => {
     abort.current?.abort();
@@ -67,6 +80,13 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
       }
       else if (e.type === "result") {
         finished = true;
+        try {
+          const next = rememberWallet(parseRecent(localStorage.getItem(RECENT_KEY)), e.data.wallet, Math.floor(Date.now() / 1000));
+          localStorage.setItem(RECENT_KEY, JSON.stringify(next));
+          setRecent(next);
+        } catch {
+          /* storage is blocked: the wallet is simply not remembered */
+        }
         setTrades(e.data);
         setResult(e.data);
         setStatus("done");
@@ -74,7 +94,17 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     });
 
     try {
-      const res = await fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, ...(more ? { more: true } : {}) }), signal: ctl.signal });
+      const post = () => fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, ...(more ? { more: true } : {}) }), signal: ctl.signal });
+      let res = await post();
+      // The invisible bot check: pass it once (usually unseen, and good for 12 hours here and in Wayback), then scan again.
+      if (res.status === 403) {
+        const j = (await res.clone().json().catch(() => null)) as { code?: string } | null;
+        const key = j?.code === "human_required" ? await humanSiteKey() : null;
+        if (key) {
+          await passHumanCheck(key);
+          res = await post();
+        }
+      }
       if (!res.ok || !res.body) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
         return fail(j?.error ?? "The scan could not start. Try again shortly.");
@@ -95,9 +125,33 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     }
   }, []);
 
+  // As soon as a valid address is typed or pasted, a quick look asks whether it has any transactions, so an unused or mistyped wallet is turned
+  // back here and never reaches a scan. The answer belongs to the address it was asked for; a failed look says nothing, and the scan may go ahead.
+  const [looked, setLooked] = useState<{ wallet: string; status: "active" | "empty" | "unknown" } | null>(null);
+  useEffect(() => {
+    const w = value.trim();
+    if (!isWalletAddress(w)) return;
+    const ctl = new AbortController();
+    const id = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/fumble/check?wallet=${w}`, { signal: ctl.signal });
+        const j = (await res.json().catch(() => null)) as { status?: string } | null;
+        setLooked({ wallet: w, status: j?.status === "empty" ? "empty" : j?.status === "active" ? "active" : "unknown" });
+      } catch {
+        if (!ctl.signal.aborted) setLooked({ wallet: w, status: "unknown" });
+      }
+    }, 350);
+    return () => {
+      clearTimeout(id);
+      ctl.abort();
+    };
+  }, [value]);
+  const emptyWallet = looked?.status === "empty" && looked.wallet === value.trim();
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const wallet = value.trim();
+    if (emptyWallet) return;
     if (!isWalletAddress(wallet)) {
       setError("That doesn't look like a Solana wallet address.");
       setStatus("error");
@@ -132,7 +186,15 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const rows = trades ? buildRows(trades.trades, result?.sells ?? null, result?.positions ?? null) : [];
 
   return (
-    <div className={cn("flex flex-col gap-6", className ?? "mt-6")}>
+    <div
+      className={cn(
+        "flex flex-col gap-6",
+        className ?? "mt-6",
+        // Until there is something to show, the heading and field sit lower on the screen instead of leaving it empty below; they slide up when a scan starts.
+        !launch && "transition-[padding-top] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none",
+        !launch && !trades && !scanning && "pt-[16dvh]",
+      )}
+    >
       <div className={cn(aside && "cut-card pulse-hover grid items-center gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-12")}>
         <div className="flex flex-col gap-6">
           {intro}
@@ -151,21 +213,60 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                       autoComplete="off"
                       autoCapitalize="off"
                       spellCheck={false}
-                      aria-invalid={status === "error" && !trades}
+                      aria-invalid={emptyWallet || (status === "error" && !trades)}
                       className="h-full w-full rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
                     />
                   </div>
-                  <Button type="submit" disabled={scanning} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">
+                  <Button type="submit" disabled={scanning || emptyWallet} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">
                     {scanning && <MarkLoader className="size-4" />}
                     {scanning ? "Scanning" : "Scan"}
                   </Button>
                 </div>
-                {error && (
-                  <p role="alert" className="mt-2 text-sm font-bold">
-                    {error}
+                {emptyWallet ? (
+                  <p role="status" className="mt-2 text-sm font-bold">
+                    No transactions found for this wallet.
                   </p>
+                ) : (
+                  error && (
+                    <p role="alert" className="mt-2 text-sm font-bold">
+                      {error}
+                    </p>
+                  )
                 )}
               </form>
+
+              {!launch && !trades && !scanning && recent.length > 0 && (
+                <div className="flex max-w-2xl flex-wrap items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Recent</span>
+                  {recent.map((r) => (
+                    <button
+                      key={r.wallet}
+                      type="button"
+                      onClick={() => {
+                        setValue(r.wallet);
+                        void scan(r.wallet);
+                      }}
+                      className="border border-border px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+                    >
+                      {shortMint(r.wallet)}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        localStorage.removeItem(RECENT_KEY);
+                      } catch {
+                        /* nothing stored that could be removed */
+                      }
+                      setRecent([]);
+                    }}
+                    className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
 
               {scanning && !launch && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} active={active} />}
         </div>
@@ -188,11 +289,12 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
   const label = reading ? `${hasTrades ? "Reading older trades" : "Reading trades"}${read}` : prices ? `Pricing coins, ${Math.min(progress!.done + 1, progress!.total)} of ${progress!.total}` : "Pricing coins";
   const pct = !reading && prices ? Math.round((progress!.done / progress!.total) * 100) : null;
   return (
-    <div role="status" aria-live="polite" className="max-w-2xl">
+    <div role="status" aria-live="polite" className="enter-up max-w-2xl" style={{ "--base": "0ms" } as React.CSSProperties}>
       <p className="text-sm text-muted-foreground">{label}</p>
       {active && <p className="mt-1 text-sm text-foreground">This wallet is very active, so this can take a while.</p>}
-      <div className="mt-2 h-0.5 w-full overflow-hidden bg-border">
-        <div className={cn("h-full bg-primary transition-[width] duration-500", pct === null && "w-1/3 animate-pulse")} style={pct === null ? undefined : { width: `${Math.max(pct, 4)}%` }} />
+      {/* The track draws itself in from the left. While reading, how much is left is not known, so a short bar runs along it instead of a length. */}
+      <div className="progress-track mt-2 h-0.5 w-full overflow-hidden bg-border">
+        {pct === null ? <div className="progress-sweep h-full w-1/3 bg-primary" /> : <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${Math.max(pct, 4)}%` }} />}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motionReduced } from "@/lib/settings.ts";
 
 const DIGITS = "0123456789";
@@ -38,12 +38,51 @@ function startRoll(text: string, set: (s: string | null) => void, slow = 1): () 
  * right (about half a second for a month and year). The first render is plain, and people who prefer reduced motion get the plain text
  * straight away. Spaces and punctuation never move, and the page font is monospaced, so nothing jitters sideways.
  * With `introDelay` the text is hidden at first, then rolls in once that many milliseconds have passed. `wide` lists the positions of
- * characters to draw twice as wide (a letter of a heading); they stay wide while the text rolls.
+ * characters to draw twice as wide (a letter of a heading); they stay wide while the text rolls. A wide letter is stretched from its own
+ * ink, not its box, so the gaps either side match the gaps between the other letters whatever the letter is (see `wideFit`).
  */
+/**
+ * How to stretch a letter to twice its width without uneven gaps. Scaling a letter's box doubles its side gaps too, so an "e" looked right
+ * and a "c" (whose open side is all gap) did not. From the letter's measured ink: shift it back by its left gap, and make room for exactly
+ * the ink's width, and the gap before it and the gap after it are the letter's normal ones. Sizes are in em, so they follow the font size.
+ */
+function wideFit(ctx: CanvasRenderingContext2D, ch: string, fontSize: number): { shift: number; room: number } | null {
+  const m = ctx.measureText(ch);
+  const left = -m.actualBoundingBoxLeft; // the gap between the letter's origin and where its ink starts
+  const ink = m.actualBoundingBoxRight - left;
+  if (!(ink > 0) || !(fontSize > 0)) return null;
+  return { shift: left / fontSize, room: ink / fontSize };
+}
+
 export function RollText({ text, className, introDelay, introSlow = 1, wide }: { text: string; className?: string; introDelay?: number; introSlow?: number; wide?: number[] }) {
   const [rolling, setRolling] = useState<string | null>(null);
   const [hidden, setHidden] = useState(introDelay !== undefined);
   const before = useRef(text);
+  const shell = useRef<HTMLSpanElement>(null);
+  // For each wide position, how far to pull the stretched letter back and how much room to leave after it (em). Measured from the font in use.
+  const [fits, setFits] = useState<Record<number, { shift: number; room: number }>>({});
+
+  useLayoutEffect(() => {
+    const el = shell.current;
+    if (!el || !wide?.length) return;
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const ctx = document.createElement("canvas").getContext("2d");
+      const fontSize = parseFloat(cs.fontSize);
+      if (!ctx) return;
+      ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      const next: Record<number, { shift: number; room: number }> = {};
+      for (const i of wide) {
+        const fit = text[i] ? wideFit(ctx, text[i], fontSize) : null;
+        if (fit) next[i] = fit;
+      }
+      setFits(next);
+    };
+    measure();
+    // The first measure may be of a fallback font; measure again once the page's own fonts are in.
+    void document.fonts?.ready.then(measure);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [text, wide?.join(",")]);
 
   useEffect(() => {
     if (introDelay === undefined) return;
@@ -74,8 +113,18 @@ export function RollText({ text, className, introDelay, introSlow = 1, wide }: {
   return (
     <span className={className}>
       <span className="sr-only">{text}</span>
-      <span aria-hidden style={hidden ? { opacity: 0 } : undefined}>
-        {wide?.length ? [...(rolling ?? text)].map((ch, i) => (wide.includes(i) ? <span key={i} className="wide-letter">{ch}</span> : ch)) : (rolling ?? text)}
+      <span ref={shell} aria-hidden style={hidden ? { opacity: 0 } : undefined}>
+        {wide?.length
+          ? [...(rolling ?? text)].map((ch, i) =>
+              wide.includes(i) ? (
+                <span key={i} className="wide-letter" style={fits[i] ? { transform: `translateX(${-fits[i].shift}em) scaleX(2)`, marginRight: `${fits[i].room}em` } : undefined}>
+                  {ch}
+                </span>
+              ) : (
+                ch
+              ),
+            )
+          : (rolling ?? text)}
       </span>
     </span>
   );

@@ -19,11 +19,19 @@ export function SignInDialog() {
 
   useEffect(() => {
     const onOpen = (e: Event) => {
-      setReason((e as CustomEvent<{ reason?: string }>).detail?.reason ?? null);
-      setState("idle");
-      setError(null);
-      setDevLink(null);
-      setOpen(true);
+      const why = (e as CustomEvent<{ reason?: string }>).detail?.reason ?? null;
+      // Only when accounts are open: otherwise a run that hits the daily limit just shows its own message.
+      void fetch("/api/auth/me", { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((v: { canSignIn?: boolean } | null) => {
+          if (!v?.canSignIn) return;
+          setReason(why);
+          setState("idle");
+          setError(null);
+          setDevLink(null);
+          setOpen(true);
+        })
+        .catch(() => {});
     };
     window.addEventListener(OPEN_SIGNIN_EVENT, onOpen);
     return () => window.removeEventListener(OPEN_SIGNIN_EVENT, onOpen);

@@ -1,3 +1,4 @@
+import { lookWallet, rememberedLook } from "./check.ts";
 import { fetchHistory } from "./helius.ts";
 import { birdeyeProvider, firstOf, geckoProvider, sharedPrices, solPriceAt } from "./prices.ts";
 import { scanWallet } from "./scan.ts";
@@ -55,4 +56,13 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
     },
   });
   return scanner;
+}
+
+let looker: ReturnType<typeof rememberedLook> | null | undefined;
+
+/** The quick "does this wallet have any transactions" look, or null when the server has no Helius key. Shared by every request on this server. */
+export function getWalletLook(): ReturnType<typeof rememberedLook> | null {
+  if (looker !== undefined) return looker;
+  const key = process.env.HELIUS_API_KEY;
+  return (looker = key ? rememberedLook((wallet) => lookWallet(wallet, { apiKey: key })) : null);
 }

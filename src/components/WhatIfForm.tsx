@@ -18,6 +18,7 @@ import { MonthFilterBar } from "@/components/MonthFilterBar";
 import { AmountInput } from "@/components/AmountInput";
 import { CoinPicker } from "@/components/CoinPicker";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
+import { CURRENCIES_TAB } from "@/lib/features.ts";
 import { currencyByCode, isCurrency } from "@/lib/fxCurrencies.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
 import { getTiingoKey } from "@/lib/userKeys.ts";
@@ -236,7 +237,7 @@ export function WhatIfForm() {
       const q = readQuery();
       const last = shiftMonth(currentMonth(), -1);
       const tab = q.get("tab");
-      if (tab === "fx") setMode("fx");
+      if (tab === "fx" && CURRENCIES_TAB) setMode("fx");
       else if (tab === "crypto") {
         setMode("token");
         const kind = q.get("kind") === "token" ? "token" : "major";
@@ -454,7 +455,9 @@ export function WhatIfForm() {
                       ["fx", "Currencies"],
                       ["commodity", "Commodities"],
                     ] as const
-                  ).map(([v, label]) => (
+                  )
+                    .filter(([v]) => v !== "fx" || CURRENCIES_TAB)
+                    .map(([v, label]) => (
                     <ToggleGroupItem
                       key={v}
                       value={v}

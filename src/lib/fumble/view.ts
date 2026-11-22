@@ -1,3 +1,4 @@
+import { isWalletAddress } from "./helius.ts";
 import type { TokenInfo } from "./tokens.ts";
 import type { ApiPosition, ApiResult, ApiSell, ApiTrade, ScanEvent } from "./service.ts";
 
@@ -174,4 +175,33 @@ export function veryActive(coverage: { transactions: number; oldest: number | nu
 export function fumbleFileName(r: { wallet: string; scannedAt: number }): string {
   const day = new Date(r.scannedAt * 1000).toISOString().slice(0, 10);
   return `replay-fumble-${r.wallet.slice(0, 4)}-${r.wallet.slice(-4)}-${day}.xlsx`.toLowerCase();
+}
+
+/** Where the page keeps the wallets last scanned in this browser, so they can be scanned again with one tap. */
+export const RECENT_KEY = "replay-recent-wallets";
+export const RECENT_MAX = 5;
+
+export interface RecentWallet {
+  wallet: string;
+  /** Seconds since 1970. */
+  at: number;
+}
+
+/** What was stored, trusted no further than it checks out: anything that is not a wallet address with a time is dropped, newest first. */
+export function parseRecent(raw: string | null): RecentWallet[] {
+  try {
+    const list = JSON.parse(raw ?? "[]") as unknown;
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((x): x is RecentWallet => !!x && typeof x.wallet === "string" && isWalletAddress(x.wallet) && typeof x.at === "number" && Number.isFinite(x.at))
+      .sort((a, b) => b.at - a.at)
+      .slice(0, RECENT_MAX);
+  } catch {
+    return [];
+  }
+}
+
+/** The list with this wallet put first (a wallet scanned again moves up, it is not listed twice), keeping only the latest few. */
+export function rememberWallet(list: RecentWallet[], wallet: string, at: number): RecentWallet[] {
+  return [{ wallet, at }, ...list.filter((r) => r.wallet !== wallet)].slice(0, RECENT_MAX);
 }

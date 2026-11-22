@@ -18,7 +18,7 @@ test("anonymous visitors get the smallest allowance, and every number can be set
   assert.equal(limitsFor("anonymous").day, 20, "a bad value falls back to the default");
 });
 
-test("runs are counted per visitor: the day's allowance runs out, then the sign-in message appears", async () => {
+test("runs are counted per visitor: the day's allowance runs out, then it says when it comes back", async () => {
   process.env.RUN_LIMIT_ANON_DAY = "3";
   process.env.RUN_LIMIT_ANON_MINUTE = "100";
   const a = { kind: "anonymous" as const, id: "aaa" };
@@ -27,7 +27,11 @@ test("runs are counted per visitor: the day's allowance runs out, then the sign-
   const refused = await countRun(a);
   assert.equal(refused.ok, false);
   assert.equal(refused.code, "day");
+  assert.doesNotMatch(limitMessage(refused), /sign in/i, "accounts are closed, so no sign-in is offered");
+  assert.match(limitMessage(refused), /come back in/);
+  process.env.ACCOUNTS_OPEN = "1";
   assert.match(limitMessage(refused), /Sign in to keep going/);
+  delete process.env.ACCOUNTS_OPEN;
   assert.equal((await countRun(b)).ok, true, "someone else is not affected");
 });
 

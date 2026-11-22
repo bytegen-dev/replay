@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
-import { getScanner } from "@/lib/fumble/live.ts";
+import { getScanner, getWalletLook } from "@/lib/fumble/live.ts";
 import { BusyError } from "@/lib/fumble/service.ts";
+import { isHuman } from "@/lib/human.ts";
+import { whoIs } from "@/lib/limits.ts";
 import { hitRateLimit } from "@/lib/rateLimit.ts";
 import { hashSecret } from "@/lib/share.ts";
 
@@ -13,7 +15,8 @@ export const maxDuration = 60;
  *
  *   POST { "wallet": "<address>", "more": true }     "more" is optional: read further back than the saved history reaches (see ApiTrades.coverage.extendable)
  *
- * Problems with the request come back as ordinary JSON errors (400 bad address, 429 too many scans, 503 not set up). A scan that
+ * Problems with the request come back as ordinary JSON errors (400 bad address, 403 with code "human_required" when the quick bot check must be passed
+ * first (see /api/human), 422 a wallet with no transactions, 429 too many scans, 503 not set up). A scan that
  * starts answers 200 with a stream of newline-separated JSON events:
  *
  *   {"type":"progress","stage":"history"|"prices"|"done","done":2,"total":9}
@@ -33,8 +36,19 @@ export async function POST(request: Request) {
   const scanner = getScanner();
   if (!scanner) return NextResponse.json({ error: "The fumble scanner isn't set up yet." }, { status: 503 });
 
-  // Only a scan that has to do real work costs anything, so only that counts against the limits.
+  // Only a scan that has to do real work costs anything, so only that is checked and counted: a finished scan being opened again is free.
   if (more || !scanner.peek(wallet)) {
+    // Anonymous visitors have to have passed the invisible bot check first (when it is set up). It is the cheapest test, so it comes first.
+    const viewer = await whoIs(request);
+    if (viewer.kind === "anonymous" && !isHuman(request)) return NextResponse.json({ error: "Quick check needed.", code: "human_required" }, { status: 403, headers: { "cache-control": "no-store" } });
+
+    // A wallet with no transactions is turned back before anything is spent on it: no scan slot, no turn against the limits, no history read. The
+    // page has usually asked already, and the answer is remembered, so this costs no extra call then. A look that could not be made lets the scan go ahead.
+    if (!more) {
+      const status = await getWalletLook()?.(wallet).catch(() => null);
+      if (status === "empty") return NextResponse.json({ error: "No transactions found for this wallet." }, { status: 422 });
+    }
+
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
     const perPerson = await hitRateLimit(`fumble:${hashSecret(ip).slice(0, 16)}`, 6, 600);
     if (!perPerson.ok) return NextResponse.json({ error: "You've scanned a lot of wallets. Try again in a few minutes." }, { status: 429, headers: { "retry-after": String(perPerson.resetSeconds) } });
