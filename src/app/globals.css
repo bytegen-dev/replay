@@ -1177,6 +1177,7 @@ html[data-motion="reduce"] [data-slot="button"] {
     pointer-events: none;
     animation: hatch-flow 3.6s linear infinite;
     will-change: transform;
+    opacity: calc(1 - var(--hatch-gone, 0));
     background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 18.385px);
     background-position: calc(var(--p, 0) * 60px) calc(var(--p, 0) * -60px);
     /* Fades out toward the bottom and into the top-left corner (the two masks are intersected); both fades shift a little with --p. */
@@ -1190,7 +1191,7 @@ html[data-motion="reduce"] [data-slot="button"] {
   @media (min-width: 1024px) {
     body::after {
       --hatch-fade: 42%;
-      opacity: 0.85;
+      opacity: calc(0.85 * (1 - var(--hatch-gone, 0)));
     }
   }
   /* The display face is for things you read as labels or press: headings, the nav, buttons and tab switches. Data stays in the mono. */

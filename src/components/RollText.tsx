@@ -17,13 +17,13 @@ export function scramble(ch: string): string {
 }
 
 /** Runs the roll for `text`: every letter and digit flickers, then locks in from left to right. Returns a stop function. */
-function startRoll(text: string, set: (s: string | null) => void): () => void {
+function startRoll(text: string, set: (s: string | null) => void, slow = 1): () => void {
   const start = performance.now();
   const id = setInterval(() => {
     const t = performance.now() - start;
     let done = true;
     const out = [...text].map((ch, i) => {
-      if (!/[0-9A-Za-z]/.test(ch) || t >= 110 + i * 32) return ch;
+      if (!/[0-9A-Za-z]/.test(ch) || t >= (110 + i * 32) * slow) return ch;
       done = false;
       return scramble(ch);
     });
@@ -40,7 +40,7 @@ function startRoll(text: string, set: (s: string | null) => void): () => void {
  * With `introDelay` the text is hidden at first, then rolls in once that many milliseconds have passed. `wide` lists the positions of
  * characters to draw twice as wide (a letter of a heading); they stay wide while the text rolls.
  */
-export function RollText({ text, className, introDelay, wide }: { text: string; className?: string; introDelay?: number; wide?: number[] }) {
+export function RollText({ text, className, introDelay, introSlow = 1, wide }: { text: string; className?: string; introDelay?: number; introSlow?: number; wide?: number[] }) {
   const [rolling, setRolling] = useState<string | null>(null);
   const [hidden, setHidden] = useState(introDelay !== undefined);
   const before = useRef(text);
@@ -54,7 +54,7 @@ export function RollText({ text, className, introDelay, wide }: { text: string; 
     let stop = () => {};
     const id = setTimeout(() => {
       setHidden(false);
-      stop = startRoll(before.current, setRolling);
+      stop = startRoll(before.current, setRolling, introSlow);
     }, introDelay);
     return () => {
       clearTimeout(id);

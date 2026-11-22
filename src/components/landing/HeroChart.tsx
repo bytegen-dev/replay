@@ -21,7 +21,7 @@ export function HeroChart({ checks }: { checks: DemoCheck[] }) {
 
   return (
     <figure
-      className="cut-card pulse-ring enter-card flex flex-col gap-4 border border-border bg-card p-4 sm:p-6"
+      className="cut-card pulse-ring flex flex-col gap-4 border border-border bg-card p-4 sm:p-6"
       aria-label="Example results"
       // The light on the border takes the colour of the result: mint for a gain, red for a loss.
       style={{ "--pulse": up ? "var(--primary)" : "var(--destructive)" } as React.CSSProperties}
@@ -31,13 +31,13 @@ export function HeroChart({ checks }: { checks: DemoCheck[] }) {
       }}
     >
       <figcaption className="flex flex-col gap-1">
-        <span className="enter-up text-sm text-muted-foreground" style={{ "--base": "800ms", "--i": 0 } as React.CSSProperties}>
+        <span className="text-sm text-muted-foreground">
           {check.buying} into {check.name} {check.timing}
         </span>
-        <span className={cn("enter-up font-heading text-4xl font-bold tabular-nums tracking-tight sm:text-5xl", up ? "text-primary" : "text-destructive")} style={{ "--base": "800ms", "--i": 1 } as React.CSSProperties}>
-          <RollText text={usd(check.value)} introDelay={1150} />
+        <span className={cn("font-heading text-4xl font-bold tabular-nums tracking-tight sm:text-5xl", up ? "text-primary" : "text-destructive")}>
+          <RollText text={usd(check.value)} introDelay={200} introSlow={3} />
         </span>
-        <span className="enter-up text-sm text-muted-foreground" style={{ "--base": "800ms", "--i": 2 } as React.CSSProperties}>
+        <span className="text-sm text-muted-foreground">
           worth today, from <b className="text-foreground">{usd(check.invested)}</b> put in{" "}
           <span className={up ? "text-primary" : "text-destructive"}>
             ({up ? "+" : "-"}
@@ -45,10 +45,10 @@ export function HeroChart({ checks }: { checks: DemoCheck[] }) {
           </span>
         </span>
       </figcaption>
-      <div className="enter-up -mx-1 sm:-mx-2" style={{ "--base": "800ms", "--i": 3 } as React.CSSProperties}>
-        <DrawChart compact points={check.points} runKey={check.id} height={250} firstDelayMs={1250} ariaLabel={`${check.buying} into ${check.name} ${check.timing}: ${usd(check.invested)} put in, worth ${usd(check.value)} today.`} />
+      <div className="-mx-1 sm:-mx-2">
+        <DrawChart compact points={check.points} runKey={check.id} height={250} firstDelayMs={600} ariaLabel={`${check.buying} into ${check.name} ${check.timing}: ${usd(check.invested)} put in, worth ${usd(check.value)} today.`} />
       </div>
-      <div className="enter-up flex items-center justify-between gap-4" style={{ "--base": "800ms", "--i": 5 } as React.CSSProperties}>
+      <div className="flex items-center justify-between gap-4">
         <p className="text-xs text-muted-foreground">Last updated {monthYear(check.asOf)}</p>
         <div role="group" aria-label="Pick an example" className="flex shrink-0 gap-1.5">
           {checks.map((c, i) => (

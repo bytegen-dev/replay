@@ -113,22 +113,21 @@ export default function LandingPage() {
               {/* The headline breaks the same way on every screen: "A time machine" over "for your money." */}
               <WordRise text="for your" from={3} /> <RotatingWord index={5} />
             </h1>
-            <p className="enter-up max-w-xl font-heading text-xl leading-snug text-primary sm:text-2xl" style={{ "--base": "650ms", "--i": 0 } as React.CSSProperties}>
+            <p className="max-w-xl font-heading text-xl leading-snug text-primary sm:text-2xl">
               You can&rsquo;t change the past. You can learn from it.
             </p>
             <SpotlightText
-              className="enter-up max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
-              style={{ "--base": "650ms", "--i": 1 } as React.CSSProperties}
-              text="Pick a stock, coin, commodity or currency and a date to see what a buy would be worth today. Or paste a Solana wallet to see what its sells left on the table and how much profit it gave back."
+              className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
+              text="Pick any stock, coin or currency and a date to see what a buy would be worth today. Or paste a Solana wallet to see what you missed."
             />
-            <div className="enter-up flex flex-wrap items-center gap-x-6 gap-y-3" style={{ "--base": "650ms", "--i": 2 } as React.CSSProperties}>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <WaitlistButton />
               <a href="#fumble" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
                 Try it first
               </a>
             </div>
-            <p className="enter-up max-w-xl text-xs leading-relaxed text-muted-foreground" style={{ "--base": "650ms", "--i": 3 } as React.CSSProperties}>
-              Prices from Yahoo Finance, Bitstamp, CoinGecko, Birdeye, Nasdaq, the ECB and the Federal Reserve.
+            <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
+              Data from Yahoo Finance, CoinGecko, Birdeye.
             </p>
           </div>
           {hero.length > 0 && <HeroChart checks={hero} />}
@@ -157,7 +156,7 @@ export default function LandingPage() {
         </section>
 
         {/* How it works. */}
-        <section className={`${section} py-10 sm:py-16`}>
+        <section id="steps" className={`${section} py-10 sm:py-16`}>
           <h2 className={`${h2} mb-8 max-w-2xl sm:mb-10`} data-reveal-on-scroll style={later()}>
             Three steps from a question to an answer.
           </h2>
