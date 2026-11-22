@@ -62,6 +62,15 @@ export function Faq({ items, title }: { items: FaqItem[]; title?: React.ReactNod
       window.removeEventListener("resize", check);
     };
   }, []);
+  // The chip row scrolls sideways on a phone: it fades at an edge only when there is more beyond it.
+  const row = useRef<HTMLDivElement>(null);
+  const fades = () => {
+    const el = row.current;
+    if (!el) return;
+    el.style.setProperty("--fl", el.scrollLeft > 2 ? "2.5rem" : "0px");
+    el.style.setProperty("--fr", el.scrollLeft < el.scrollWidth - el.clientWidth - 2 ? "2.5rem" : "0px");
+  };
+  useEffect(fades, []);
   const shown = items.filter((i) => topic === "All" || i.topic === topic);
 
   return (
@@ -78,7 +87,7 @@ export function Faq({ items, title }: { items: FaqItem[]; title?: React.ReactNod
             .
           </p>
         </div>
-        <div role="group" aria-label="Filter the questions by topic" className="relative -mx-4 flex gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] [scrollbar-width:none] lg:mx-0 lg:flex-col lg:items-start lg:overflow-visible lg:px-0 lg:[mask-image:none] [&::-webkit-scrollbar]:hidden">
+        <div role="group" aria-label="Filter the questions by topic" ref={row} onScroll={fades} className="relative -mx-4 flex gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(to_right,transparent,#000_var(--fl,0px),#000_calc(100%-var(--fr,2.5rem)),transparent)] [scrollbar-width:none] lg:mx-0 lg:flex-col lg:items-start lg:overflow-visible lg:px-0 lg:[mask-image:none] [&::-webkit-scrollbar]:hidden">
           {box && (
             <span
               aria-hidden
