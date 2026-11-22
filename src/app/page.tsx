@@ -39,8 +39,6 @@ function WordRise({ text, from = 0 }: { text: string; from?: number }) {
   ));
 }
 
-/** The style for a part that waits to be scrolled to: --d is how many ms it holds back, so a row of cards arrives in turn. */
-const later = (ms = 0) => ({ "--d": ms }) as React.CSSProperties;
 
 const faqs = (anon: number, user: number) => [
   {
@@ -91,6 +89,10 @@ const faqs = (anon: number, user: number) => [
 ];
 
 export default function LandingPage() {
+  // The style for a part that waits to be scrolled to: --d is how many ms it holds back, so a row of cards arrives in turn, and --n is its
+  // place in the page's order, which the script at the foot of <main> uses to hide the parts below the fold before the first paint.
+  let place = 0;
+  const later = (ms = 0) => ({ "--d": ms, "--n": place++ }) as React.CSSProperties;
   const hero = heroChecks();
   const anon = limitsFor("anonymous").day;
   const user = limitsFor("user").day;
@@ -275,6 +277,17 @@ export default function LandingPage() {
           }}
         />
       </main>
+      {/* Hides what is below the fold before the page first paints. Without this the server's HTML shows everything until the page has
+          loaded its scripts, and the sections flash on screen just before RevealObserver hides them. The parts are numbered in page order
+          (--n); this works out which is the first one off screen and sets that on <html> as --from, and the stylesheet hides every part from
+          there on. It touches only <html>, never the parts themselves, so React finds the markup it expects. RevealObserver then takes over
+          and lifts this (and a few seconds later so does this script, in case the page's scripts never load). */}
+      <script
+        dangerouslySetInnerHTML={{
+          __html:
+            '(function(){try{var d=document.documentElement;if(d.dataset.motion==="reduce"||matchMedia("(prefers-reduced-motion: reduce)").matches)return;var a=document.querySelectorAll("[data-reveal-on-scroll]"),f=-1;for(var i=0;i<a.length;i++){var v=a[i].style.getPropertyValue("--n");if(v!==""&&a[i].getBoundingClientRect().top>=innerHeight*0.9){f=+v;break}}if(f<0)return;d.style.setProperty("--from",f);d.classList.add("reveal-pre");setTimeout(function(){if(!window.__revealReady)d.classList.remove("reveal-pre")},5000)}catch(e){}})()',
+        }}
+      />
 
       <SiteFooter />
     </div>

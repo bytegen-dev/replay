@@ -28,6 +28,12 @@ export interface HistoryOptions {
   maxPages?: number;
   /** Stop a type once a page reaches back to this time (seconds). */
   sinceTime?: number;
+  /**
+   * Stop at this transaction, which is already known (the newest one saved from an earlier scan): only what is newer than it is read.
+   * The list then counts as complete, since nothing is missing between the new transactions and the saved ones. Exact, unlike a time
+   * cut-off, which could skip a transaction landing in the same second.
+   */
+  untilSignature?: string;
   /** Called after each page with everything read so far (newest first) and how many pages that took, so a caller can show trades while the rest loads. Only for a single list: with several lists nothing is partial yet. */
   onPage?: (txs: HeliusTx[], pages: number) => void;
   /** Stop reading once this many milliseconds have passed. What was read is kept, and the history is reported incomplete. */
@@ -69,7 +75,13 @@ async function readType(wallet: string, type: string, opts: HistoryOptions, fetc
     if (!res.ok) throw new NetError(res.status, "api.helius.xyz");
     const page = (await res.json()) as unknown;
     if (!Array.isArray(page)) throw new Error("Helius answered with something other than a list of transactions");
-    txs.push(...(page as HeliusTx[]));
+    const known = opts.untilSignature ? (page as HeliusTx[]).findIndex((t) => t.signature === opts.untilSignature) : -1;
+    txs.push(...(known >= 0 ? (page as HeliusTx[]).slice(0, known) : (page as HeliusTx[])));
+    if (known >= 0) {
+      if (txs.length) onPage?.(txs, pages);
+      complete = true;
+      break;
+    }
     if (page.length) onPage?.(txs, pages);
     const last = page.length ? (page[page.length - 1] as HeliusTx) : null;
     if (page.length === 0 || (opts.sinceTime !== undefined && last !== null && last.timestamp <= opts.sinceTime)) {

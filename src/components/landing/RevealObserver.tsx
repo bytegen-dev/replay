@@ -31,6 +31,12 @@ export function RevealObserver() {
       { rootMargin: "0px 0px -10% 0px", threshold: 0.08 },
     );
     root.classList.add("reveal-armed");
+    // The page's inline script hid everything below the fold until now (by number, through the stylesheet). This hides the same parts by
+    // attribute in the same frame, so nothing shows in between, and the early rule is lifted.
+    root.classList.remove("reveal-pre");
+    root.style.removeProperty("--from");
+    // Tells the inline script in the page that the scripts loaded, so it does not lift the hiding as a safety net.
+    (window as unknown as { __revealReady?: boolean }).__revealReady = true;
     for (const el of items) {
       // Already in view when the page opens: no animation, the hero has its own.
       if (el.getBoundingClientRect().top < window.innerHeight * 0.9) continue;

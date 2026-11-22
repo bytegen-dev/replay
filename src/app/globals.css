@@ -529,6 +529,13 @@
     opacity: 0;
   }
 }
+/* Before the page's scripts have run: the parts from --from on (set on <html> by the inline script at the foot of the landing page) are hidden,
+   so they do not flash on screen first. The clamp turns "is this part's number below --from" into 1 (shown) or 0 (hidden). Parts with no number
+   (the FAQ rows) count as far below. */
+html.reveal-pre [data-reveal-on-scroll] {
+  opacity: clamp(0, calc((var(--from) - var(--n, 9999)) * 1000), 1);
+  transform: translate3d(0, calc((1 - clamp(0, calc((var(--from) - var(--n, 9999)) * 1000), 1)) * 22px), 0);
+}
 .reveal-armed [data-reveal="hidden"] {
   opacity: 0;
   transform: translate3d(0, 22px, 0);

@@ -4,6 +4,7 @@ import { matchLots, type SellLot } from "./lots.ts";
 import { createNameBook, type TokenInfo } from "./tokens.ts";
 import { SOL_MINT, type PriceSeries } from "./prices.ts";
 import { findPositions, roundTripFor, type Position, type RoundTrip } from "./roundtrip.ts";
+import type { SavedWallet, WalletStore } from "./store.ts";
 import { parseTrades, type HeliusTx } from "./trades.ts";
 import type { Dropped, Trade } from "./types.ts";
 
@@ -15,7 +16,12 @@ import type { Dropped, Trade } from "./types.ts";
 
 export interface ScanDeps {
   /** Reads the wallet's history. `onPage` is called after each page with everything read so far, newest first. */
-  history: (wallet: string, onPage?: (txs: HeliusTx[], pages: number) => void) => Promise<History>;
+  history: (wallet: string, onPage?: (txs: HeliusTx[], pages: number) => void, until?: string) => Promise<History>;
+  /**
+   * Where a wallet's trades are saved between scans. With it, a rescan shows the saved trades at once and reads only the transactions newer
+   * than the newest saved one (`until` in `history`). Without it, or when it fails, every scan reads the history from scratch.
+   */
+  store?: WalletStore;
   /** A token's candles from `from` to `now`, or null when no provider has them. */
   prices: (mint: string, from: number, now: number) => Promise<PriceSeries | null>;
   /** The SOL price in USD at a time, or null. */
@@ -101,11 +107,34 @@ export interface ScanResult {
   ranOutOfTime: boolean;
 }
 
+/** Two trade lists as one, by transaction. Where both have a trade the second wins. */
+function mergeTrades(older: Trade[], newer: Trade[]): Trade[] {
+  const bySig = new Map<string, Trade>();
+  for (const t of older) bySig.set(t.signature, t);
+  for (const t of newer) bySig.set(t.signature, t);
+  return [...bySig.values()];
+}
+const addDropped = (a: Dropped, b: Dropped): Dropped => ({ noTokenMove: a.noTokenMove + b.noTokenMove, multiToken: a.multiToken + b.multiToken, noSolLeg: a.noSolLeg + b.noSolLeg });
+const NO_DROPS: Dropped = { noTokenMove: 0, multiToken: 0, noSolLeg: 0 };
+
 export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanResult> {
   const now = deps.now ? deps.now() : Math.floor(Date.now() / 1000);
   deps.onProgress?.({ stage: "history", done: 0, total: 0 });
   const names = createNameBook(deps.tokens);
   const bigEnough = (list: Trade[]) => list.filter((t) => t.sol >= MIN_TRADE_SOL).sort((a, b) => b.time - a.time);
+
+  // What an earlier scan saved. A failure to read it is no reason to fail the scan: it just starts from scratch.
+  let saved: SavedWallet | null = null;
+  if (deps.store) {
+    try {
+      saved = await deps.store.load(wallet);
+    } catch {
+      saved = null;
+    }
+    if (saved && !saved.newestSig) saved = null;
+  }
+  const earlier = saved?.trades ?? [];
+  const earlierDropped = saved?.dropped ?? NO_DROPS;
 
   // While the history is still being read, each page puts the trades found so far on the page: the list grows, and the names of new coins
   // follow a moment later. Nothing about profit is said yet, because the buys behind an old sell may be on a page not read.
@@ -113,26 +142,53 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
   const emitPartial = deps.onTrades
     ? (txs: HeliusTx[], pages: number) => {
         deps.onProgress?.({ stage: "history", done: txs.length, total: 0 });
-        const { trades: soFar, dropped: droppedSoFar } = parseTrades(wallet, txs);
+        const { trades: fresh, dropped: freshDropped } = parseTrades(wallet, txs);
+        const soFar = saved ? mergeTrades(earlier, fresh) : fresh;
+        const droppedSoFar = saved ? addDropped(earlierDropped, freshDropped) : freshDropped;
         const list = bigEnough(soFar);
         const send = () => {
           if (!reading) return;
-          deps.onTrades?.({ history: { transactions: txs.length, pages, complete: false, oldest: txs.length ? txs[txs.length - 1].timestamp : null }, dropped: droppedSoFar, tradeCount: soFar.length, trades: list, tokens: names.snapshot(), partial: true, pnl: {} });
+          const read = txs.length + (saved?.transactions ?? 0);
+          deps.onTrades?.({ history: { transactions: read, pages, complete: false, oldest: saved ? saved.oldestTime : txs.length ? txs[txs.length - 1].timestamp : null }, dropped: droppedSoFar, tradeCount: soFar.length, trades: list, tokens: names.snapshot(), partial: true, pnl: {} });
         };
         send();
         void names.ensure(list.map((t) => t.mint)).then((learned) => learned && send());
       }
     : undefined;
-  const history = await deps.history(wallet, emitPartial);
+  // Saved trades show at once, while the newer transactions are read.
+  if (saved && deps.onTrades) {
+    const list = bigEnough(earlier);
+    const show = () => reading && deps.onTrades?.({ history: { transactions: saved!.transactions, pages: 0, complete: false, oldest: saved!.oldestTime }, dropped: earlierDropped, tradeCount: earlier.length, trades: list, tokens: names.snapshot(), partial: true, pnl: {} });
+    show();
+    void names.ensure(list.map((t) => t.mint)).then((learned) => learned && show());
+  }
+  const history = await deps.history(wallet, emitPartial, saved?.newestSig ?? undefined);
   reading = false;
-  const { trades, dropped } = parseTrades(wallet, history.txs);
+  const fresh = parseTrades(wallet, history.txs);
+  // With saved trades and the newer transactions all read, the two join up. If time ran out before reaching the saved ones there is a gap
+  // between them, so only what was just read is used, as on a first scan, and the saved state is left as it was.
+  const joined = saved !== null && history.complete;
+  const trades = joined ? mergeTrades(earlier, fresh.trades) : fresh.trades;
+  const dropped = joined ? addDropped(earlierDropped, fresh.dropped) : fresh.dropped;
+  let persisted: Promise<void> = Promise.resolve();
+  if (deps.store && history.txs.length > 0 && (joined || saved === null)) {
+    const next: SavedWallet = joined
+      ? { trades, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: saved!.oldestSig, oldestTime: saved!.oldestTime, complete: saved!.complete, transactions: saved!.transactions + history.txs.length, dropped }
+      : { trades, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: history.txs[history.txs.length - 1].signature, oldestTime: history.txs[history.txs.length - 1].timestamp, complete: history.complete, transactions: history.txs.length, dropped };
+    const known = new Set(earlier.map((t) => t.signature));
+    persisted = deps.store.save(wallet, next, trades.filter((t) => !known.has(t.signature))).catch(() => {
+      /* not saving is no reason to fail the scan */
+    });
+  }
   const lots = matchLots(trades)
     .filter((l) => l.sell.sol >= MIN_TRADE_SOL)
     .sort((a, b) => a.sell.time - b.sell.time);
 
   // The complete trade list goes out now, before the slow price lookups, with each sell's profit, which needs no prices.
   const tradeList = bigEnough(trades);
-  const historySummary = { transactions: history.txs.length, pages: history.pages, complete: history.complete, oldest: history.oldest };
+  const historySummary = joined
+    ? { transactions: saved!.transactions + history.txs.length, pages: history.pages, complete: saved!.complete, oldest: saved!.oldestTime }
+    : { transactions: history.txs.length, pages: history.pages, complete: history.complete, oldest: history.oldest };
   const pnl = Object.fromEntries(lots.map((l) => [l.sell.signature, { profitSol: l.profitSol, matchedTokens: l.matchedTokens }]));
   // The names of any coins not looked up yet are fetched while the prices are, and the list goes out as soon as they are in, so it never
   // waits on the slow part. With no name lookup there is nothing to wait for and the list goes out at once.
@@ -220,6 +276,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps): Promise<ScanRe
     totalSol += s.fumble.fumbleSol;
     if (!worst || s.fumble.fumbleUsd > (worst.fumble as { fumbleUsd: number }).fumbleUsd) worst = s;
   }
+  await persisted;
   deps.onProgress?.({ stage: "done", done: order.length, total: order.length });
   return {
     wallet,
