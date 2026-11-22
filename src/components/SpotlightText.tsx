@@ -24,7 +24,7 @@ export function SpotlightText({ text, className, style }: { text: string; classN
   return (
     <p ref={ref} style={style} className={cn("relative", className)} onPointerEnter={() => setOn(true)} onPointerLeave={() => setOn(false)} onPointerMove={move}>
       {text}
-      <span aria-hidden className="pointer-events-none absolute inset-0 text-foreground transition-opacity duration-300" style={{ opacity: on ? 1 : 0, maskImage: mask, WebkitMaskImage: mask }}>
+      <span aria-hidden className="pointer-events-none absolute inset-0 text-foreground transition-opacity duration-300 [padding:inherit]" style={{ opacity: on ? 1 : 0, maskImage: mask, WebkitMaskImage: mask }}>
         {text}
       </span>
     </p>
