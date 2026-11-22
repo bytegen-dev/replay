@@ -47,9 +47,8 @@ export function Faq({ items }: { items: FaqItem[] }) {
                 const next = items.filter((i) => t === "All" || i.topic === t);
                 if (!next.some((i) => i.q === open)) setOpen(next[0]?.q ?? null);
               }}
-              className={cn("group/chip relative flex shrink-0 items-center gap-2 border py-1.5 pr-3 pl-4 text-sm transition-colors duration-300", topic === t ? "border-primary text-primary" : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground")}
+              className={cn("relative flex shrink-0 items-center gap-2 border px-3 py-1.5 text-sm transition-colors duration-300", topic === t ? "border-primary text-primary" : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground")}
             >
-              <span aria-hidden className={cn("absolute top-1/2 left-1.5 size-1.5 -translate-y-1/2 bg-current transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]", topic === t ? "scale-100" : "scale-0 group-hover/chip:scale-100")} />
               {t}
               <span className="text-xs tabular-nums text-muted-foreground">{t === "All" ? items.length : items.filter((i) => i.topic === t).length}</span>
             </button>
