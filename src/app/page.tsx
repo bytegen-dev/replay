@@ -8,6 +8,7 @@ import { HeroChart } from "@/components/landing/HeroChart";
 import { LineCard } from "@/components/landing/LineCard";
 import { RotatingWord } from "@/components/landing/RotatingWord";
 import { RevealObserver } from "@/components/landing/RevealObserver";
+import { RevealPrime } from "@/components/landing/RevealPrime";
 import { SmoothScroll } from "@/components/landing/SmoothScroll";
 import { StepVisual } from "@/components/landing/StepVisuals";
 import { WaitlistButton } from "@/components/landing/WaitlistButton";
@@ -294,12 +295,7 @@ export default function LandingPage() {
           (--n); this works out which is the first one off screen and sets that on <html> as --from, and the stylesheet hides every part from
           there on. It touches only <html>, never the parts themselves, so React finds the markup it expects. RevealObserver then takes over
           and lifts this (and a few seconds later so does this script, in case the page's scripts never load). */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html:
-            '(function(){try{var d=document.documentElement;if(d.dataset.motion==="reduce"||matchMedia("(prefers-reduced-motion: reduce)").matches)return;var a=document.querySelectorAll("[data-reveal-on-scroll]"),f=-1;for(var i=0;i<a.length;i++){var v=a[i].style.getPropertyValue("--n");if(v!==""&&a[i].getBoundingClientRect().top>=innerHeight*0.9){f=+v;break}}if(f<0)return;d.style.setProperty("--from",f);d.classList.add("reveal-pre");setTimeout(function(){if(!window.__revealReady)d.classList.remove("reveal-pre")},5000)}catch(e){}})()',
-        }}
-      />
+      <RevealPrime />
 
       <SiteFooter />
     </div>

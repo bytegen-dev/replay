@@ -328,15 +328,25 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
     prefs({ muted: m });
   };
 
-  const fetchBoard = useCallback(async () => {
+  // A score being saved, and when the player's own last score was saved. The leaderboard is cached for a short while by the server's host, so a
+  // board asked for just after a save has to use a different address to get past that cache, and has to wait for a save still under way.
+  const saving = useRef<Promise<void> | null>(null);
+  const savedAt = useRef(0);
+  const loadBoard = useCallback(async () => {
     try {
-      const r = await fetch("/api/game/leaderboard", { cache: "no-store" });
+      const r = await fetch(`/api/game/leaderboard${savedAt.current ? `?v=${savedAt.current}` : ""}`, { cache: "no-store" });
       const j = (await r.json()) as { available?: boolean; entries?: BoardEntry[] };
       setBoard({ available: j.available === true, entries: Array.isArray(j.entries) ? j.entries : [] });
     } catch {
       setBoard({ available: false, entries: [] });
     }
   }, []);
+  const fetchBoard = useCallback(async () => {
+    // A save is still under way: show "Loading" rather than the old list, then the board with this run in it.
+    if (saving.current) setBoard(null);
+    await saving.current;
+    await loadBoard();
+  }, [loadBoard]);
 
   /* ----------------------------- starting a run ----------------------------- */
 
@@ -402,29 +412,37 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       setFinal(base);
       setScreen("gameover");
       if (newBest && score > 0 && !calm.current) setHighFlash((n) => n + 1);
-      void fetchBoard();
-      if (cur.username && !cur.offline && score > 0) {
-        try {
-          const res = await fetch("/api/game/score", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ username: cur.username, token: cur.token, score, durationMs: Math.round(performance.now() - s.startedAt), asset, reached }),
-          });
-          const j = (await res.json().catch(() => null)) as { ok?: boolean; rank?: number; best?: number; error?: string; offline?: boolean } | null;
-          if (res.ok && j?.ok) {
-            setFinal({ ...base, rank: j.rank ?? null, best: Math.max(base.best, j.best ?? 0) });
-            void fetchBoard();
-          } else {
-            setFinal({ ...base, note: j?.offline ? "The leaderboard is offline, so this run is only saved on this device." : (j?.error ?? "Your run could not be saved to the leaderboard.") });
+      const willSave = Boolean(cur.username && !cur.offline && score > 0);
+      if (!willSave) void fetchBoard();
+      if (willSave) {
+        // The board is loaded once the score is in it, not before: asked any earlier it would not show this run.
+        const save = (async () => {
+          try {
+            const res = await fetch("/api/game/score", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ username: cur.username, token: cur.token, score, durationMs: Math.round(performance.now() - s.startedAt), asset, reached }),
+            });
+            const j = (await res.json().catch(() => null)) as { ok?: boolean; rank?: number; best?: number; error?: string; offline?: boolean } | null;
+            if (res.ok && j?.ok) {
+              savedAt.current = Date.now();
+              setFinal({ ...base, rank: j.rank ?? null, best: Math.max(base.best, j.best ?? 0) });
+            } else {
+              setFinal({ ...base, note: j?.offline ? "The leaderboard is offline, so this run is only saved on this device." : (j?.error ?? "Your run could not be saved to the leaderboard.") });
+            }
+          } catch {
+            setFinal({ ...base, note: "Could not reach the leaderboard. Your best is saved on this device." });
           }
-        } catch {
-          setFinal({ ...base, note: "Could not reach the leaderboard. Your best is saved on this device." });
-        }
+          await loadBoard();
+        })();
+        saving.current = save;
+        await save;
+        if (saving.current === save) saving.current = null;
       } else if (cur.offline) {
         setFinal({ ...base, note: "Playing offline: scores stay on this device." });
       }
     },
-    [fetchBoard, keep],
+    [fetchBoard, loadBoard, keep],
   );
 
   const flapNow = useCallback(() => {
@@ -561,18 +579,27 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
       const by = Math.max(1, rect?.height ?? 360);
       // The title screen and menus fill the whole box, whatever its shape: the scene is drawn 640 wide at least and as tall as it needs to be.
       const sceneScale = Math.min(bx / 640, by / H);
-      const W = demoMode ? bx / sceneScale : Math.min(1100, Math.max(400, Math.round((H * bx) / by)));
-      const Hs = demoMode ? by / sceneScale : H;
+      const W0 = demoMode ? bx / sceneScale : Math.min(1100, Math.max(400, Math.round((H * bx) / by)));
+      let W = W0;
+      let Hs = demoMode ? by / sceneScale : H;
       let cw = bx;
-      let ch = by;
+      const ch = by;
+      let pad = 9;
       if (!demoMode) {
-        if (cw / ch > W / H) cw = (ch * W) / H;
-        else ch = (cw * H) / W;
+        // The playing area keeps its shape (W0 by H), scaled as large as the box allows. The picture is as tall as the whole box: what is
+        // above and below the playing area is scenery, so the top bar and the year line sit at the box's real top and bottom. It is only as
+        // wide as the playing area is allowed to be, with bars at the sides on a very wide box.
+        const k = Math.min(bx / W0, by / H);
+        cw = Math.min(bx, W0 * k);
+        W = cw / k;
+        Hs = by / k;
+        // The year line keeps about 28 real pixels clear of the bottom edge (a phone's rounded corners and home bar sit close to it).
+        pad = Math.max(9, 28 / k);
       }
       cv.style.width = `${cw}px`;
       cv.style.height = `${ch}px`;
       cv.style.left = `${(bx - cw) / 2}px`;
-      cv.style.top = `${(by - ch) / 2}px`;
+      cv.style.top = "0px";
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const bw = Math.max(1, Math.round(cw * dpr));
       const bh = Math.max(1, Math.round(ch * dpr));
@@ -752,6 +779,8 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
             : { left: `${levelIdx + 1}  ${lv?.title ?? ""}`, right: `${s.gotCount} / ${r.coins.length}`, center, logo },
         sync: survival && s.syncUntil > s.time ? { amount: Math.min(1, (s.syncUntil - s.time) / 1.4), label: s.syncLabel } : undefined,
         w: W,
+        h: Hs,
+        bottomPad: pad,
         light: lightRef.current,
         speed: survival ? levRef.current : 1,
         timeline,
@@ -934,7 +963,7 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
 
         {/* Level start: the narrator, and the controls (tutorial) */}
         {screen === "play" && phase === "ready" && (
-          <div className="pointer-events-none absolute inset-x-0 top-[12%] flex justify-center px-4">
+          <div className="pointer-events-none absolute inset-x-0 top-[18%] flex justify-center px-4">
             <div className="max-w-md border border-primary/30 bg-background/75 p-2.5 text-center backdrop-blur-sm sm:p-3">
               {mode === "tutorial" && level ? (
                 <>
@@ -957,12 +986,12 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
           </div>
         )}
         {screen === "play" && hint && phase === "running" && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-9 flex justify-center px-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-20 flex justify-center px-4">
             <p className="max-w-sm border border-primary/40 bg-background/80 px-3 py-1.5 text-center text-[0.68rem] leading-snug backdrop-blur-sm sm:text-xs">{hint}</p>
           </div>
         )}
         {screen === "play" && phase === "crashed" && mode === "tutorial" && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-10 flex justify-center px-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-20 flex justify-center px-4">
             <p className="border border-border bg-background/80 px-3 py-2 text-xs backdrop-blur-sm">Liquidated. Tap to try again.</p>
           </div>
         )}

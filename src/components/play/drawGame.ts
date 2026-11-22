@@ -25,8 +25,15 @@ export interface Frame {
   light: boolean;
   /** The leverage the run is flying at (1 to 10): the faster it is, the more streaks fly past. */
   speed: number;
-  /** The width of the playing area in game pixels (the height is always H), which follows the shape of the screen. */
+  /** The width of the picture in game pixels, which follows the shape of the screen. */
   w: number;
+  /**
+   * The height of the picture in game pixels: H at the least. The playing area is always H tall and sits in the middle; on a tall screen the
+   * rest is scenery above and below it, so the picture fills the screen and the heads-up display sits at its real top and bottom.
+   */
+  h?: number;
+  /** How far the year line sits above the bottom edge of the picture, in game pixels (9 when not given). */
+  bottomPad?: number;
   /** Where the run is in time: the span the asset or level covers and the date under Tony now, all in milliseconds. */
   timeline?: { from: number; to: number; at: number };
   /** The handover between assets: 0 (none) to 1, and what it is announcing. */
@@ -142,13 +149,13 @@ const candles = (() => {
 })();
 
 /** The scenery: a chart grid and a ghost chart, each scrolling at its own pace, and (at high leverage) streaks of speed. */
-function drawBackdrop(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
+function drawBackdrop(ctx: CanvasRenderingContext2D, f: Frame, W: number, hh: number, dy: number) {
   const x = f.bird.x;
   // Chart gridlines: horizontal price lines stay put, vertical time lines slide by.
   ctx.fillStyle = `rgba(${P.gridRgb},0.05)`;
-  for (let gy = 40; gy < H - 30; gy += 56) ctx.fillRect(0, gy, W, 1);
+  for (let gy = 40 - 56 * Math.ceil(dy / 56); gy < H - 30 + dy; gy += 56) ctx.fillRect(0, gy, W, 1);
   const gOff = Math.round(x * 0.2);
-  for (let gx = -(gOff % 120); gx < W; gx += 120) ctx.fillRect(gx, 0, 1, H);
+  for (let gx = -(gOff % 120); gx < W; gx += 120) ctx.fillRect(gx, -dy, 1, hh);
   // A ghost price chart.
   const cOff = Math.round(x * 0.28);
   ctx.globalAlpha = 0.07;
@@ -166,7 +173,7 @@ function drawBackdrop(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
   if (f.speed >= 3 && f.phase === "running") {
     const n = 6 + f.speed * 3;
     for (let i = 0; i < n; i++) {
-      const y = ((i * 97) % (H - 40)) + 8;
+      const y = ((i * 97) % (hh - 40)) + 8 - dy;
       const len = 30 + f.speed * 14 + (i % 4) * 12;
       const sx = W + 40 - ((f.time * (500 + f.speed * 260) + i * 173) % (W + 200));
       ctx.globalAlpha = 0.05 + f.speed * 0.012;
@@ -338,27 +345,31 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   const { bird, track } = f;
   const W = f.w;
   const left = bird.x - BIRD_X;
+  // The picture may be taller than the playing area: the playing area sits in the middle (dy is the extra above it, and the same below).
+  const hh = Math.max(H, f.h ?? H);
+  const dy = (hh - H) / 2;
   ctx.save();
   if (f.fx.shake > 0) {
     const k = f.fx.shake * f.fx.shake * 6;
     ctx.translate(k * Math.sin(f.time * 71), k * Math.sin(f.time * 53 + 1));
   }
+  ctx.translate(0, dy);
   // Sky: a deep teal-black wash, and stars that drift past slower than the course (they are far away).
-  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  const sky = ctx.createLinearGradient(0, -dy, 0, H + dy);
   sky.addColorStop(0, P.sky0);
   sky.addColorStop(1, P.sky1);
   ctx.fillStyle = sky;
-  ctx.fillRect(-12, -12, W + 24, H + 24);
+  ctx.fillRect(-12, -dy - 12, W + 24, hh + 24);
   for (const s of stars) {
     const sx = (((s.x * W - bird.x * s.depth) % W) + W) % W;
     ctx.globalAlpha = 0.35 + 0.35 * Math.sin(f.time * 1.5 + s.tw);
     ctx.fillStyle = P.star;
     ctx.beginPath();
-    ctx.arc(sx, s.y, s.r, 0, Math.PI * 2);
+    ctx.arc(sx, (s.y / H) * hh - dy, s.r, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-  drawBackdrop(ctx, f, W);
+  drawBackdrop(ctx, f, W, hh, dy);
 
   // The tunnel.
   const tops: number[] = [];
@@ -373,15 +384,15 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   }
   ctx.fillStyle = P.wall;
   ctx.beginPath();
-  ctx.moveTo(xs[0], -2);
+  ctx.moveTo(xs[0], -dy - 2);
   xs.forEach((x, i) => ctx.lineTo(x, tops[i]));
-  ctx.lineTo(xs[xs.length - 1], -2);
+  ctx.lineTo(xs[xs.length - 1], -dy - 2);
   ctx.closePath();
   ctx.fill();
   ctx.beginPath();
-  ctx.moveTo(xs[0], H + 2);
+  ctx.moveTo(xs[0], H + dy + 2);
   xs.forEach((x, i) => ctx.lineTo(x, bots[i]));
-  ctx.lineTo(xs[xs.length - 1], H + 2);
+  ctx.lineTo(xs[xs.length - 1], H + dy + 2);
   ctx.closePath();
   ctx.fill();
   const glow = ctx.createLinearGradient(0, 0, 0, H);
@@ -523,14 +534,14 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
   ctx.restore();
   if (f.fx.flash > 0) {
     ctx.fillStyle = `rgba(251,113,133,${(f.fx.flash * 0.35).toFixed(3)})`;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, W, hh);
   }
 
   // The handover from one asset to the next: the picture tears sideways, and a banner says where it is going.
   if (f.sync && f.sync.amount > 0) {
     const a = f.sync.amount;
     for (let i = 0; i < 7; i++) {
-      const y = ((f.time * 190 + i * 53) % H) | 0;
+      const y = ((f.time * 190 + i * 53) % hh) | 0;
       ctx.fillStyle = i % 2 ? `rgba(${P.glowRgb},0.16)` : `rgba(${P.inkRgb},0.1)`;
       ctx.fillRect(0, y, W, 2 + (i % 3) * 3 * a);
     }
@@ -548,29 +559,34 @@ export function drawFrame(ctx: CanvasRenderingContext2D, f: Frame) {
     ctx.globalAlpha = 1;
   }
 
-  // Heads-up display.
+  // Heads-up display: the player on the left, the asset and its price in the middle and the score on the right, all on one line. If the asset's
+  // line would run into the name or the score (a long name on a narrow screen), it drops to a second line under them instead.
   ctx.fillStyle = `rgba(${P.inkRgb},0.9)`;
   ctx.font = `600 12px ${f.fonts.head}`;
   ctx.textAlign = "left";
   ctx.fillText(f.hud.left, 14, 22);
+  const leftEnd = 14 + ctx.measureText(f.hud.left).width;
   ctx.textAlign = "right";
   ctx.fillStyle = P.gold;
   ctx.fillText(f.hud.right, W - 14, 22);
+  const rightStart = W - 14 - ctx.measureText(f.hud.right).width;
   if (f.progress !== undefined) {
     ctx.fillStyle = P.edge;
     ctx.fillRect(0, 0, W * Math.min(1, f.progress), 3);
   }
-  // The asset under Tony on its own line: a round logo, its name and its price.
+  // The asset: a round logo, its name and its price.
   ctx.font = `500 12px ${f.fonts.body}`;
   const tw = ctx.measureText(f.hud.center).width;
   const hasLogo = Boolean(f.hud.logo);
   const total = (hasLogo ? 22 : 0) + tw;
   const x0 = W / 2 - total / 2;
-  if (f.hud.logo) drawLogo(ctx, f.hud.logo, x0 + 8, 44, 8);
+  const sameLine = x0 > leftEnd + 12 && x0 + total < rightStart - 12;
+  const ty = sameLine ? 22 : 48;
+  if (f.hud.logo) drawLogo(ctx, f.hud.logo, x0 + 8, ty - 4, 8);
   ctx.textAlign = "left";
   ctx.fillStyle = `rgba(${P.inkRgb},0.85)`;
-  ctx.fillText(f.hud.center, x0 + (hasLogo ? 22 : 0), 48);
-  if (f.timeline) drawTimeline(ctx, f, W);
+  ctx.fillText(f.hud.center, x0 + (hasLogo ? 22 : 0), ty);
+  if (f.timeline) drawTimeline(ctx, f, W, hh);
 }
 
 const logoImages = new Map<string, HTMLImageElement>();
@@ -600,11 +616,11 @@ function drawLogo(ctx: CanvasRenderingContext2D, src: string, cx: number, cy: nu
 }
 
 /** The strip along the bottom: a timeline of the years the asset covers, filling in as Tony flies, with the date under him ticking along. */
-function drawTimeline(ctx: CanvasRenderingContext2D, f: Frame, W: number) {
+function drawTimeline(ctx: CanvasRenderingContext2D, f: Frame, W: number, hh: number) {
   const { from, to, at } = f.timeline!;
   const x0 = 36;
   const x1 = W - 36;
-  const y = H - 9;
+  const y = hh - (f.bottomPad ?? 9);
   const p = Math.min(1, Math.max(0, (at - from) / Math.max(1, to - from)));
   ctx.fillStyle = `rgba(${P.inkRgb},0.14)`;
   ctx.fillRect(x0, y - 1.5, x1 - x0, 3);

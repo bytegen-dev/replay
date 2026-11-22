@@ -13,7 +13,7 @@ import { AUTH_CHANGED_EVENT, openGameFromLink, openSignIn, useViewer } from "@/l
 const TOOLS = [
   { href: "/#trade", label: "Trade", note: "Paper and live trading, coming soon", Icon: ArrowLeftRight },
   { href: "/wayback", label: "Wayback", note: "Past buys and the price on any day", Icon: History },
-  { href: "/game", label: "Game", note: "Tony Stonk, a chart game", Icon: Gamepad2 },
+  { href: "/game", label: "Game", note: "Fly Tony Stonk through real prices", Icon: Gamepad2 },
   { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },
 ];
 const LINKS = [
