@@ -177,7 +177,7 @@ export default function LandingPage() {
         </section>
 
         {/* What is in it. */}
-        <section className={`${section} py-10 sm:py-16`}>
+        <section className={`${section} pt-20 pb-10 sm:py-16`}>
           <h2 className={`${h2} mb-8 max-w-2xl sm:mb-10`} data-reveal-on-scroll style={later()}>
             Three ways to look at the past.
           </h2>
@@ -205,7 +205,7 @@ export default function LandingPage() {
         </section>
 
         {/* What is coming, and the waitlist that goes with it, in one card. Shown as coming soon, never as something you can do today. */}
-        <section id="trade" className={`${section} scroll-mt-20 py-10 sm:py-16`}>
+        <section id="trade" className={`${section} scroll-mt-20 pt-20 pb-10 sm:py-16`}>
           {/* A line runs through this card from edge to edge, behind it; hovering sends a pulse along it, round the card and out the far side. */}
           <LineCard className="flex flex-col gap-8 border border-border bg-card p-5 sm:p-8" data-reveal-on-scroll style={later()}>
             <div className="flex max-w-2xl flex-col gap-3">
