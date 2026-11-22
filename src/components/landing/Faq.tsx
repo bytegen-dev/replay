@@ -64,6 +64,9 @@ export function Faq({ items, title }: { items: FaqItem[]; title?: React.ReactNod
   }, []);
   // The chip row scrolls sideways on a phone: it fades at an edge only when there is more beyond it.
   const row = useRef<HTMLDivElement>(null);
+  // Dragging the row with the mouse scrolls it (a finger already does). A press that moves a few pixels becomes a drag, and the click that follows it
+  // is swallowed, so letting go over a chip does not pick that topic.
+  const drag = useRef<{ x: number; left: number; moved: boolean } | null>(null);
   const fades = () => {
     const el = row.current;
     if (!el) return;
@@ -87,7 +90,34 @@ export function Faq({ items, title }: { items: FaqItem[]; title?: React.ReactNod
             .
           </p>
         </div>
-        <div role="group" aria-label="Filter the questions by topic" ref={row} onScroll={fades} className="relative -mx-4 flex gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(to_right,transparent,#000_var(--fl,0px),#000_calc(100%-var(--fr,2.5rem)),transparent)] [scrollbar-width:none] lg:mx-0 lg:flex-col lg:items-start lg:overflow-visible lg:px-0 lg:[mask-image:none] [&::-webkit-scrollbar]:hidden">
+        <div role="group" aria-label="Filter the questions by topic" ref={row}
+          onScroll={fades}
+          onPointerDown={(e) => {
+            if (e.pointerType !== "mouse" || e.button !== 0 || !row.current) return;
+            drag.current = { x: e.clientX, left: row.current.scrollLeft, moved: false };
+          }}
+          onPointerMove={(e) => {
+            const d = drag.current;
+            const el = row.current;
+            if (!d || !el) return;
+            const dx = e.clientX - d.x;
+            if (!d.moved && Math.abs(dx) > 5) {
+              d.moved = true;
+              el.setPointerCapture(e.pointerId);
+            }
+            if (d.moved) el.scrollLeft = d.left - dx;
+          }}
+          onPointerUp={(e) => {
+            if (drag.current?.moved) row.current?.releasePointerCapture(e.pointerId);
+          }}
+          onClickCapture={(e) => {
+            if (drag.current?.moved) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+            drag.current = null;
+          }}
+          className="relative -mx-4 flex cursor-grab gap-2 overflow-x-auto px-4 select-none active:cursor-grabbing lg:cursor-auto lg:select-auto [mask-image:linear-gradient(to_right,transparent,#000_var(--fl,0px),#000_calc(100%-var(--fr,2.5rem)),transparent)] [scrollbar-width:none] lg:mx-0 lg:flex-col lg:items-start lg:overflow-visible lg:px-0 lg:[mask-image:none] [&::-webkit-scrollbar]:hidden">
           {box && (
             <span
               aria-hidden

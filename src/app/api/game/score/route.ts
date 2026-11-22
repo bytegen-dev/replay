@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { plausibleScore, saveScore, validToken, validUsername } from "@/lib/gameBoard.ts";
+import { isHuman } from "@/lib/human.ts";
 import { hitRateLimit } from "@/lib/rateLimit.ts";
 import { hashSecret } from "@/lib/share.ts";
 
-/** Save a finished Survival run to the board. */
+/**
+ * Save a finished Survival run to the board.
+ *
+ * The game runs in the player's browser, so a score is only checked for being plausible. To keep a script from posting believable scores
+ * straight to this route, the quick bot check has to have been passed first (when it is set up): 403 with code "human_required", see /api/human.
+ */
 export async function POST(request: Request) {
+  if (!isHuman(request)) return NextResponse.json({ error: "Quick check needed.", code: "human_required" }, { status: 403, headers: { "cache-control": "no-store" } });
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
   const rate = await hitRateLimit(`game-score:${hashSecret(ip).slice(0, 16)}`, 30, 600);
   if (!rate.ok) return NextResponse.json({ error: "Too many runs too quickly. Wait a few minutes." }, { status: 429, headers: { "retry-after": String(rate.resetSeconds) } });

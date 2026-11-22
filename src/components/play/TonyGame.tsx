@@ -12,6 +12,7 @@ import { finishAt, flap, H, PLAY_H, hitsObstacle, hitsWall, newBird, step, type 
 import { buzz, canBuzz, setHaptics as audioHaptics, setMusic as audioMusic, setMuted as audioMute, setSfx as audioSfx, setVolume as audioVolume, sfx, startAudio, startMusic, stopMusic } from "@/lib/gameAudio.ts";
 import type { BoardEntry } from "@/lib/gameBoard.ts";
 import { gamePrice, SCROLL_SPEED, scoreFor, STORY, SURVIVAL_COURSE, survivalObstacles, survivalSpeed, type Level } from "@/lib/gameLevels.ts";
+import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
 import type { EndlessSegment } from "@/lib/flappyCourse.ts";
 import { cn } from "@/lib/utils";
 import { openWaitlist } from "@/lib/viewerClient.ts";
@@ -418,11 +419,28 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
         // The board is loaded once the score is in it, not before: asked any earlier it would not show this run.
         const save = (async () => {
           try {
-            const res = await fetch("/api/game/score", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ username: cur.username, token: cur.token, score, durationMs: Math.round(performance.now() - s.startedAt), asset, reached }),
-            });
+            const post = () =>
+              fetch("/api/game/score", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ username: cur.username, token: cur.token, score, durationMs: Math.round(performance.now() - s.startedAt), asset, reached }),
+              });
+            let res = await post();
+            // The invisible bot check, passed once (usually unseen, and shared with the rest of the site for 12 hours), then the run is saved again.
+            if (res.status === 403) {
+              const why = (await res.clone().json().catch(() => null)) as { code?: string } | null;
+              const key = why?.code === "human_required" ? await humanSiteKey() : null;
+              if (key) {
+                try {
+                  await passHumanCheck(key);
+                } catch {
+                  setFinal({ ...base, note: "The quick check didn't pass, so this run is only saved on this device." });
+                  await loadBoard();
+                  return;
+                }
+                res = await post();
+              }
+            }
             const j = (await res.json().catch(() => null)) as { ok?: boolean; rank?: number; best?: number; error?: string; offline?: boolean } | null;
             if (res.ok && j?.ok) {
               savedAt.current = Date.now();
