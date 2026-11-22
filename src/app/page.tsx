@@ -237,10 +237,14 @@ export default function LandingPage() {
 
         {/* Questions. */}
         <section className={`${section} py-10 sm:py-16`}>
-          <h2 className={`${h2} mb-8 max-w-2xl`} data-reveal-on-scroll style={later()}>
-            Questions people ask.
-          </h2>
-          <Faq items={questions} />
+          <Faq
+            items={questions}
+            title={
+              <h2 className={h2} data-reveal-on-scroll style={later()}>
+                Frequently asked questions
+              </h2>
+            }
+          />
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{

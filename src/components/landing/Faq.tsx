@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { SpotlightText } from "@/components/SpotlightText";
 import { cn } from "@/lib/utils";
 
@@ -16,16 +16,59 @@ export interface FaqItem {
  * open smoothly, and the open row is marked with a mint bar that grows down its edge. Closed answers stay in the page for
  * search engines and screen readers (the page also publishes them as structured data).
  */
-export function Faq({ items }: { items: FaqItem[] }) {
+export function Faq({ items, title }: { items: FaqItem[]; title?: React.ReactNode }) {
   const topics = ["All", ...Array.from(new Set(items.map((i) => i.topic)))];
   const [topic, setTopic] = useState("All");
   const [open, setOpen] = useState<string | null>(items[0]?.q ?? null);
   const base = useId();
+  // The outline around the chosen topic is one shared box that slides from chip to chip.
+  const chips = useRef<Record<string, HTMLButtonElement | null>>({});
+  const [box, setBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [slide, setSlide] = useState(false);
+  const measure = () => {
+    const el = chips.current[topic];
+    if (!el) return;
+    const next = { x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight };
+    // Keep the old object when nothing moved, so measuring never causes another render.
+    setBox((b) => (b && b.x === next.x && b.y === next.y && b.w === next.w && b.h === next.h ? b : next));
+  };
+  useLayoutEffect(measure, [topic]);
+  useEffect(() => {
+    // Only slide once the box has been placed, so it does not fly in from the corner on load.
+    const id = requestAnimationFrame(() => setSlide(true));
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener("resize", measure);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // On wide screens the left column sticks as you scroll. Once it is stuck the list is rising up beside the title, so the title shrinks to fit the column.
+  const column = useRef<HTMLDivElement>(null);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const el = column.current;
+    if (!el) return;
+    const check = () => {
+      const wide = window.matchMedia("(min-width: 1024px)").matches;
+      const top = parseFloat(getComputedStyle(el).top) || 0;
+      setStuck(wide && el.getBoundingClientRect().top <= top + 1);
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, []);
   const shown = items.filter((i) => topic === "All" || i.topic === topic);
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:gap-14">
-      <div className="flex flex-col gap-5 lg:sticky lg:top-28 lg:self-start">
+      <div ref={column} className="flex flex-col gap-5 lg:sticky lg:top-28 lg:self-start">
+        {/* The section title is part of what sticks, so the column holds from the title and not from the line under it. On wide screens it starts full size, running on past the column with the list below it, and shrinks once the column is stuck. */}
+        {title && <div className={cn("lg:whitespace-nowrap lg:[&_h2]:transition-[font-size] lg:[&_h2]:duration-300 motion-reduce:lg:[&_h2]:transition-none", stuck && "lg:[&_h2]:text-2xl")}>{title}</div>}
         <div className="flex flex-col gap-2">
           <p className="text-sm leading-relaxed whitespace-nowrap text-muted-foreground">
             Not here? Read the{" "}
@@ -35,10 +78,20 @@ export function Faq({ items }: { items: FaqItem[] }) {
             .
           </p>
         </div>
-        <div role="group" aria-label="Filter the questions by topic" className="-mx-4 flex gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] [scrollbar-width:none] lg:mx-0 lg:flex-col lg:items-start lg:overflow-visible lg:px-0 lg:[mask-image:none] [&::-webkit-scrollbar]:hidden">
+        <div role="group" aria-label="Filter the questions by topic" className="relative -mx-4 flex gap-2 overflow-x-auto px-4 [mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)] [scrollbar-width:none] lg:mx-0 lg:flex-col lg:items-start lg:overflow-visible lg:px-0 lg:[mask-image:none] [&::-webkit-scrollbar]:hidden">
+          {box && (
+            <span
+              aria-hidden
+              className={cn("pointer-events-none absolute top-0 left-0 border border-primary", slide && "transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none")}
+              style={{ width: box.w, height: box.h, transform: `translate(${box.x}px, ${box.y}px)` }}
+            />
+          )}
           {topics.map((t) => (
             <button
               key={t}
+              ref={(el) => {
+                chips.current[t] = el;
+              }}
               type="button"
               aria-pressed={topic === t}
               onClick={() => {
@@ -47,7 +100,7 @@ export function Faq({ items }: { items: FaqItem[] }) {
                 const next = items.filter((i) => t === "All" || i.topic === t);
                 if (!next.some((i) => i.q === open)) setOpen(next[0]?.q ?? null);
               }}
-              className={cn("relative flex shrink-0 items-center gap-2 border px-3 py-1.5 text-sm transition-colors duration-300", topic === t ? "border-primary text-primary" : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground")}
+              className={cn("relative flex shrink-0 items-center gap-2 border px-3 py-1.5 text-sm transition-colors duration-300", topic === t ? "border-transparent text-primary" : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground")}
             >
               {t}
               <span className="text-xs tabular-nums text-muted-foreground">{t === "All" ? items.length : items.filter((i) => i.topic === t).length}</span>
@@ -56,7 +109,7 @@ export function Faq({ items }: { items: FaqItem[] }) {
         </div>
       </div>
 
-      <div className="flex flex-col border-t border-border">
+      <div className="flex flex-col border-t border-border lg:mt-[4.5rem]">
         {shown.map((f, i) => {
           const isOpen = open === f.q;
           const id = `${base}-${i}`;
