@@ -16,6 +16,19 @@ const MAX_NAME = 40;
 export interface TokenInfo {
   symbol?: string;
   name?: string;
+  /** A small picture of the coin, always on Helius's own image address (see `cleanImage`). */
+  image?: string;
+}
+
+const HELIUS_IMAGES = "https://cdn.helius-rpc.com/cdn-cgi/image/";
+
+/**
+ * The coin's picture, only from Helius's image proxy and resized to a thumbnail. The address a coin's creator typed can point anywhere, and a page that
+ * loaded it would tell that server who is looking; the proxy fetches it instead, so the browser only ever talks to Helius.
+ */
+export function cleanImage(raw: unknown): string | undefined {
+  if (typeof raw !== "string" || raw.length > 700 || /\s/.test(raw) || !raw.startsWith(`${HELIUS_IMAGES}/`)) return undefined;
+  return `${HELIUS_IMAGES}width=96,height=96,fit=cover,format=auto/${raw.slice(HELIUS_IMAGES.length + 1)}`;
 }
 
 /** Code point ranges removed from names: control characters, the zero-width ones, and the left-to-right and right-to-left overrides and isolates. */
@@ -42,7 +55,7 @@ export function cleanText(raw: unknown, max: number): string | undefined {
 
 interface Asset {
   id?: string;
-  content?: { metadata?: { name?: unknown; symbol?: unknown } };
+  content?: { metadata?: { name?: unknown; symbol?: unknown }; files?: { cdn_uri?: unknown }[] };
   token_info?: { symbol?: unknown };
 }
 
@@ -55,7 +68,8 @@ export function parseAssets(json: unknown): Map<string, TokenInfo> {
     if (!a?.id) continue;
     const symbol = cleanText(a.content?.metadata?.symbol ?? a.token_info?.symbol, MAX_SYMBOL);
     const name = cleanText(a.content?.metadata?.name, MAX_NAME);
-    if (symbol || name) out.set(a.id, { ...(symbol ? { symbol } : {}), ...(name ? { name } : {}) });
+    const image = cleanImage(a.content?.files?.[0]?.cdn_uri);
+    if (symbol || name) out.set(a.id, { ...(symbol ? { symbol } : {}), ...(name ? { name } : {}), ...(image ? { image } : {}) });
   }
   return out;
 }

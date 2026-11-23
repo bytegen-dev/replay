@@ -36,8 +36,8 @@ const open = async (r: Awaited<ReturnType<typeof scan>>) => {
 test("the spreadsheet has a summary, every trade, and the closed positions", async () => {
   const r = await scan();
   const wb = await open(r);
-  assert.deepEqual(wb.worksheets.map((w) => w.name), ["Summary", "Trades", "Positions"]);
-  assert.equal(wb.getWorksheet("Trades")!.rowCount, r.trades.length + 1);
+  assert.deepEqual(wb.worksheets.map((w) => w.name), ["Summary", "Trades", "Transactions", "Positions"]);
+  assert.equal(wb.getWorksheet("Transactions")!.rowCount, r.trades.length + 1);
   assert.equal(wb.getWorksheet("Positions")!.rowCount, r.positions.length + 1);
 });
 
@@ -48,7 +48,7 @@ test("the summary totals are formulas over the trades and positions, with the sc
     for (let i = 1; i <= sum.rowCount; i++) if (sum.getCell(`A${i}`).value === label) return sum.getCell(`B${i}`).value as ExcelJS.CellFormulaValue;
     throw new Error(`no row ${label}`);
   };
-  assert.match(find("Fumbled (USD)").formula, /SUM\(Trades!I2:I\d+\)/);
+  assert.match(find("Fumbled (USD)").formula, /SUM\(Transactions!I2:I\d+\)/);
   assert.ok(Math.abs((find("Fumbled (USD)").result as number) - r.totalFumbleUsd) < 1e-6);
   assert.ok(Math.abs((find("Profit (SOL)").result as number) - r.totalProfitSol) < 1e-9);
   assert.match(find("Roundtripped (SOL)").formula, /SUM\(Positions!I2:I\d+\)/);
@@ -56,7 +56,7 @@ test("the summary totals are formulas over the trades and positions, with the sc
 
 test("a measured sell shows its fumble and the coin's ticker, and a sell with no price says why", async () => {
   const r = await scan();
-  const tr = (await open(r)).getWorksheet("Trades")!;
+  const tr = (await open(r)).getWorksheet("Transactions")!;
   const rows = Array.from({ length: tr.rowCount - 1 }, (_, i) => tr.getRow(i + 2));
   const fumbled = rows.filter((x) => typeof x.getCell("I").value === "number" && (x.getCell("I").value as number) > 1000);
   assert.equal(fumbled.length, 1);
@@ -68,7 +68,7 @@ test("a measured sell shows its fumble and the coin's ticker, and a sell with no
 });
 
 test("transactions link to the explorer and dates are real dates", async () => {
-  const tr = (await open(await scan())).getWorksheet("Trades")!;
+  const tr = (await open(await scan())).getWorksheet("Transactions")!;
   const link = tr.getCell("Q2").value as ExcelJS.CellHyperlinkValue;
   assert.match(link.hyperlink, /^https:\/\/solscan\.io\/tx\//);
   assert.ok(tr.getCell("A2").value instanceof Date);
@@ -124,4 +124,16 @@ test("a short burst does not read as an endless rate", () => {
   // 400 transactions in the last minute counts as an hour's worth: still very active, but the rate is bounded.
   assert.equal(veryActive({ transactions: 400, oldest: NOW - 60 }, NOW), true);
   assert.equal(veryActive({ transactions: 300, oldest: NOW - 5 * 86400 }, NOW), false);
+});
+
+test("the Trades sheet has one row per coin with the page's columns and no actions column", async () => {
+  const r = await scan();
+  const ws = (await open(r)).getWorksheet("Trades")!;
+  const head = (ws.getRow(1).values as string[]).slice(1);
+  assert.deepEqual(head.slice(0, 5), ["Coin", "Name", "First trade (UTC)", "Last trade (UTC)", "Bought (SOL)"]);
+  assert.ok(!head.some((h) => /action/i.test(h)));
+  assert.equal(ws.rowCount, new Set(r.trades.map((t) => t.token)).size + 1);
+  // The averages are formulas over the money and token columns.
+  const row = ws.getRow(2);
+  if (typeof row.getCell("G").value === "number" && (row.getCell("G").value as number) > 0) assert.match(String((row.getCell("K").value as { formula: string }).formula), /^E2\/G2$/);
 });

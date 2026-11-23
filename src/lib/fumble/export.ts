@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { coinRows } from "./coins.ts";
 import { isWalletAddress } from "./helius.ts";
 import type { ApiPosition, ApiResult, ApiSell, ApiTrade } from "./service.ts";
 import { fumbleFileName, shortMint } from "./view.ts";
@@ -6,7 +7,7 @@ import { fumbleFileName, shortMint } from "./view.ts";
 export { fumbleFileName };
 
 /**
- * The scan as a spreadsheet: a summary, every trade with its profit, fumble and the profit roundtripped, and the closed positions. The totals
+ * The scan as a spreadsheet: a summary, the trades by coin (as on the page), every transaction with its profit, fumble and the profit roundtripped, and the closed positions. The totals
  * on the summary are formulas over those sheets, so the numbers can be checked and followed.
  */
 
@@ -89,6 +90,7 @@ export function parseFumbleExport(x: unknown): ApiResult | string {
     totalRoundTripUsd: num(r.totalRoundTripUsd) ?? 0,
     totalMissedSol: num(r.totalMissedSol) ?? 0,
     totalMissedUsd: num(r.totalMissedUsd) ?? 0,
+    coins: arr(r.coins).map((c) => ({ token: str(c.token, 60), boughtUsd: num(c.boughtUsd) ?? null, soldUsd: num(c.soldUsd) ?? null, profitUsd: num(c.profitUsd) ?? null, missedSol: num(c.missedSol) ?? 0, missedUsd: num(c.missedUsd) ?? 0 })),
     ranOutOfTime: r.ranOutOfTime === true,
   };
 }
@@ -103,14 +105,68 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Replay";
   const sum = wb.addWorksheet("Summary");
-  const tr = wb.addWorksheet("Trades");
+  const co = wb.addWorksheet("Trades");
+  const tr = wb.addWorksheet("Transactions");
   const po = wb.addWorksheet("Positions");
 
   const label = (mint: string) => r.tokens[mint]?.symbol ?? shortMint(mint);
   const sellBy = new Map(r.sells.map((s) => [s.signature, s]));
   const closing = new Map(r.positions.map((p) => [p.closedBy, p]));
 
-  /* ---- Trades ---- */
+  /* ---- Trades: one row per coin, the same columns as the table on the page (without its buttons) ---- */
+  co.addRow(["Coin", "Name", "First trade (UTC)", "Last trade (UTC)", "Bought (SOL)", "Bought (USD)", "Tokens bought", "Sold (SOL)", "Sold (USD)", "Tokens sold", "Avg entry (SOL)", "Avg exit (SOL)", "Avg entry (USD)", "Avg exit (USD)", "Balance (tokens)", "PnL (SOL)", "PnL (USD)", "PnL (%)", "Fumbled (SOL)", "Fumbled (USD)", "Note", "Coin address"]);
+  co.getRow(1).font = BOLD;
+  co.views = [{ state: "frozen", ySplit: 1 }];
+  const profits = Object.fromEntries(r.sells.map((x) => [x.signature, { profitSol: x.profitSol, matchedTokens: x.matchedTokens }]));
+  const coins = coinRows(r.trades, profits, r.coins);
+  coins.forEach((c, i) => {
+    const row = i + 2;
+    const e = c.extra;
+    const name = r.tokens[c.mint]?.name;
+    const put = (col: string, value: ExcelJS.CellValue, fmt?: string) => {
+      co.getCell(`${col}${row}`).value = value;
+      if (fmt) co.getCell(`${col}${row}`).numFmt = fmt;
+    };
+    put("A", label(c.mint));
+    put("B", name && name.toLowerCase() !== label(c.mint).toLowerCase() ? name : "");
+    put("C", date(c.firstAt), DATE_FMT);
+    put("D", date(c.lastAt), DATE_FMT);
+    put("E", c.boughtSol, SOL);
+    if (e?.boughtUsd != null) put("F", e.boughtUsd, USD);
+    put("G", c.boughtTokens, "#,##0.##");
+    if (c.soldTokens > 0) {
+      put("H", c.soldSol, SOL);
+      if (e?.soldUsd != null) put("I", e.soldUsd, USD);
+      put("J", c.soldTokens, "#,##0.##");
+    }
+    // The averages are formulas over the money and token columns, so they can be checked.
+    if (c.boughtTokens > 0) {
+      put("K", { formula: `E${row}/G${row}`, result: c.avgEntrySol ?? 0 }, "0.000000000");
+      if (e?.boughtUsd != null) put("M", { formula: `F${row}/G${row}`, result: e.boughtUsd / c.boughtTokens }, "0.000000000");
+    }
+    if (c.soldTokens > 0) {
+      put("L", { formula: `H${row}/J${row}`, result: c.avgExitSol ?? 0 }, "0.000000000");
+      if (e?.soldUsd != null) put("N", { formula: `I${row}/J${row}`, result: e.soldUsd / c.soldTokens }, "0.000000000");
+    }
+    put("O", c.balance > 0 ? c.balance : "Sold all", c.balance > 0 ? "#,##0.##" : undefined);
+    if (c.profitSol !== null) {
+      put("P", c.profitSol, SOL);
+      if (e?.profitUsd != null) put("Q", e.profitUsd, USD);
+      if (c.profitPct !== null) put("R", c.profitPct, "0.0%");
+    }
+    if (c.soldTokens > 0 && e) {
+      put("S", e.missedSol, SOL);
+      put("T", e.missedUsd, USD);
+    }
+    const notes: string[] = [];
+    if (c.costUnknown) notes.push("Bought before the history, so no PnL shown");
+    else if (c.partial) notes.push("Sold more than the trades read show bought; PnL covers only the part bought inside the history");
+    co.getCell(`U${row}`).value = notes.join("; ");
+    co.getCell(`V${row}`).value = c.mint;
+  });
+  co.columns = [{ width: 12 }, { width: 22 }, { width: 17 }, { width: 17 }, { width: 13 }, { width: 13 }, { width: 16 }, { width: 13 }, { width: 13 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 16 }, { width: 13 }, { width: 13 }, { width: 10 }, { width: 13 }, { width: 13 }, { width: 50 }, { width: 46 }];
+
+  /* ---- Transactions: every buy and sell ---- */
   tr.addRow(["Time (UTC)", "Side", "Coin", "Name", "Tokens", "SOL", "Profit (SOL)", "Profit (USD)", "Fumble (USD)", "Fumble (SOL)", "Peak after sale (x)", "Peak date (UTC)", "Roundtripped (SOL)", "Roundtripped (USD)", "Note", "Coin address", "Transaction"]);
   tr.getRow(1).font = BOLD;
   tr.views = [{ state: "frozen", ySplit: 1 }];
@@ -209,12 +265,12 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
     ["Wallet", r.wallet],
     ["Scanned (UTC)", date(r.scannedAt), DATE_FMT],
     ["History read", r.coverage.complete ? "All of it" : r.coverage.oldest ? `Back to ${date(r.coverage.oldest).toISOString().slice(0, 10)} (older trades were not read)` : "Part of it"],
-    ["Trades of 0.1 SOL or more", { formula: `COUNTA(Trades!B2:B${last})`, result: trades.length }, "0"],
-    ["Sells", { formula: `COUNTIF(Trades!B2:B${last},"Sell")`, result: trades.filter((t) => t.side === "sell").length }, "0"],
-    ["Profit (SOL)", { formula: `SUM(Trades!G2:G${last})`, result: r.totalProfitSol }, SOL],
-    ["Profit (USD)", { formula: `SUM(Trades!H2:H${last})`, result: r.totalProfitUsd }, USD],
-    ["Fumbled (USD)", { formula: `SUM(Trades!I2:I${last})`, result: r.totalFumbleUsd }, USD],
-    ["Fumbled (SOL)", { formula: `SUM(Trades!J2:J${last})`, result: r.totalFumbleSol }, SOL],
+    ["Trades of 0.1 SOL or more", { formula: `COUNTA(Transactions!B2:B${last})`, result: trades.length }, "0"],
+    ["Sells", { formula: `COUNTIF(Transactions!B2:B${last},"Sell")`, result: trades.filter((t) => t.side === "sell").length }, "0"],
+    ["Profit (SOL)", { formula: `SUM(Transactions!G2:G${last})`, result: r.totalProfitSol }, SOL],
+    ["Profit (USD)", { formula: `SUM(Transactions!H2:H${last})`, result: r.totalProfitUsd }, USD],
+    ["Fumbled (USD)", { formula: `SUM(Transactions!I2:I${last})`, result: r.totalFumbleUsd }, USD],
+    ["Fumbled (SOL)", { formula: `SUM(Transactions!J2:J${last})`, result: r.totalFumbleSol }, SOL],
     ["Roundtripped (SOL)", { formula: `SUM(Positions!I2:I${lastPos})`, result: r.totalRoundTripSol }, SOL],
     ["Roundtripped (USD)", { formula: `SUM(Positions!J2:J${lastPos})`, result: r.totalRoundTripUsd }, USD],
     // Fumbles and round-trips together, counting each closed position once (the larger of its two), so not the sum of the two lines above.

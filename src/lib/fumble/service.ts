@@ -74,6 +74,17 @@ export function toApiTrades(wallet: string, t: TradeList): ApiTrades {
 /** What a scan sends while it runs: progress, and once the history is read the trade list. */
 export type ScanEvent = ({ type: "progress" } & ScanProgress) | { type: "trades"; data: ApiTrades };
 
+/** What the scan works out for one coin that needs prices: the dollar value of what was bought and sold, the profit in dollars, and the coin's total fumble. */
+export interface ApiCoin {
+  token: string;
+  boughtUsd: number | null;
+  soldUsd: number | null;
+  profitUsd: number | null;
+  /** The coin's total fumble: its fumbles and round-trips together without counting it twice (see missed.ts). */
+  missedSol: number;
+  missedUsd: number;
+}
+
 /** One closed position: a coin bought and then sold out of, with the profit it gave back. Money is SOL; times are seconds since 1970. */
 export interface ApiPosition {
   token: string;
@@ -122,6 +133,8 @@ export interface ApiResult extends ApiTrades {
   /** The total fumble: the two above together without counting a coin twice. */
   totalMissedSol: number;
   totalMissedUsd: number;
+  /** One entry per coin traded, with what needed prices. */
+  coins: ApiCoin[];
   ranOutOfTime: boolean;
 }
 
@@ -175,6 +188,7 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     totalRoundTripUsd: r.totalRoundTripUsd,
     totalMissedSol: r.totalMissedSol,
     totalMissedUsd: r.totalMissedUsd,
+    coins: r.coins,
     ranOutOfTime: r.ranOutOfTime,
   };
 }
@@ -221,13 +235,14 @@ export function createScanner(opts: ScannerOptions) {
    * Scans a wallet, or returns the fresh scan already done, or joins the one already running for it (and so also gets its events,
    * including the trade list if that was already sent). `cached` says whether the result came from a previous scan.
    */
-  async function scan(wallet: string, onEvent?: (e: ScanEvent) => void, scanOpts: { more?: boolean; target?: number } = {}): Promise<{ result: ApiResult; cached: boolean }> {
+  async function scan(wallet: string, onEvent?: (e: ScanEvent) => void, scanOpts: { more?: boolean; target?: number; refresh?: boolean } = {}): Promise<{ result: ApiResult; cached: boolean }> {
     const more = scanOpts.more === true;
     const target = scanOpts.target;
     // Reading further back, or a scan with its own size, is new work: it never takes a finished scan, and it runs apart from an ordinary scan of the same wallet.
     const own = more || target !== undefined;
     const key = own ? `${wallet}#${more ? "more" : "scan"}${target ?? ""}` : wallet;
-    const hit = own ? null : peek(wallet);
+    // A refresh asks for what is new now, so it never takes a finished scan either (it still joins one that is running, and reads only what is new).
+    const hit = own || scanOpts.refresh === true ? null : peek(wallet);
     if (hit) return { result: hit, cached: true };
 
     const joined = running.get(key);

@@ -84,6 +84,16 @@ export interface ScannedPosition {
   source: string | null;
 }
 
+/** What the scan works out for one coin that needs prices (see ApiCoin in service.ts). `token` is the coin's address. */
+export interface ScannedCoin {
+  token: string;
+  boughtUsd: number | null;
+  soldUsd: number | null;
+  profitUsd: number | null;
+  missedSol: number;
+  missedUsd: number;
+}
+
 export interface ScanResult {
   wallet: string;
   history: HistorySummary;
@@ -116,6 +126,8 @@ export interface ScanResult {
   /** The total fumble: fumbles and round-trips together without counting a coin twice (see missed.ts), in SOL and in dollars. */
   totalMissedSol: number;
   totalMissedUsd: number;
+  /** One entry per coin traded: the dollar value of what was bought and sold, the profit in dollars, and the coin's total fumble. */
+  coins: ScannedCoin[];
   /** True when pricing stopped early because time ran out; the sells left unpriced say so. */
   ranOutOfTime: boolean;
 }
@@ -268,7 +280,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
   const series = new Map<string, PriceSeries | null>();
   const timedOut = new Set<string>();
   // The SOL price through every position and sale, in one lookup, so holdings can be valued in SOL and profits in dollars.
-  const solTimes = [...positions.map((p) => p.openedAt), ...lots.map((l) => l.sell.time)];
+  const solTimes = [...positions.map((p) => p.openedAt), ...lots.map((l) => l.sell.time), ...tradeList.map((t) => t.time)];
   const solSeries = solTimes.length && !deps.outOfTime?.() ? await deps.prices(SOL_MINT, Math.min(...solTimes), now) : null;
   const solAt = (time: number) => (solSeries ? priceAt(solSeries.candles, time) : null);
   let done = 0;
@@ -327,6 +339,25 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     if (!worst || s.fumble.fumbleUsd > (worst.fumble as { fumbleUsd: number }).fumbleUsd) worst = s;
   }
   const missed = missedTotals(sells, scannedPositions);
+  // Each coin's money in dollars, at the SOL price of each trade, and its own share of the total fumble. A dollar value that cannot be worked out
+  // (no SOL price for a trade) is null, not a made-up number.
+  const coins: ScannedCoin[] = [...new Set(tradeList.map((t) => t.mint))].map((mint) => {
+    const own = tradeList.filter((t) => t.mint === mint);
+    const usdOf = (side: "buy" | "sell") => {
+      let sum = 0;
+      for (const t of own) {
+        if (t.side !== side) continue;
+        const rate = solAt(t.time);
+        if (!rate) return null;
+        sum += t.sol * rate;
+      }
+      return sum;
+    };
+    const mine = sells.filter((x) => x.lot.sell.mint === mint);
+    const profits = mine.map((x) => x.profitUsd);
+    const m = missedTotals(mine, scannedPositions.filter((p) => p.position.mint === mint));
+    return { token: mint, boughtUsd: usdOf("buy"), soldUsd: usdOf("sell"), profitUsd: mine.length && profits.every((v) => v !== null) ? profits.reduce<number>((a, v) => a + (v ?? 0), 0) : null, missedSol: m.sol, missedUsd: m.usd };
+  });
   await persisted;
   deps.onProgress?.({ stage: "done", done: order.length, total: order.length });
   return {
@@ -345,6 +376,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     totalRoundTripUsd,
     totalMissedSol: missed.sol,
     totalMissedUsd: missed.usd,
+    coins,
     unpriced: sells.filter((s) => s.fumble.status !== "ok").length,
     totalFumbleUsd: total,
     totalFumbleSol: totalSol,

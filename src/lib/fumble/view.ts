@@ -146,11 +146,11 @@ export function sol(x: number): string {
 }
 
 /** How a coin is written in a row: its ticker, and its name when that says something more. With no metadata the ticker is the shortened address. */
-export function tokenLabel(mint: string, tokens: Record<string, TokenInfo> | undefined): { ticker: string; name: string | null } {
+export function tokenLabel(mint: string, tokens: Record<string, TokenInfo> | undefined): { ticker: string; name: string | null; image?: string } {
   const info = tokens?.[mint];
   const ticker = info?.symbol ?? shortMint(mint);
   const name = info?.name && info.name.toLowerCase() !== ticker.toLowerCase() ? info.name : null;
-  return { ticker, name };
+  return { ticker, name, ...(info?.image ? { image: info.image } : {}) };
 }
 
 export const explorerUrl = (mint: string) => `https://dexscreener.com/solana/${mint}`;

@@ -110,3 +110,14 @@ test("a failed lookup leaves those coins unnamed and never throws, and no lookup
   assert.deepEqual(failing.snapshot(), {});
   assert.equal(await createNameBook(undefined).ensure([WIN]), false);
 });
+
+import { cleanImage } from "../src/lib/fumble/tokens.ts";
+
+test("a coin's picture is kept only from Helius's image proxy, resized to a thumbnail", () => {
+  const raw = "https://cdn.helius-rpc.com/cdn-cgi/image//https://example.com/coin.webp";
+  assert.equal(cleanImage(raw), "https://cdn.helius-rpc.com/cdn-cgi/image/width=96,height=96,fit=cover,format=auto/https://example.com/coin.webp");
+  assert.equal(cleanImage("https://example.com/coin.webp"), undefined);
+  assert.equal(cleanImage("https://cdn.helius-rpc.com.evil.com/cdn-cgi/image//x"), undefined);
+  assert.equal(cleanImage("https://cdn.helius-rpc.com/cdn-cgi/image//https://a.com/x y"), undefined);
+  assert.equal(cleanImage(42), undefined);
+});

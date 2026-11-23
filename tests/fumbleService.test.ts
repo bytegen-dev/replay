@@ -37,6 +37,7 @@ const empty = (wallet: string): ScanResult => ({
   totalRoundTripUsd: 0,
   totalMissedSol: 0,
   totalMissedUsd: 0,
+  coins: [],
   sells: [],
   unpriced: 0,
   totalFumbleUsd: 0,
@@ -477,4 +478,14 @@ test("a scan with its own size is passed that size, and never takes a cached sca
   const sized = await scanner.scan(WALLET, undefined, { target: 250 });
   assert.equal(sized.cached, false);
   assert.deepEqual(runs, [undefined, 250]);
+});
+
+test("a refresh never takes a finished scan, and the new scan replaces it", async () => {
+  let runs = 0;
+  const s = createScanner({ run: async (w) => (runs++, empty(w)), now: () => 1000, ttlSeconds: 600 });
+  await s.scan(WALLET);
+  assert.equal((await s.scan(WALLET)).cached, true);
+  assert.equal((await s.scan(WALLET, undefined, { refresh: true })).cached, false);
+  assert.equal(runs, 2);
+  assert.equal((await s.scan(WALLET)).cached, true);
 });

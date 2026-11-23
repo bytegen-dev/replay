@@ -1,13 +1,13 @@
 "use client";
 
-import { FileSpreadsheet, ImageDown, Settings } from "lucide-react";
+import { FileSpreadsheet, ImageDown, RefreshCw, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CoinTable } from "@/components/CoinTable";
 import { MarkLoader } from "@/components/MarkLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
@@ -17,13 +17,13 @@ import { ImagePreviewDialog } from "@/components/ImagePreviewDialog";
 import { downloadFile } from "@/lib/download.ts";
 import { figure, showIn, SOL_UNIT, USD_UNIT, type Display, type Unit } from "@/lib/fumble/money.ts";
 import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
+import { coinRows, type CoinRow } from "@/lib/fumble/coins.ts";
+import { renderTradeCard, tradeCardFileName } from "@/lib/fumble/tradeCard.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
-import { buildRows, explorerUrl, fumbleCell, makeEventReader, pnlCell, roundTripCell, times, tokenLabel, veryActive, fumbleFileName, reachLabel, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type FumbleCell, type PnlCell, type Row, type RoundTripCell, type StreamEvent } from "@/lib/fumble/view.ts";
+import { makeEventReader, tokenLabel, veryActive, fumbleFileName, reachLabel, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
-
-const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
  * Paste a wallet, see its trades as soon as they are read, and watch each sell's fumble fill in as the prices come. One request
@@ -109,7 +109,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     return () => clearTimeout(id);
   }, []);
 
-  const scan = useCallback(async (wallet: string, more = false) => {
+  const scan = useCallback(async (wallet: string, more = false, refresh = false) => {
     abort.current?.abort();
     const ctl = new AbortController();
     abort.current = ctl;
@@ -117,8 +117,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     setError(null);
     setProgress({ stage: "history", done: 0, total: 0 });
     setLoadingMore(more);
-    // Loading more keeps the trades already on screen, and the new ones join them as they are read.
-    if (!more) {
+    // Loading more, or refreshing, keeps the trades already on screen, and the new ones join them as they are read.
+    if (!more && !refresh) {
       setTrades(null);
       setResult(null);
     }
@@ -154,7 +154,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     });
 
     try {
-      const post = () => fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, ...(more ? { more: true } : {}), ...(settingsRef.current.perLoad !== DEFAULT_SETTINGS.perLoad ? { limit: settingsRef.current.perLoad } : {}) }), signal: ctl.signal });
+      const post = () => fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, ...(more ? { more: true } : {}), ...(refresh ? { refresh: true } : {}), ...(settingsRef.current.perLoad !== DEFAULT_SETTINGS.perLoad ? { limit: settingsRef.current.perLoad } : {}) }), signal: ctl.signal });
       let res = await post();
       // The invisible bot check: pass it once (usually unseen, and good for 12 hours here and in Wayback), then scan again.
       if (res.status === 403) {
@@ -243,7 +243,20 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   }, [scan, launch]);
 
   const scanning = status === "scanning";
-  const rows = trades ? buildRows(trades.trades, result?.sells ?? null, result?.positions ?? null).filter((r) => !settings.sellsOnly || r.trade.side === "sell") : [];
+  // The trades by coin: from the trade list as it is read, with the dollar values and fumbles added once the scan has finished. A coin hidden with its
+  // eye button (kept per wallet, until the page is left) is left out.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  const [sharing, setSharing] = useState<CoinRow | null>(null);
+  const allCoins = useMemo(() => {
+    if (!trades) return [];
+    const profits = result ? Object.fromEntries(result.sells.map((x) => [x.signature, { profitSol: x.profitSol, matchedTokens: x.matchedTokens }])) : trades.pnl;
+    return coinRows(trades.trades, profits, result?.coins ?? null);
+  }, [trades, result]);
+  const keyOf = (mint: string) => `${trades?.wallet}:${mint}`;
+  const shown = allCoins.filter((c) => !hidden.has(keyOf(c.mint)) && (!settings.sellsOnly || c.soldTokens > 0));
+  const hiddenCount = allCoins.filter((c) => hidden.has(keyOf(c.mint))).length;
+  const sharedTicker = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).ticker : "";
+  const renderShared = useCallback(() => renderTradeCard(sharing!, sharedTicker, display, asOf || Math.floor(Date.now() / 1000)), [sharing, sharedTicker, display, asOf]);
 
   return (
     <div
@@ -335,8 +348,18 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
 
       {trades && (
         <>
-          <Summary trades={trades} result={result} asOf={asOf} display={display} settings={settings} onSettings={update} />
-          <TradeTable rows={rows} tokens={trades.tokens} pnl={trades.pnl} done={status === "done"} display={display} />
+          <Summary trades={trades} result={result} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
+          <CoinTable
+            coins={shown}
+            tokens={trades.tokens}
+            done={status === "done"}
+            display={display}
+            hiddenCount={hiddenCount}
+            onHide={(mint) => setHidden((h) => new Set(h).add(keyOf(mint)))}
+            onShowHidden={() => setHidden((h) => new Set([...h].filter((k) => !k.startsWith(`${trades.wallet}:`))))}
+            onShare={setSharing}
+          />
+          {sharing && <ImagePreviewDialog open title={`Your ${sharedTicker} trade`} fileName={tradeCardFileName(sharedTicker, sharing.lastAt)} render={renderShared} onClose={() => setSharing(null)} />}
           {/* The wallet has more: another hundred trades are read from where this stopped. */}
           {trades.coverage.extendable && (result || loadingMore) && (
             <div className="flex flex-col items-start gap-3">
@@ -371,7 +394,7 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
 }
 
 /** One headline number: dollars big, SOL under it, and what it means in a line. A signed one (profit) is green for a gain and red for a loss. */
-function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture, hero }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about: string; className?: string; texture?: boolean; hero?: boolean }) {
+function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture, hero }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean }) {
   const tone = hero && !pending && !empty ? "text-destructive" : signed && !pending && !empty ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
   // A dollar value of exactly nothing next to a SOL amount means no dollar price was found, not that it is worth nothing.
   const fig = figure(display, sols, dollars === 0 && sols !== 0 ? null : dollars, signed);
@@ -391,7 +414,7 @@ function Stat({ label, dollars, sols, display, pending, empty, signed, about, cl
       <p className="text-sm text-muted-foreground">{label}</p>
       <p className={cn("font-heading leading-none font-bold tabular-nums", hero ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : fig.main}</p>
       <p className="h-5 text-sm tabular-nums text-muted-foreground">{pending || empty ? "" : (fig.sub ?? "")}</p>
-      <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{about}</p>
+      {about && <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{about}</p>}
     </div>
   );
 }
@@ -485,8 +508,8 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
               label="Table"
               value={settings.sellsOnly ? "sells" : "all"}
               options={[
-                { value: "all", text: "All trades" },
-                { value: "sells", text: "Sells only" },
+                { value: "all", text: "All coins" },
+                { value: "sells", text: "Sold coins only" },
               ]}
               onPick={(v) => onChange({ sellsOnly: v === "sells" })}
             />
@@ -501,7 +524,7 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
   );
 }
 
-function Summary({ trades, result, asOf, display, settings, onSettings }: { trades: ApiTrades; result: ApiResult | null; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void }) {
+function Summary({ trades, result, asOf, display, settings, onSettings, busy, onRefresh }: { trades: ApiTrades; result: ApiResult | null; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void; busy: boolean; onRefresh: () => void }) {
   const unknown = result?.unknown ?? 0;
   const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
@@ -535,7 +558,7 @@ function Summary({ trades, result, asOf, display, settings, onSettings }: { trad
     <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card" style={{ "--pulse-speed": "6s" } as React.CSSProperties}>
       <FumbleSettingsDialog settings={settings} onChange={onSettings} />
       {/* The headline is the total fumble; the three numbers under it are what it is made of (and the PnL, for the record). */}
-      <Stat label="Total fumble" hero texture display={display} dollars={result?.totalMissedUsd ?? 0} sols={result?.totalMissedSol ?? 0} pending={!result} empty={!!result && result.measured === 0 && !result.positions.some((p) => p.status === "ok")} about="Upside you missed after selling, plus profit you gave back. Each coin counts once." />
+      <Stat label="Total fumble" hero texture display={display} dollars={result?.totalMissedUsd ?? 0} sols={result?.totalMissedSol ?? 0} pending={!result} empty={!!result && result.measured === 0 && !result.positions.some((p) => p.status === "ok")} />
       <div className="grid border-t border-border sm:grid-cols-3">
         <Stat label="Missed after selling" display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." />
         <Stat
@@ -545,7 +568,7 @@ function Summary({ trades, result, asOf, display, settings, onSettings }: { trad
           sols={result?.totalRoundTripSol ?? 0}
           pending={!result}
           empty={!!result && result.positions.length === 0}
-          about="Peak profit minus what you kept."
+          about="Peak profit minus realized."
           className="border-t border-border sm:border-t-0 sm:border-l"
         />
         <Stat label="PnL" display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="Total realized profit." className="border-t border-border sm:border-t-0 sm:border-l" />
@@ -569,173 +592,12 @@ function Summary({ trades, result, asOf, display, settings, onSettings }: { trad
           <button type="button" onClick={exportSheet} disabled={exporting} className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary disabled:opacity-60">
             <FileSpreadsheet className="size-4" aria-hidden /> {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
           </button>
+          {/* Looks for trades made since this scan. Only the new transactions are read, so it is quick. */}
+          <button type="button" onClick={onRefresh} disabled={busy} className="ml-auto inline-flex h-10 items-center gap-2 border border-border px-4 text-sm font-bold text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:opacity-60">
+            <RefreshCw className={cn("size-4", busy && "animate-spin")} aria-hidden /> {busy ? "Refreshing" : "Refresh"}
+          </button>
         </div>
       )}
     </section>
-  );
-}
-
-/* The cells of the table, shared by the wide table and the phone list. */
-
-function CoinCell({ row, tokens }: { row: Row; tokens: ApiTrades["tokens"] }) {
-  const { trade } = row;
-  const label = tokenLabel(trade.token, tokens);
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <span className={cn("inline-flex h-5 w-10 shrink-0 items-center justify-center border text-xs font-bold", trade.side === "buy" ? "border-primary text-primary" : "border-foreground/40 text-foreground")}>{trade.side === "buy" ? "Buy" : "Sell"}</span>
-      <a href={explorerUrl(trade.token)} target="_blank" rel="noreferrer" className="shrink-0 font-bold underline-offset-4 hover:text-primary hover:underline" title={trade.token}>
-        {label.ticker}
-      </a>
-      {label.name && <span className="truncate text-muted-foreground">{label.name}</span>}
-    </span>
-  );
-}
-
-function PnlView({ cell, display }: { cell: PnlCell; display: Display }) {
-  if (cell.kind === "none") return <span className="text-muted-foreground">&mdash;</span>;
-  // Waiting for the rest of the history, not for prices: a sell's profit needs the buys before it.
-  if (cell.kind === "pending") return <span className="animate-pulse text-muted-foreground" title="Waiting for the rest of the history">&hellip;</span>;
-  if (cell.kind === "unknown")
-    return (
-      <span className="text-muted-foreground" title="None of these coins were bought in the part of the history that was read, so what they cost is not known.">
-        Cost unknown
-      </span>
-    );
-  const gain = cell.sol >= 0;
-  const fig = figure(display, cell.sol, cell.usd, true);
-  const detail = [fig.sub, cell.partial ? "part of the sale" : null].filter(Boolean).join(", ");
-  return (
-    <>
-      <span className={cn("block font-bold tabular-nums", gain ? "text-primary" : "text-destructive")}>{fig.main}</span>
-      {detail && <span className="block text-xs whitespace-nowrap text-muted-foreground">{detail}</span>}
-    </>
-  );
-}
-
-function FumbleView({ cell, display }: { cell: FumbleCell; display: Display }) {
-  if (cell.kind === "none") return <span className="text-muted-foreground">&mdash;</span>;
-  if (cell.kind === "pricing") return <span className="animate-pulse text-muted-foreground">Pricing</span>;
-  if (cell.kind === "sold-well") return <span className="text-muted-foreground">No fumble</span>;
-  if (cell.kind === "unknown")
-    return (
-      <span className="text-muted-foreground" title={cell.reason}>
-        No price data
-      </span>
-    );
-  return (
-    <>
-      <span className="block font-bold tabular-nums text-destructive">{figure(display, cell.sol, cell.usd).main}</span>
-      <span className="block text-xs whitespace-nowrap text-muted-foreground">
-        {figure(display, cell.sol, cell.usd).sub ? `${figure(display, cell.sol, cell.usd).sub}, ` : ""}{times(cell.peakMultiple)} after
-      </span>
-    </>
-  );
-}
-
-function TripView({ cell, display }: { cell: RoundTripCell; display: Display }) {
-  if (cell.kind === "none") return <span className="text-muted-foreground">&mdash;</span>;
-  if (cell.kind === "kept") return <span className="text-muted-foreground">Sold near the peak</span>;
-  if (cell.kind === "unknown")
-    return (
-      <span className="text-muted-foreground" title={cell.reason}>
-        No price data
-      </span>
-    );
-  return (
-    <>
-      <span className="block font-bold tabular-nums text-destructive">{figure(display, cell.sol, cell.usd).main}</span>
-      <span className="block text-xs whitespace-nowrap text-muted-foreground">
-        {figure(display, cell.sol, cell.usd).sub ? `${figure(display, cell.sol, cell.usd).sub}, ` : ""}{Math.round(cell.share * 100)}% of its profit
-      </span>
-    </>
-  );
-}
-
-/**
- * The trades, in the same table the Wayback results use: a bordered box, a header that stays put, striped rows, and a first column that
- * stays put when it scrolls sideways. On a phone the rows stack instead, because six columns do not fit.
- */
-function TradeTable({ rows, tokens, pnl, done, display }: { rows: Row[]; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean; display: Display }) {
-  if (rows.length === 0) return <p className="text-sm text-muted-foreground">No trades of 0.1 SOL or more in what was read.</p>;
-  const head = "sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]";
-  return (
-    <section aria-label="Trades" className="overflow-x-auto border border-border bg-background/80 backdrop-blur-xl">
-      <Table className="min-w-[860px]" containerClassName="hidden max-h-[40rem] overflow-auto sm:block">
-        <TableHeader className="sticky top-0 z-10 bg-card">
-          <TableRow className="hover:bg-transparent">
-            <TableHead className={cn(head, "left-0 z-20 shadow-[inset_0_-1px_0_var(--border),inset_-1px_0_0_var(--border)]")}>When</TableHead>
-            <TableHead className={head}>Coin</TableHead>
-            <TableHead className={cn(head, "text-right")}>Size</TableHead>
-            <TableHead className={cn(head, "text-right")}>PnL</TableHead>
-            <TableHead className={cn(head, "text-right")}>Fumble</TableHead>
-            <TableHead className={cn(head, "text-right")}>Roundtripped</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.trade.signature} className="align-top odd:bg-muted/40 hover:bg-muted/60">
-              <TableCell className="sticky left-0 z-[5] bg-card font-bold whitespace-nowrap shadow-[inset_-1px_0_0_var(--border)]">{when(r.trade.time)}</TableCell>
-              <TableCell>
-                <CoinCell row={r} tokens={tokens} />
-              </TableCell>
-              <TableCell className="text-right whitespace-nowrap tabular-nums">{r.trade.sol.toFixed(2)} SOL</TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <PnlView cell={pnlCell(r, done, pnl)} display={display} />
-              </TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <FumbleView cell={fumbleCell(r, done)} display={display} />
-              </TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <TripView cell={roundTripCell(r)} display={display} />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      <ul className="sm:hidden">
-        {rows.map((r) => (
-          <PhoneRow key={r.trade.signature} row={r} tokens={tokens} pnl={pnl} done={done} display={display} />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function PhoneRow({ row, tokens, pnl: early, done, display }: { row: Row; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean; display: Display }) {
-  const pnl = pnlCell(row, done, early);
-  const fumble = fumbleCell(row, done);
-  const trip = roundTripCell(row);
-  const line = "flex items-baseline justify-between gap-3";
-  return (
-    <li className="flex flex-col gap-1 border-b border-border px-3 py-3 text-sm odd:bg-muted/40 last:border-0">
-      <div className={line}>
-        <CoinCell row={row} tokens={tokens} />
-        <span className="shrink-0 tabular-nums">{row.trade.sol.toFixed(2)} SOL</span>
-      </div>
-      <div className={line}>
-        <span className="text-muted-foreground">{when(row.trade.time)}</span>
-        {pnl.kind !== "none" && (
-          <span className="text-right">
-            <PnlView cell={pnl} display={display} />
-          </span>
-        )}
-      </div>
-      {fumble.kind !== "none" && (
-        <div className={line}>
-          <span className="text-muted-foreground">Fumble</span>
-          <span className="text-right">
-            <FumbleView cell={fumble} display={display} />
-          </span>
-        </div>
-      )}
-      {trip.kind !== "none" && (
-        <div className={line}>
-          <span className="text-muted-foreground">Roundtripped</span>
-          <span className="text-right">
-            <TripView cell={trip} display={display} />
-          </span>
-        </div>
-      )}
-    </li>
   );
 }
