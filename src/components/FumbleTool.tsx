@@ -4,6 +4,8 @@ import { FileSpreadsheet, ImageDown, RefreshCw, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoinTable } from "@/components/CoinTable";
+import { Toast } from "@/components/Toast";
+import { tradesWithout, withoutCoins } from "@/lib/fumble/hide.ts";
 import { MarkLoader } from "@/components/MarkLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +22,7 @@ import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
 import { coinRows, type CoinRow } from "@/lib/fumble/coins.ts";
 import { renderTradeCard, tradeCardFileName } from "@/lib/fumble/tradeCard.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
-import { makeEventReader, tokenLabel, veryActive, fumbleFileName, reachLabel, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
+import { makeEventReader, tokenLabel, veryActive, fumbleFileName, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -255,6 +257,12 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const keyOf = (mint: string) => `${trades?.wallet}:${mint}`;
   const shown = allCoins.filter((c) => !hidden.has(keyOf(c.mint)) && (!settings.sellsOnly || c.soldTokens > 0));
   const hiddenCount = allCoins.filter((c) => hidden.has(keyOf(c.mint))).length;
+  // A hidden coin drops out of the totals, the picture and the spreadsheet as well as the table, so the card adds up to the rows shown.
+  const hiddenMints = useMemo(() => new Set(allCoins.filter((c) => hidden.has(keyOf(c.mint))).map((c) => c.mint)), [allCoins, hidden]); // eslint-disable-line react-hooks/exhaustive-deps
+  const viewTrades = trades ? tradesWithout(trades, hiddenMints) : null;
+  const viewResult = useMemo(() => (result ? withoutCoins(result, hiddenMints) : null), [result, hiddenMints]);
+  const [toast, setToast] = useState<{ mint: string; ticker: string } | null>(null);
+  const closeToast = useCallback(() => setToast(null), []);
   const sharedTicker = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).ticker : "";
   const renderShared = useCallback(() => renderTradeCard(sharing!, sharedTicker, display, asOf || Math.floor(Date.now() / 1000)), [sharing, sharedTicker, display, asOf]);
 
@@ -307,6 +315,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                   )
                 )}
               </form>
+              <div data-human-slot />
 
               {!launch && !trades && !scanning && recent.length > 0 && (
                 <div className="flex max-w-2xl flex-wrap items-center gap-2">
@@ -348,24 +357,42 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
 
       {trades && (
         <>
-          <Summary trades={trades} result={result} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
+          <Summary trades={viewTrades ?? trades} result={viewResult} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
           <CoinTable
             coins={shown}
             tokens={trades.tokens}
             done={status === "done"}
             display={display}
             hiddenCount={hiddenCount}
-            onHide={(mint) => setHidden((h) => new Set(h).add(keyOf(mint)))}
+            onHide={(mint) => {
+              setHidden((h) => new Set(h).add(keyOf(mint)));
+              setToast({ mint, ticker: tokenLabel(mint, trades.tokens).ticker });
+            }}
             onShowHidden={() => setHidden((h) => new Set([...h].filter((k) => !k.startsWith(`${trades.wallet}:`))))}
             onShare={setSharing}
           />
+          {toast && (
+            <Toast
+              message={`${toast.ticker} hidden, and out of the totals.`}
+              action="Undo"
+              onAction={() => {
+                setHidden((h) => {
+                  const next = new Set(h);
+                  next.delete(keyOf(toast.mint));
+                  return next;
+                });
+                setToast(null);
+              }}
+              onClose={closeToast}
+            />
+          )}
           {sharing && <ImagePreviewDialog open title={`Your ${sharedTicker} trade`} fileName={tradeCardFileName(sharedTicker, sharing.lastAt)} render={renderShared} onClose={() => setSharing(null)} />}
           {/* The wallet has more: another hundred trades are read from where this stopped. */}
           {trades.coverage.extendable && (result || loadingMore) && (
             <div className="flex flex-col items-start gap-3">
               <Button type="button" variant="outline" disabled={scanning} onClick={() => void scan(trades.wallet, true)} className="cut-btn h-11 gap-2 rounded-none px-6 text-sm font-bold">
                 {scanning && loadingMore && <MarkLoader className="size-4" />}
-                {scanning && loadingMore ? "Loading more trades" : trades.trades.length ? "Load 100 more trades" : "Keep looking for trades"}
+                {scanning && loadingMore ? "Loading" : "Load more"}
               </Button>
               {scanning && loadingMore && <ProgressLine progress={progress} hasTrades reading={trades.partial} active={active} />}
             </div>
@@ -394,7 +421,7 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
 }
 
 /** One headline number: dollars big, SOL under it, and what it means in a line. A signed one (profit) is green for a gain and red for a loss. */
-function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture, hero }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean }) {
+function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture, hero, loading }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean; loading?: boolean }) {
   const tone = hero && !pending && !empty ? "text-destructive" : signed && !pending && !empty ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
   // A dollar value of exactly nothing next to a SOL amount means no dollar price was found, not that it is worth nothing.
   const fig = figure(display, sols, dollars === 0 && sols !== 0 ? null : dollars, signed);
@@ -412,8 +439,8 @@ function Stat({ label, dollars, sols, display, pending, empty, signed, about, cl
         />
       )}
       <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={cn("font-heading leading-none font-bold tabular-nums", hero ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : fig.main}</p>
-      <p className="h-5 text-sm tabular-nums text-muted-foreground">{pending || empty ? "" : (fig.sub ?? "")}</p>
+      <p className={cn("font-heading leading-none font-bold tabular-nums", hero ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl", loading && "animate-pulse", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : fig.main}</p>
+      <p className={cn("h-5 text-sm tabular-nums text-muted-foreground", loading && "animate-pulse")}>{pending || empty ? "" : (fig.sub ?? "")}</p>
       {about && <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{about}</p>}
     </div>
   );
@@ -547,22 +574,26 @@ function Summary({ trades, result, asOf, display, settings, onSettings, busy, on
       setExporting(false);
     }
   }
+  // One line says how much was read; anything that limits the numbers follows in a few short words, only when it applies.
+  const reach = cov.oldest ? reachSpan(cov.oldest, asOf || Math.floor(trades.coverage.oldest ?? 0)) : null;
   const notes = [
-    cov.oldest ? `${cov.complete ? "All" : "Latest"} ${trades.trades.length} trades, over ${reachLabel(cov.oldest, asOf || Math.floor(trades.coverage.oldest ?? 0))}.` : null,
-    partial > 0 ? `${partial} ${partial === 1 ? "sell" : "sells"} partly traced: some coins were bought before this window.` : null,
-    unknown > 0 ? `${unknown} ${unknown === 1 ? "sell" : "sells"} unpriced, left out of the fumble.` : null,
-    unknownPositions > 0 ? `${unknownPositions} ${unknownPositions === 1 ? "position" : "positions"} unpriced, left out of the roundtrip.` : null,
-    result?.ranOutOfTime ? "Ran out of time before pricing every coin." : null,
+    partial > 0 ? `Buys for ${partial} ${partial === 1 ? "sell" : "sells"} are older than this window.` : null,
+    result?.ranOutOfTime ? "Ran out of time pricing every coin." : unknown > 0 || unknownPositions > 0 ? "Some coins couldn't be priced." : null,
   ].filter((n): n is string => n !== null);
   return (
     <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card" style={{ "--pulse-speed": "6s" } as React.CSSProperties}>
+      {/* Refresh sits beside the settings gear: it looks for trades made since this scan, and only the new transactions are read, so it is quick. */}
+      <button type="button" onClick={onRefresh} disabled={busy} aria-label="Refresh" title="Look for new trades" className="absolute top-2 right-[3.25rem] z-20 flex size-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60">
+        <RefreshCw className={cn("size-6", busy && "animate-spin")} aria-hidden />
+      </button>
       <FumbleSettingsDialog settings={settings} onChange={onSettings} />
       {/* The headline is the total fumble; the three numbers under it are what it is made of (and the PnL, for the record). */}
-      <Stat label="Total fumble" hero texture display={display} dollars={result?.totalMissedUsd ?? 0} sols={result?.totalMissedSol ?? 0} pending={!result} empty={!!result && result.measured === 0 && !result.positions.some((p) => p.status === "ok")} />
+      <Stat label="Total fumble" hero texture loading={busy} display={display} dollars={result?.totalMissedUsd ?? 0} sols={result?.totalMissedSol ?? 0} pending={!result} empty={!!result && result.measured === 0 && !result.positions.some((p) => p.status === "ok")} />
       <div className="grid border-t border-border sm:grid-cols-3">
-        <Stat label="Missed after selling" display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." />
+        <Stat label="Missed after selling" loading={busy} display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." />
         <Stat
           label="Roundtripped"
+          loading={busy}
           display={display}
           dollars={result?.totalRoundTripUsd ?? 0}
           sols={result?.totalRoundTripSol ?? 0}
@@ -571,30 +602,38 @@ function Summary({ trades, result, asOf, display, settings, onSettings, busy, on
           about="Peak profit minus realized."
           className="border-t border-border sm:border-t-0 sm:border-l"
         />
-        <Stat label="PnL" display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="Total realized profit." className="border-t border-border sm:border-t-0 sm:border-l" />
+        <Stat label="PnL" loading={busy} display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="Total realized profit." className="border-t border-border sm:border-t-0 sm:border-l" />
       </div>
-      <div className="flex flex-col gap-1 border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-6">
+      <div className="flex flex-col gap-2 border-t border-border px-5 py-4 text-sm text-muted-foreground sm:px-6">
         <p>
           <span className="font-bold text-foreground tabular-nums">{trades.trades.length}</span> trades, <span className="font-bold text-foreground tabular-nums">{sells}</span> sells
+          {reach && (
+            <>
+              , over{" "}
+              <span title={reach.full} className="cursor-help">
+                {reach.label}
+              </span>
+            </>
+          )}
         </p>
-        {notes.map((n) => (
-          <p key={n}>{n}</p>
-        ))}
+        {notes.length > 0 && (
+          <p className="flex flex-wrap gap-x-5 gap-y-1 text-xs">
+            {notes.map((n) => (
+              <span key={n}>{n}</span>
+            ))}
+          </p>
+        )}
         {exportError && <p className="text-destructive">{exportError}</p>}
       </div>
       {/* The two things to take away, set apart from the notes above so they are easy to find. Only once this scan has finished. */}
       {result && (
         <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-6">
-          <button type="button" onClick={() => setPreviewOpen(true)} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold">
+          <button type="button" onClick={() => setPreviewOpen(true)} disabled={busy} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold disabled:opacity-60">
             <ImageDown className="size-4" aria-hidden /> Download image
           </button>
           <ImagePreviewDialog open={previewOpen} title="Your fumble card" fileName={fumbleCardFileName(result)} fileNameFor={(privacy) => fumbleCardFileName(result, privacy)} privacyMode render={renderCard} onClose={() => setPreviewOpen(false)} />
-          <button type="button" onClick={exportSheet} disabled={exporting} className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary disabled:opacity-60">
+          <button type="button" onClick={exportSheet} disabled={exporting || busy} className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary disabled:opacity-60">
             <FileSpreadsheet className="size-4" aria-hidden /> {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
-          </button>
-          {/* Looks for trades made since this scan. Only the new transactions are read, so it is quick. */}
-          <button type="button" onClick={onRefresh} disabled={busy} className="ml-auto inline-flex h-10 items-center gap-2 border border-border px-4 text-sm font-bold text-muted-foreground transition-colors hover:border-primary hover:text-foreground disabled:opacity-60">
-            <RefreshCw className={cn("size-4", busy && "animate-spin")} aria-hidden /> {busy ? "Refreshing" : "Refresh"}
           </button>
         </div>
       )}

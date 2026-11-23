@@ -207,18 +207,34 @@ export function rememberWallet(list: RecentWallet[], wallet: string, at: number)
 }
 
 /**
- * How far back a set of trades reaches, in words a person says: "the last 3 days", "the last 2 weeks", "the last 5 months", "the last 2 years".
- * `oldest` is the time of the oldest trade and `now` the time it is measured from, both in seconds since 1970.
+ * How far back a set of trades reaches, as the two biggest units that apply: "3 days 4 hours", "2 hours 15 minutes", "2 weeks 6 days",
+ * "5 months 2 weeks", "1 year 3 months". `full` is the same span in one unit for a hover: hours, or minutes when it is under an hour.
+ * `oldest` is the time of the oldest trade and `now` the time it is measured from, both in seconds since 1970; a clock that is behind counts as
+ * no time at all.
  */
-export function reachLabel(oldest: number, now: number): string {
-  const seconds = Math.max(0, now - oldest);
-  const hours = seconds / 3600;
-  const days = hours / 24;
-  const plural = (n: number, unit: string) => (n === 1 ? `the last ${unit}` : `the last ${n} ${unit}s`);
-  if (hours < 1) return "the last hour";
-  if (days < 1) return plural(Math.floor(hours), "hour");
-  if (days < 14) return plural(Math.max(1, Math.ceil(days)), "day");
-  if (days < 56) return plural(Math.round(days / 7), "week");
-  if (days < 730) return plural(Math.round(days / 30.4), "month");
-  return plural(Math.round(days / 365), "year");
+export function reachSpan(oldest: number, now: number): { label: string; full: string } {
+  const seconds = Math.max(0, Math.floor(now - oldest));
+  const DAY = 86400;
+  // Each unit, biggest first, in seconds. A month is 30.44 days (a year over twelve), so the months of a long span add up to its years.
+  const units: [string, number][] = [
+    ["year", 365 * DAY],
+    ["month", 30.44 * DAY],
+    ["week", 7 * DAY],
+    ["day", DAY],
+    ["hour", 3600],
+    ["minute", 60],
+  ];
+  const noun = (n: number, unit: string) => `${n.toLocaleString("en-US")} ${unit}${n === 1 ? "" : "s"}`;
+  let label = "less than a minute";
+  for (let i = 0; i < units.length; i++) {
+    const [name, size] = units[i];
+    if (seconds < size) continue;
+    const n = Math.floor(seconds / size);
+    const next = units[i + 1];
+    const rest = next ? Math.floor((seconds - n * size) / next[1]) : 0;
+    label = rest > 0 ? `${noun(n, name)} ${noun(rest, next![0])}` : noun(n, name);
+    break;
+  }
+  const full = seconds < 3600 ? noun(Math.max(1, Math.floor(seconds / 60)), "minute") : noun(Math.floor(seconds / 3600), "hour");
+  return { label, full };
 }

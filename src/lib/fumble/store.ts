@@ -30,8 +30,11 @@ export interface WalletStore {
   save(wallet: string, saved: SavedWallet, added: Trade[]): Promise<void>;
 }
 
-/** A store that lives in memory, for tests and for running without a database. */
-export function memoryStore(): WalletStore & { wallets: Map<string, SavedWallet> } {
+/**
+ * A store that lives in memory, for tests and for running without a database. `max` keeps only the most recently saved wallets, so it cannot grow
+ * without end on a long-running server.
+ */
+export function memoryStore(max = Infinity): WalletStore & { wallets: Map<string, SavedWallet> } {
   const wallets = new Map<string, SavedWallet>();
   return {
     wallets,
@@ -40,7 +43,9 @@ export function memoryStore(): WalletStore & { wallets: Map<string, SavedWallet>
       return s ? { ...s, trades: [...s.trades] } : null;
     },
     async save(wallet, saved) {
+      wallets.delete(wallet); // saved again: it moves to the newest end
       wallets.set(wallet, { ...saved, trades: [...saved.trades] });
+      while (wallets.size > max) wallets.delete(wallets.keys().next().value as string);
     },
   };
 }

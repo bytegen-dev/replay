@@ -3,7 +3,7 @@ import { fetchHistory } from "./helius.ts";
 import { birdeyeProvider, firstOf, geckoProvider, sharedPrices, solPriceAt } from "./prices.ts";
 import { savedPrices, sqlPriceStore } from "./priceStore.ts";
 import { scanWallet } from "./scan.ts";
-import { sqlStore } from "./store.ts";
+import { memoryStore, sqlStore } from "./store.ts";
 import { createScanner, toApiTrades } from "./service.ts";
 import { heliusTokens } from "./tokens.ts";
 
@@ -14,7 +14,7 @@ import { heliusTokens } from "./tokens.ts";
  *   BIRDEYE_API_KEY        optional. Birdeye is the first price source; without it GeckoTerminal alone prices everything (slower, tighter limits).
  *   FUMBLE_MAX_PAGES       pages of 100 transactions read per wallet (default 30, about 30 seconds at the speed Helius answers).
  *   FUMBLE_HISTORY_SECONDS how long reading history may take before it stops with what it has (default 20).
- *   DATABASE_URL           optional. With it, each wallet's trades are saved and a rescan reads only what is new since (see store.ts), and price history is saved per coin (see priceStore.ts).
+ *   DATABASE_URL           optional. With it, each wallet's trades are saved and a rescan reads only what is new since (see store.ts), and price history is saved per coin (see priceStore.ts). Without it the trades are kept in memory instead.
  *   FUMBLE_BUDGET_SECONDS  how long a whole scan may spend before it stops pricing and reports the rest as unknown (default 50).
  *
  * Built once per server instance, so the per-API limiters are shared by every scan running on it.
@@ -42,7 +42,8 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   const maxPages = intEnv("FUMBLE_MAX_PAGES", 30);
   const budgetMs = intEnv("FUMBLE_BUDGET_SECONDS", 50) * 1000;
   const historyMs = intEnv("FUMBLE_HISTORY_SECONDS", 20) * 1000;
-  const store = sqlStore() ?? undefined;
+  // Without a database the history is kept in this server's memory (the most recent wallets), so reading further back still works while the server is up.
+  const store = sqlStore() ?? memoryStore(100);
 
   scanner = createScanner({
     run: (wallet, emit, opts) => {

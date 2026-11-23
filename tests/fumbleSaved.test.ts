@@ -305,3 +305,13 @@ test("the partial lists shown while reading never hold a transaction twice", asy
   await fetchHistory(WALLET, { apiKey: "k", fetchImpl: async () => page(pages[n++]), sleep: async () => {}, onPage: (txs) => seen.push(txs.length - new Set(txs.map((t) => t.signature)).size) });
   assert.deepEqual(seen, [0, 0]);
 });
+
+test("the memory store keeps only the most recently saved wallets", async () => {
+  const store = memoryStore(2);
+  const saved = { trades: [], newestSig: "n", newestTime: 1, oldestSig: "o", oldestTime: 1, complete: false, transactions: 1, dropped: { noTokenMove: 0, multiToken: 0, noSolLeg: 0 } };
+  await store.save("a", saved, []);
+  await store.save("b", saved, []);
+  await store.save("a", saved, []); // a is newest again
+  await store.save("c", saved, []);
+  assert.deepEqual([...store.wallets.keys()], ["a", "c"]);
+});

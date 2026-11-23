@@ -32,9 +32,17 @@ function loadScript(): Promise<void> {
 /** Runs the check and asks the server to set the pass cookie. Throws with a short message if it doesn't work out. */
 export async function passHumanCheck(siteKey: string): Promise<void> {
   await loadScript();
+  // Drawn in the page's own `[data-human-slot]` (under the form) when it has one; otherwise in a corner of the screen.
+  const slot = document.querySelector<HTMLElement>("[data-human-slot]");
   const box = document.createElement("div");
-  box.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:100";
-  document.body.appendChild(box);
+  if (slot) {
+    box.style.cssText = "margin-top:12px";
+    slot.appendChild(box);
+    slot.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } else {
+    box.style.cssText = "position:fixed;right:16px;bottom:16px;z-index:100";
+    document.body.appendChild(box);
+  }
   let widget: string | null = null;
   try {
     const token = await new Promise<string>((resolve, reject) => {

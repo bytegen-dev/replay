@@ -2,7 +2,7 @@ import { drawHatch } from "../canvasHatch.ts";
 import { canvasTheme } from "../replayVideo.ts";
 import type { ApiResult } from "./service.ts";
 import { figure, type Display } from "./money.ts";
-import { reachLabel, shortMint, tokenLabel } from "./view.ts";
+import { reachSpan, shortMint, tokenLabel } from "./view.ts";
 
 /**
  * The scan as a picture to share (PNG, 1200 by 630 drawn at twice the size): the total fumble as the headline, the numbers it comes from, how many
@@ -51,7 +51,7 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
   ctx.fillText(who, 64, 124);
 
   // How much was looked at: the trades, and how far back they reach.
-  const reach = r.coverage.oldest ? `, from ${reachLabel(r.coverage.oldest, now)}` : "";
+  const reach = r.coverage.oldest ? `, over ${reachSpan(r.coverage.oldest, now).label}` : "";
   ctx.fillStyle = c.muted;
   ctx.fillText(`${r.coverage.complete ? "All" : "Latest"} ${r.trades.length} trades${reach}`, 64 + ctx.measureText(who).width + 28, 124);
 

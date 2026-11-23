@@ -52,7 +52,7 @@ export function CoinTable({ coins, tokens, done, display, hiddenCount, onHide, o
     );
   return (
     <section ref={box} aria-label="Trades" className="overflow-x-auto border border-border bg-background/80 backdrop-blur-xl">
-      <Table className="min-w-[860px]" containerClassName="max-h-[40rem] cursor-grab overflow-auto">
+      <Table className="min-w-[860px]" containerClassName="cursor-grab overflow-x-auto">
         <TableHeader className="sticky top-0 z-10 bg-card">
           <TableRow className="hover:bg-transparent">
             <TableHead className={cn(head, "left-0 z-20 shadow-[inset_0_-1px_0_var(--border),inset_-1px_0_0_var(--border)]")}>Token</TableHead>

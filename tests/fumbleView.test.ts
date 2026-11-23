@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ApiPosition, ApiSell, ApiTrade } from "../src/lib/fumble/service.ts";
-import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, reachLabel, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
+import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, reachSpan, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
 
 const trade = (signature: string, side: "buy" | "sell", time = 1): ApiTrade => ({ signature, side, token: "M".repeat(44), tokens: 100, sol: 1, time });
 const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
@@ -170,22 +170,27 @@ test("what was stored is checked on the way back: junk is dropped, the rest come
 
 const H = 3600;
 const D = 86400;
-test("the reach of the loaded trades is said in the unit a person would use", () => {
+test("the reach of the loaded trades is said in its two biggest units", () => {
   const now = 2_000_000_000;
-  assert.equal(reachLabel(now - 20 * 60, now), "the last hour");
-  assert.equal(reachLabel(now - 5 * H, now), "the last 5 hours");
-  assert.equal(reachLabel(now - 1 * D, now), "the last day");
-  assert.equal(reachLabel(now - 3 * D - H, now), "the last 4 days");
-  assert.equal(reachLabel(now - 20 * D, now), "the last 3 weeks");
-  assert.equal(reachLabel(now - 75 * D, now), "the last 2 months");
-  assert.equal(reachLabel(now - 300 * D, now), "the last 10 months");
-  assert.equal(reachLabel(now - 800 * D, now), "the last 2 years");
+  const label = (seconds: number) => reachSpan(now - seconds, now).label;
+  assert.equal(label(20 * 60), "20 minutes");
+  assert.equal(label(2 * H + 15 * 60), "2 hours 15 minutes");
+  assert.equal(label(5 * H), "5 hours");
+  assert.equal(label(1 * D), "1 day");
+  assert.equal(label(3 * D + 4 * H), "3 days 4 hours");
+  assert.equal(label(7 * D), "1 week");
+  assert.equal(label(20 * D), "2 weeks 6 days");
+  assert.equal(label(75 * D), "2 months 2 weeks");
+  assert.equal(label(800 * D), "2 years 2 months");
+  assert.equal(label(365 * D + 3 * 30.44 * D), "1 year 3 months");
 });
 
-test("a week of days stays in days, two years of days says months until it passes them, and a clock that is behind does not go negative", () => {
+test("the hover says the whole span in hours, or in minutes under an hour, and a clock that is behind does not go negative", () => {
   const now = 2_000_000_000;
-  assert.equal(reachLabel(now - 7 * D, now), "the last 7 days");
-  assert.equal(reachLabel(now - 729 * D, now), "the last 24 months");
-  assert.equal(reachLabel(now - 730 * D, now), "the last 2 years");
-  assert.equal(reachLabel(now + 500, now), "the last hour");
+  assert.equal(reachSpan(now - (3 * D + 4 * H), now).full, "76 hours");
+  assert.equal(reachSpan(now - 1 * H, now).full, "1 hour");
+  assert.equal(reachSpan(now - 45 * 60, now).full, "45 minutes");
+  assert.equal(reachSpan(now - 30, now).full, "1 minute");
+  assert.equal(reachSpan(now - 800 * D, now).full, "19,200 hours");
+  assert.deepEqual(reachSpan(now + 500, now), { label: "less than a minute", full: "1 minute" });
 });

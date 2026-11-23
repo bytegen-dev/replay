@@ -2,6 +2,7 @@
 
 import { Check, Copy, Download } from "lucide-react";
 import { useEffect, useState } from "react";
+import { MarkLoader } from "@/components/MarkLoader";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -76,7 +77,18 @@ export function ImagePreviewDialog({ open, title, fileName, fileNameFor, privacy
           // eslint-disable-next-line @next/next/no-img-element -- a local blob, nothing for the image optimiser to do
           <img src={shown.url} alt={title} className="max-h-[60dvh] w-full border border-border object-contain" />
         ) : (
-          <div className="grid aspect-[1200/630] w-full place-items-center border border-border text-sm text-muted-foreground">{error ? <span role="alert" className="font-bold text-foreground">{error}</span> : "Making the picture"}</div>
+          <div className="flex aspect-[1200/630] w-full flex-col items-center justify-center gap-3 border border-border text-sm text-muted-foreground">
+            {error ? (
+              <span role="alert" className="font-bold text-foreground">
+                {error}
+              </span>
+            ) : (
+              <>
+                <MarkLoader className="size-10 text-primary" />
+                <span>Generating graphic</span>
+              </>
+            )}
+          </div>
         )}
         <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
           <button type="button" onClick={download} disabled={!shown} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold disabled:opacity-60">

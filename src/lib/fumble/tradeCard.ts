@@ -2,7 +2,7 @@ import { drawHatch } from "../canvasHatch.ts";
 import { canvasTheme } from "../replayVideo.ts";
 import { coinMoney, compactAmount, type CoinRow } from "./coins.ts";
 import type { Display } from "./money.ts";
-import { reachLabel } from "./view.ts";
+import { reachSpan } from "./view.ts";
 
 /**
  * One trade (one coin) as a picture to share (PNG, 1200 by 630 drawn at twice the size): the coin, the PnL as the headline, and what was bought and
@@ -41,7 +41,7 @@ export async function renderTradeCard(coin: CoinRow, ticker: string, display: Di
   ctx.fillText(ticker, 64, 96);
   ctx.fillStyle = c.muted;
   ctx.font = `400 22px ${c.body}`;
-  ctx.fillText(`Traded in ${reachLabel(coin.firstAt, now)}`, 64, 134);
+  ctx.fillText(`Traded over ${reachSpan(coin.firstAt, now).label}`, 64, 134);
 
   // The PnL, big, and its percent.
   ctx.fillStyle = c.muted;
