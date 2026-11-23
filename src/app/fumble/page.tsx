@@ -26,7 +26,7 @@ export default function FumblePage() {
             intro={
               <div className="flex flex-col gap-2">
                 <h1 className="font-heading text-4xl font-medium tracking-tight sm:text-6xl">
-                  <RollText text="Fumble check" introDelay={60} wide={[10]} />
+                  <RollText text="Fumble check" introDelay={60} wide={[10]} glitch />
                 </h1>
                 <SpotlightText className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table, and how much of its profit it gave back." />
               </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { scramble } from "@/components/RollText";
 import { motionReduced } from "@/lib/settings.ts";
 
 /** The words the headline's last word goes through, and how long each one stays. "money" is the real one: it comes back and rests longest. */
@@ -25,6 +26,9 @@ export function RotatingWord({ index }: { index: number }) {
   const [at, setAt] = useState(0);
   const [shown, setShown] = useState(WORDS[0].length);
   const [busy, setBusy] = useState(false);
+  // The glitch of the long "e" in "money": once, a couple of seconds after the word has come back and stopped pulsing. It shakes and flickers through other letters.
+  const [glitching, setGlitching] = useState(false);
+  const [glitchChar, setGlitchChar] = useState<string | null>(null);
   // True for a moment after "money" has been typed back in: it flickers like a bulb coming on (the big 4 on the page does the same).
   const [flicker, setFlicker] = useState(false);
 
@@ -32,6 +36,9 @@ export function RotatingWord({ index }: { index: number }) {
     if (motionReduced()) return;
     let timer = 0;
     let cancelled = false;
+    // Timers for the flicker and the glitch that follows it, so leaving the page stops them too.
+    const side: number[] = [];
+    let flickerId = 0;
     const wait = (ms: number, then: () => void) => {
       timer = window.setTimeout(() => {
         if (!cancelled) then();
@@ -63,7 +70,22 @@ export function RotatingWord({ index }: { index: number }) {
           setBusy(false);
           if (word === 0) {
             setFlicker(true);
-            window.setTimeout(() => setFlicker(false), 2000);
+            // The bulb flickers for 2s; two seconds after it has settled the long "e" glitches once.
+            side.push(
+              window.setTimeout(() => setFlicker(false), 2000),
+              window.setTimeout(() => {
+                if (cancelled) return;
+                setGlitching(true);
+                flickerId = window.setInterval(() => setGlitchChar(scramble(WORDS[0][STRETCH.money])), 45);
+                side.push(
+                  window.setTimeout(() => {
+                    window.clearInterval(flickerId);
+                    setGlitching(false);
+                    setGlitchChar(null);
+                  }, 180),
+                );
+              }, 4000),
+            );
           }
           run(word);
         }
@@ -74,6 +96,8 @@ export function RotatingWord({ index }: { index: number }) {
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      side.forEach((id) => window.clearTimeout(id));
+      window.clearInterval(flickerId);
     };
   }, []);
 
@@ -86,8 +110,8 @@ export function RotatingWord({ index }: { index: number }) {
           .split("")
           .map((ch, i) =>
             i === STRETCH[word] ? (
-              <span key={i} className="stretch-letter">
-                {ch}
+              <span key={i} className="stretch-letter" data-glitch={glitching && word === "money" ? "on" : undefined}>
+                {glitching && glitchChar && word === "money" ? glitchChar : ch}
               </span>
             ) : (
               ch

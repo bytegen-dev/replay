@@ -1708,6 +1708,64 @@ html[data-motion="reduce"] .tex-layer {
   margin-right: 0.49em;
 }
 
+/* The wide letter's glitch (see RollText's `glitch`): for a moment it shakes sideways, splits into red and mint fringes, is cut into slices and
+   flickers, all in under a fifth of a second so it is easy to miss. It uses `translate`, which adds to the letter's own transform instead of replacing it, so it stays stretched and in place. */
+.wide-letter[data-glitch="on"],
+.stretch-letter[data-glitch="on"] {
+  animation: wide-glitch 0.18s steps(1, end) both;
+}
+@keyframes wide-glitch {
+  0% {
+    translate: -0.03em 0;
+    text-shadow: 0.06em 0 rgb(251 113 133 / 0.85), -0.06em 0 rgb(94 234 212 / 0.85);
+    clip-path: inset(0 0 58% 0);
+  }
+  14% {
+    translate: 0.05em 0;
+    text-shadow: -0.07em 0 rgb(251 113 133 / 0.85), 0.07em 0 rgb(94 234 212 / 0.85);
+    clip-path: inset(46% 0 0 0);
+  }
+  28% {
+    translate: 0 0;
+    text-shadow: none;
+    clip-path: none;
+    opacity: 0.5;
+  }
+  42% {
+    translate: -0.06em 0.02em;
+    text-shadow: 0.05em 0 rgb(251 113 133 / 0.85), -0.05em 0 rgb(94 234 212 / 0.85);
+    clip-path: inset(22% 0 38% 0);
+    opacity: 1;
+  }
+  58% {
+    translate: 0.04em 0;
+    text-shadow: -0.04em 0 rgb(94 234 212 / 0.85);
+    clip-path: inset(0 0 70% 0);
+  }
+  74% {
+    translate: -0.02em 0;
+    text-shadow: 0.03em 0 rgb(251 113 133 / 0.85);
+    clip-path: none;
+    opacity: 0.7;
+  }
+  100% {
+    translate: 0 0;
+    text-shadow: none;
+    clip-path: none;
+    opacity: 1;
+  }
+}
+html[data-motion="reduce"] .wide-letter[data-glitch="on"],
+html[data-motion="reduce"] .stretch-letter[data-glitch="on"] {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wide-letter[data-glitch="on"],
+  .stretch-letter[data-glitch="on"] {
+    animation: none;
+  }
+}
+
 /* A ring that spreads from where the player taps in the Tony Stonk game. */
 @keyframes tap-ripple {
   from {

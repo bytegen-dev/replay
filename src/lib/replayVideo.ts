@@ -20,6 +20,8 @@ export interface ReplayVideoOptions {
   /** Called with 0 to 1 as the recording goes. */
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
+  /** Draw the finished result as a still picture (the profit in money as well as in percent, and no progress bar) instead of a frame of the video. */
+  still?: boolean;
 }
 
 const W = 1280;
@@ -104,7 +106,8 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
     const tw = ctx.measureText(o.subtitle).width;
     const pad = 16;
     const boxW = tw + pad * 2;
-    const boxX = W - 64 - boxW;
+    // Left of the logo (which sits at the right edge) when there is one, so the two never overlap.
+    const boxX = W - 64 - (c.mark ? 52 + 16 : 0) - boxW;
     ctx.strokeStyle = c.primary;
     ctx.lineWidth = 2;
     ctx.strokeRect(boxX, 46, boxW, 42);
@@ -124,7 +127,8 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
   if (view === "growth") {
     const w = ctx.measureText(head2).width;
     ctx.fillStyle = up ? c.primary : c.down;
-    ctx.fillText(`   ${up ? "+" : ""}${gain.toFixed(1)}%`, 64 + w, 152);
+    const pct = `${up ? "+" : ""}${gain.toFixed(1)}%`;
+    ctx.fillText(o.still ? `   ${up ? "+" : ""}${usd(reading.value - reading.invested)} (${pct})` : `   ${pct}`, 64 + w, 152);
   }
 
   // The logo, top right.
@@ -231,11 +235,13 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
   ctx.fillStyle = c.fg;
   ctx.font = `600 20px ${c.head}`;
   ctx.fillText("Replay", 104, H - 15);
-  const frac = Math.min(1, (progress - 2) / Math.max(1, total - 2));
-  ctx.fillStyle = c.border;
-  ctx.fillRect(W - 364, H - 25, 300, 4);
-  ctx.fillStyle = c.primary;
-  ctx.fillRect(W - 364, H - 25, 300 * frac, 4);
+  if (!o.still) {
+    const frac = Math.min(1, (progress - 2) / Math.max(1, total - 2));
+    ctx.fillStyle = c.border;
+    ctx.fillRect(W - 364, H - 25, 300, 4);
+    ctx.fillStyle = c.primary;
+    ctx.fillRect(W - 364, H - 25, 300 * frac, 4);
+  }
 }
 
 /** "#39d6a3" or "rgb(...)" with an alpha. Falls back to the colour itself for anything it can't read. */
@@ -268,6 +274,39 @@ function loadMark(light: boolean): Promise<HTMLImageElement | null> {
   });
 }
 
+/** The site's colours and fonts as the canvas draws them, read from the page's current theme. */
+function makePalette(mark: HTMLImageElement | null): Palette {
+  return {
+    bg: css("--background", "#03090b"),
+    card: css("--card", "#071215"),
+    fg: css("--foreground", "#f3f8f8"),
+    muted: css("--muted-foreground", "#8ea4ad"),
+    primary: css("--primary", "#39d6a3"),
+    down: css("--destructive", "#fb7185"),
+    border: css("--border", "#25414a"),
+    body: `"JetBrains Mono", ui-monospace, monospace`,
+    head: `"Chakra Petch", ui-sans-serif, sans-serif`,
+    mark,
+  };
+}
+
+/**
+ * The finished result as a picture (PNG): the title and what kind of trade it was, what went in, what it is worth and the profit in money and percent,
+ * the whole chart, and the Replay mark. It is the last frame of the video, drawn at twice the size so it stays sharp when shared.
+ */
+export async function renderReplayStill(o: ReplayVideoOptions): Promise<Blob> {
+  if (o.points.length < 2) throw new Error("There aren't enough months to make a picture.");
+  const [mark] = await Promise.all([loadMark(isLight(css("--background", "#03090b"))), document.fonts?.ready]);
+  const canvas = document.createElement("canvas");
+  canvas.width = W * 2;
+  canvas.height = H * 2;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Couldn't make the picture.");
+  ctx.scale(2, 2);
+  drawFrame(ctx, { ...o, view: "growth", still: true }, makePalette(mark), o.points.length);
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't make the picture."))), "image/png"));
+}
+
 /** Plays the replay onto a canvas and records it. Resolves with the video file; rejects if cancelled. */
 export function recordReplay(o: ReplayVideoOptions): Promise<{ blob: Blob; ext: string }> {
   return loadMark(isLight(css("--background", "#03090b"))).then((mark) => record(o, mark));
@@ -284,18 +323,7 @@ function record(o: ReplayVideoOptions, mark: HTMLImageElement | null): Promise<{
   const ctx = canvas.getContext("2d");
   if (!ctx) return Promise.reject(new Error("Couldn't start the recording."));
 
-  const palette: Palette = {
-    bg: css("--background", "#03090b"),
-    card: css("--card", "#071215"),
-    fg: css("--foreground", "#f3f8f8"),
-    muted: css("--muted-foreground", "#8ea4ad"),
-    primary: css("--primary", "#39d6a3"),
-    down: css("--destructive", "#fb7185"),
-    border: css("--border", "#25414a"),
-    body: `"JetBrains Mono", ui-monospace, monospace`,
-    head: `"Chakra Petch", ui-sans-serif, sans-serif`,
-    mark,
-  };
+  const palette = makePalette(mark);
 
   const total = o.points.length;
   const runS = replaySeconds(total);

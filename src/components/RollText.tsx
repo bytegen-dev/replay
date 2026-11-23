@@ -6,6 +6,9 @@ import { motionReduced } from "@/lib/settings.ts";
 const DIGITS = "0123456789";
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+/** How long a glitching heading waits between one glitch and the next. */
+const GLITCH_EVERY_MS = 15_000;
+
 /** A random character of the same kind as `ch`, so a number flickers through digits and a month name through letters. */
 export function scramble(ch: string): string {
   if (/[0-9]/.test(ch)) return DIGITS[Math.floor(Math.random() * DIGITS.length)];
@@ -39,7 +42,8 @@ function startRoll(text: string, set: (s: string | null) => void, slow = 1): () 
  * straight away. Spaces and punctuation never move, and the page font is monospaced, so nothing jitters sideways.
  * With `introDelay` the text is hidden at first, then rolls in once that many milliseconds have passed. `wide` lists the positions of
  * characters to draw twice as wide (a letter of a heading); they stay wide while the text rolls. A wide letter is stretched from its own
- * ink, not its box, so the gaps either side match the gaps between the other letters whatever the letter is (see `wideFit`).
+ * ink, not its box, so the gaps either side match the gaps between the other letters whatever the letter is (see `wideFit`). With `glitch`, the
+ * wide letter breaks up for a moment, once every 15 seconds and whenever the pointer comes onto the heading: it shakes, splits into colour fringes and flickers between other letters, then settles.
  */
 /**
  * How to stretch a letter to twice its width without uneven gaps. Scaling a letter's box doubles its side gaps too, so an "e" looked right
@@ -54,11 +58,43 @@ function wideFit(ctx: CanvasRenderingContext2D, ch: string, fontSize: number): {
   return { shift: left / fontSize, room: ink / fontSize };
 }
 
-export function RollText({ text, className, introDelay, introSlow = 1, wide }: { text: string; className?: string; introDelay?: number; introSlow?: number; wide?: number[] }) {
+export function RollText({ text, className, introDelay, introSlow = 1, wide, glitch = false }: { text: string; className?: string; introDelay?: number; introSlow?: number; wide?: number[]; glitch?: boolean }) {
   const [rolling, setRolling] = useState<string | null>(null);
   const [hidden, setHidden] = useState(introDelay !== undefined);
   const before = useRef(text);
   const shell = useRef<HTMLSpanElement>(null);
+  // The glitch: on for a moment (the letter shakes and flickers through other ones), every 15 seconds and whenever the pointer comes onto the heading.
+  const [glitching, setGlitching] = useState(false);
+  const [glitchChar, setGlitchChar] = useState<string | null>(null);
+  const glitchOff = useRef(0);
+  const glitchFlicker = useRef(0);
+  const fireGlitch = () => {
+    if (!glitch || !wide?.length || glitchOff.current || motionReduced()) return;
+    setGlitching(true);
+    glitchFlicker.current = window.setInterval(() => setGlitchChar(scramble(text[wide[0]] ?? "e")), 45);
+    glitchOff.current = window.setTimeout(() => {
+      window.clearInterval(glitchFlicker.current);
+      setGlitching(false);
+      setGlitchChar(null);
+      glitchOff.current = 0;
+    }, 180);
+  };
+  // The timer below always calls the latest version, which knows the current text.
+  const fireRef = useRef(fireGlitch);
+  useEffect(() => {
+    fireRef.current = fireGlitch;
+  });
+  useEffect(() => {
+    if (!glitch || !wide?.length) return;
+    const every = window.setInterval(() => fireRef.current(), GLITCH_EVERY_MS);
+    return () => {
+      window.clearInterval(every);
+      window.clearTimeout(glitchOff.current);
+      window.clearInterval(glitchFlicker.current);
+      glitchOff.current = 0;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [glitch, wide?.join(",")]);
   // For each wide position, how far to pull the stretched letter back and how much room to leave after it (em). Measured from the font in use.
   const [fits, setFits] = useState<Record<number, { shift: number; room: number }>>({});
 
@@ -111,14 +147,14 @@ export function RollText({ text, className, introDelay, introSlow = 1, wide }: {
   }, [text]);
 
   return (
-    <span className={className}>
+    <span className={className} onPointerEnter={glitch ? () => fireGlitch() : undefined}>
       <span className="sr-only">{text}</span>
       <span ref={shell} aria-hidden style={hidden ? { opacity: 0 } : undefined}>
         {wide?.length
           ? [...(rolling ?? text)].map((ch, i) =>
               wide.includes(i) ? (
-                <span key={i} className="wide-letter" style={fits[i] ? { transform: `translateX(${-fits[i].shift}em) scaleX(2)`, marginRight: `${fits[i].room}em` } : undefined}>
-                  {ch}
+                <span key={i} className="wide-letter" data-glitch={glitching ? "on" : undefined} style={fits[i] ? { transform: `translateX(${-fits[i].shift}em) scaleX(2)`, marginRight: `${fits[i].room}em` } : undefined}>
+                  {glitching && glitchChar ? glitchChar : ch}
                 </span>
               ) : (
                 ch

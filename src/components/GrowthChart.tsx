@@ -2,6 +2,7 @@
 
 import { Pause, Play, RotateCcw } from "lucide-react";
 import { DotsToggle, useDotsPref } from "@/components/DotsToggle";
+import { PnlButton } from "@/components/PnlButton";
 import { VideoButton } from "@/components/VideoButton";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DOWN, LineChart, UP, type ChartSeries } from "@/components/LineChart";
@@ -211,7 +212,10 @@ export function GrowthChart({ buys, priceToday, priceTodayDate, unit, title = "R
             </button>
           ))}
         </div>
-        <VideoButton points={points} view={view} title={title} subtitle={videoSubtitle} fileName={videoFile} onStart={() => setPlaying(false)} />
+        <div className="flex flex-wrap items-center gap-2">
+          <VideoButton points={points} view={view} title={title} subtitle={videoSubtitle} fileName={videoFile} onStart={() => setPlaying(false)} />
+          <PnlButton points={points} title={title} subtitle={videoSubtitle} fileName={videoFile} />
+        </div>
         {step !== null && (
           <button type="button" onClick={stopReplay} className="flex items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline" aria-label="Show the whole history again">
             <RotateCcw className="size-3.5" aria-hidden />
