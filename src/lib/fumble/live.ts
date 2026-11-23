@@ -1,6 +1,7 @@
 import { lookWallet, rememberedLook } from "./check.ts";
 import { fetchHistory } from "./helius.ts";
 import { birdeyeProvider, firstOf, geckoProvider, sharedPrices, solPriceAt } from "./prices.ts";
+import { savedPrices, sqlPriceStore } from "./priceStore.ts";
 import { scanWallet } from "./scan.ts";
 import { sqlStore } from "./store.ts";
 import { createScanner, toApiTrades } from "./service.ts";
@@ -13,7 +14,7 @@ import { heliusTokens } from "./tokens.ts";
  *   BIRDEYE_API_KEY        optional. Birdeye is the first price source; without it GeckoTerminal alone prices everything (slower, tighter limits).
  *   FUMBLE_MAX_PAGES       pages of 100 transactions read per wallet (default 30, about 30 seconds at the speed Helius answers).
  *   FUMBLE_HISTORY_SECONDS how long reading history may take before it stops with what it has (default 20).
- *   DATABASE_URL           optional. With it, each wallet's trades are saved and a rescan reads only what is new since (see store.ts).
+ *   DATABASE_URL           optional. With it, each wallet's trades are saved and a rescan reads only what is new since (see store.ts), and price history is saved per coin (see priceStore.ts).
  *   FUMBLE_BUDGET_SECONDS  how long a whole scan may spend before it stops pricing and reports the rest as unknown (default 50).
  *
  * Built once per server instance, so the per-API limiters are shared by every scan running on it.
@@ -32,7 +33,10 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   if (!heliusKey) return (scanner = null);
   const birdeyeKey = process.env.BIRDEYE_API_KEY;
   // Shared by every scan on this server, so a coin two wallets traded is priced once.
-  const prices = sharedPrices(firstOf([...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]));
+  const fetched = firstOf([...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]);
+  // With a database, a coin priced by any server instance is saved, so the free-tier limits are spent once per coin, not once per instance per wallet.
+  const priceStore = sqlPriceStore();
+  const prices = sharedPrices(priceStore ? savedPrices(fetched, priceStore) : fetched);
   const solUsd = solPriceAt(prices);
   const tokens = heliusTokens(heliusKey);
   const maxPages = intEnv("FUMBLE_MAX_PAGES", 30);

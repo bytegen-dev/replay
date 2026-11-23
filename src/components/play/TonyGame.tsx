@@ -15,7 +15,6 @@ import { gamePrice, SCROLL_SPEED, scoreFor, STORY, SURVIVAL_COURSE, survivalObst
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
 import type { EndlessSegment } from "@/lib/flappyCourse.ts";
 import { cn } from "@/lib/utils";
-import { openWaitlist } from "@/lib/viewerClient.ts";
 
 type Screen = "attract" | "intro" | "play" | "clear" | "menu" | "settings" | "name" | "gameover" | "board";
 type Mode = "tutorial" | "survival";
@@ -1265,9 +1264,6 @@ export function TonyGame({ levels, segments, embedded = false, onClose }: { leve
                   </button>
                 </div>
               </div>
-              <button type="button" onClick={() => openWaitlist()} className="self-center text-xs text-muted-foreground underline underline-offset-4 hover:text-primary">
-                Get notified when the Replay app launches
-              </button>
             </div>
           </div>
         )}

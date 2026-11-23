@@ -4,7 +4,6 @@ import { AccountButton } from "@/components/AccountButton";
 import { BrandMark } from "@/components/BrandMark";
 import { MobileMenu } from "@/components/MobileMenu";
 import { SiteNav } from "@/components/SiteNav";
-import { SubscribeDialog } from "@/components/SubscribeDialog";
 
 /**
  * One header for every page. On a wide screen: the name on the left, the tools and links in line, Subscribe on the
@@ -24,9 +23,6 @@ export function SiteHeader() {
           </Suspense>
         </div>
         <AccountButton className="hidden sm:order-3 sm:ml-5 sm:block" />
-        <div className="sm:order-4 sm:ml-5">
-          <SubscribeDialog />
-        </div>
         <Suspense fallback={<div className="size-9 sm:hidden" />}>
           <MobileMenu />
         </Suspense>

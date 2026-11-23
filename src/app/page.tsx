@@ -11,7 +11,6 @@ import { RevealObserver } from "@/components/landing/RevealObserver";
 import { RevealPrime } from "@/components/landing/RevealPrime";
 import { SmoothScroll } from "@/components/landing/SmoothScroll";
 import { StepVisual } from "@/components/landing/StepVisuals";
-import { WaitlistButton } from "@/components/landing/WaitlistButton";
 import { FumbleTool } from "@/components/FumbleTool";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SpotlightText } from "@/components/SpotlightText";
@@ -65,12 +64,12 @@ const faqs = (anon: number, user: number) => [
   {
     q: "Is it free?",
     topic: "Account",
-    a: `Yes. Without an account you get ${anon} checks a day, and a free account raises that to ${user}. Joining the waitlist means an email when there is something new to try.`,
+    a: `Yes. Without an account you get ${anon} checks a day, and a free account raises that to ${user}.`,
   },
   {
     q: "What is coming next?",
     topic: "Coming",
-    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. None of them is open yet. Join the waitlist to hear when each one is.",
+    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. None of them is open yet.",
   },
   {
     q: "Do you keep my searches?",
@@ -124,9 +123,8 @@ export default function LandingPage() {
               text="Pick any stock, coin or currency and a date to see what a buy would be worth today. Or paste a Solana wallet to see what you missed."
             />
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <WaitlistButton />
-              <a href="#fumble" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
-                Try it first
+              <a href="#fumble" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center px-7 text-base font-bold">
+                Check your wallet
               </a>
             </div>
             <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
@@ -219,13 +217,13 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* What is coming, and the waitlist that goes with it, in one card. Shown as coming soon, never as something you can do today. */}
+        {/* What is coming, in one card. Shown as coming soon, never as something you can do today. */}
         <section id="trade" className={`${section} scroll-mt-20 pt-20 pb-10 sm:py-16`}>
           {/* A line runs through this card from edge to edge, behind it; hovering sends a pulse along it, round the card and out the far side. */}
           <LineCard className="flex flex-col gap-8 border border-border bg-card p-5 sm:p-8" data-reveal-on-scroll style={later()}>
             <div className="flex max-w-2xl flex-col gap-3">
               <h2 className={h2}>Trade on what the past taught you.</h2>
-              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Replay is free to try today, with no account. These three are coming next, built on the same data. Join the waitlist and we will email you when each one opens." />
+              <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Replay is free to try today, with no account. These three are coming next, built on the same data." />
             </div>
             <ul className="grid gap-4 sm:grid-cols-3">
               {[
@@ -243,10 +241,7 @@ export default function LandingPage() {
                 </li>
               ))}
             </ul>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <WaitlistButton />
-              <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with up to thousands of checks daily, saved checks and exports.</p>
-            </div>
+            <p className="max-w-md text-sm text-muted-foreground">Also coming: accounts with up to thousands of checks daily, saved checks and exports.</p>
           </LineCard>
         </section>
 

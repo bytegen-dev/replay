@@ -116,6 +116,46 @@
   color-scheme: light;
 }
 
+/* Before the script in <head> has set data-theme, a light system gets the light tokens from CSS alone, so the first paint is never dark. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --game-gold: #a16207;
+    --game-red: #e11d48;
+    --game-wall: #a9cdc5;
+    --background: #f2f7f7;
+    --foreground: #0b171b;
+    --card: #ffffff;
+    --card-foreground: #0b171b;
+    --popover: #ffffff;
+    --popover-foreground: #0b171b;
+    --primary: #0c8f69;
+    --primary-foreground: #ffffff;
+    --secondary: #e4eeee;
+    --secondary-foreground: #0b171b;
+    --muted: #e4eeee;
+    --muted-foreground: #4b636b;
+    --accent: #1d7893;
+    --accent-foreground: #ffffff;
+    --destructive: #c8203f;
+    --border: #c5d6d9;
+    --input: #b3c8cc;
+    --ring: #1d7893;
+    --glow-a: rgba(12, 143, 105, 0.075);
+    --glow-b: rgba(29, 120, 147, 0.05);
+    --hatch: rgba(29, 120, 147, 0.17);
+    --cta-glow: rgba(12, 143, 105, 0.45);
+    --cta-ring: rgba(12, 143, 105, 0.18);
+    --selection: rgba(12, 143, 105, 0.25);
+    color-scheme: light;
+  }
+  :root:not([data-theme]) .brand-on-dark {
+    display: none;
+  }
+  :root:not([data-theme]) .brand-on-light {
+    display: inline-block;
+  }
+}
+
 /* High contrast: brighter text, stronger borders, a plain background and a thick focus ring. */
 :root[data-contrast="high"] {
   --foreground: #ffffff;
