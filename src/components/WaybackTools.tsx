@@ -54,12 +54,12 @@ export function WaybackTools() {
               onClick={() => choose(t.view)}
               // The same cut-corner outline as the cards on the site: mint and softly filled when chosen, plain until pointed at.
               style={{ "--edge": on ? "var(--primary)" : undefined, "--fill": on ? "color-mix(in srgb, var(--primary) 10%, var(--card))" : undefined } as React.CSSProperties}
-              className={cn("cut-card group relative flex cursor-pointer items-start gap-3 border border-border p-4 text-left transition-[filter] duration-200 hover:[--edge:color-mix(in_srgb,var(--primary)_55%,var(--border))]", on && "hover:[--edge:var(--primary)]")}
+              className={cn("cut-card group relative flex cursor-pointer items-center gap-3.5 border border-border p-4 text-left transition-[filter] duration-200 hover:[--edge:color-mix(in_srgb,var(--primary)_55%,var(--border))]", on && "hover:[--edge:var(--primary)]")}
             >
               {/* The dotted texture of the chosen card, clipped to the card's own cut corners. */}
               {on && <span aria-hidden className="tex-layer" />}
-              <span className={cn("relative z-10 flex size-9 shrink-0 items-center justify-center border bg-card/30 backdrop-blur-md transition-colors", on ? "border-primary text-primary" : "border-border text-muted-foreground group-hover:border-primary/60 group-hover:text-foreground")}>
-                <t.Icon className="size-4.5" strokeWidth={1.8} aria-hidden />
+              <span className={cn("relative z-10 flex size-7 shrink-0 items-center justify-center transition-colors", on ? "text-primary" : "text-muted-foreground group-hover:text-foreground")}>
+                <t.Icon className="size-6" strokeWidth={1.8} aria-hidden />
               </span>
               <span className="relative z-10 flex min-w-0 flex-col gap-0.5">
                 <span className={cn("font-heading text-base font-bold", on ? "text-foreground" : "text-muted-foreground group-hover:text-foreground")}>{t.label}</span>
