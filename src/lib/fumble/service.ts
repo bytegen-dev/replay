@@ -119,6 +119,9 @@ export interface ApiResult extends ApiTrades {
   positions: ApiPosition[];
   totalRoundTripSol: number;
   totalRoundTripUsd: number;
+  /** The total fumble: the two above together without counting a coin twice. */
+  totalMissedSol: number;
+  totalMissedUsd: number;
   ranOutOfTime: boolean;
 }
 
@@ -170,6 +173,8 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     positions: orderPositions(r.positions.map(toApiPosition)),
     totalRoundTripSol: r.totalRoundTripSol,
     totalRoundTripUsd: r.totalRoundTripUsd,
+    totalMissedSol: r.totalMissedSol,
+    totalMissedUsd: r.totalMissedUsd,
     ranOutOfTime: r.ranOutOfTime,
   };
 }

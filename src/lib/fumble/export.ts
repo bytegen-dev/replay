@@ -87,6 +87,8 @@ export function parseFumbleExport(x: unknown): ApiResult | string {
     positions,
     totalRoundTripSol: num(r.totalRoundTripSol) ?? 0,
     totalRoundTripUsd: num(r.totalRoundTripUsd) ?? 0,
+    totalMissedSol: num(r.totalMissedSol) ?? 0,
+    totalMissedUsd: num(r.totalMissedUsd) ?? 0,
     ranOutOfTime: r.ranOutOfTime === true,
   };
 }
@@ -215,6 +217,9 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
     ["Fumbled (SOL)", { formula: `SUM(Trades!J2:J${last})`, result: r.totalFumbleSol }, SOL],
     ["Roundtripped (SOL)", { formula: `SUM(Positions!I2:I${lastPos})`, result: r.totalRoundTripSol }, SOL],
     ["Roundtripped (USD)", { formula: `SUM(Positions!J2:J${lastPos})`, result: r.totalRoundTripUsd }, USD],
+    // Fumbles and round-trips together, counting each closed position once (the larger of its two), so not the sum of the two lines above.
+    ["Total fumble (SOL)", r.totalMissedSol, SOL],
+    ["Total fumble (USD)", r.totalMissedUsd, USD],
     ["Sells with no price history", r.unknown, "0"],
   ];
   sum.getCell("A1").value = "Replay: fumble check";

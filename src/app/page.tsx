@@ -120,7 +120,7 @@ export default function LandingPage() {
             </p>
             <SpotlightText
               className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
-              text="Pick any stock, coin or currency and a date to see what a buy would be worth today. Or paste a Solana wallet to see what you missed."
+              text="Paste a Solana wallet to see what you missed. Or pick any stock, coin or currency and a date to see what a buy would be worth today."
             />
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <a href="#fumble" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center px-7 text-base font-bold">

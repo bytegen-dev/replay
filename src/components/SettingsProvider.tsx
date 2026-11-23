@@ -19,6 +19,9 @@ export const useSettings = () => useContext(SettingsContext);
  */
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  // False until the saved settings have been read. Until then the page keeps the attributes the head script set from them: applying the defaults
+  // first would flip a saved "light" to the device's dark for a moment on every load.
+  const [loaded, setLoaded] = useState(false);
 
   // Read what was saved once the page is up (localStorage does not exist while the server renders).
   useEffect(() => {
@@ -28,18 +31,20 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       } catch {
         /* storage blocked: keep the defaults */
       }
+      setLoaded(true);
     }, 0);
     return () => clearTimeout(id);
   }, []);
 
   // Keep the page's attributes right, including when the device switches between light and dark while "System" is chosen.
   useEffect(() => {
+    if (!loaded) return;
     const mq = window.matchMedia("(prefers-color-scheme: light)");
     const apply = () => applySettings(settings, mq.matches, document.documentElement);
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
-  }, [settings]);
+  }, [settings, loaded]);
 
   const set = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => {

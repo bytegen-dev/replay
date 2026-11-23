@@ -5,8 +5,8 @@ import { figure, type Display } from "./money.ts";
 import { reachLabel, shortMint, tokenLabel } from "./view.ts";
 
 /**
- * The scan as a picture to share (PNG, 1200 by 630 drawn at twice the size): the three headline numbers, how many trades and how far back they
- * reach, and the biggest single fumble. Drawn on a canvas in the site's colours, so it needs nothing from the server.
+ * The scan as a picture to share (PNG, 1200 by 630 drawn at twice the size): the total fumble as the headline, the numbers it comes from, how many
+ * trades and how far back they reach, and the biggest single fumble. Drawn on a canvas in the site's colours, so it needs nothing from the server.
  */
 
 const W = 1200;
@@ -55,65 +55,80 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
   ctx.fillStyle = c.muted;
   ctx.fillText(`${r.coverage.complete ? "All" : "Latest"} ${r.trades.length} trades${reach}`, 64 + ctx.measureText(who).width + 28, 124);
 
-  // The headline numbers: PnL, fumbled and roundtripped (in privacy mode the PnL and the wallet address are drawn as ***).
-  // A figure with nothing behind it (no sell traced to its buys, no closed position) is a dash, not a made-up zero. Each figure leads with the
-  // chosen currency (SOL unless the visitor picked another) and has the other under it.
+  // The headline: the total fumble, big. Under it, the three numbers it comes from, smaller. A figure with nothing behind it (no priced sell or
+  // position, no sell traced to its buys) is a dash, not a made-up zero. Each figure leads with the chosen currency (SOL unless the visitor
+  // picked another) and has the other under it. In privacy mode the PnL and the wallet address are drawn as ***.
   const traced = r.sells.some((x) => x.matchedTokens > 0);
   const known = (u: number, s: number) => (u === 0 && s !== 0 ? null : u);
+  const measured = r.sells.some((x) => x.status === "ok") || r.positions.some((p) => p.status === "ok");
+  const total = figure(display, r.totalMissedSol, known(r.totalMissedUsd, r.totalMissedSol));
+  ctx.fillStyle = c.muted;
+  ctx.font = `400 26px ${c.body}`;
+  ctx.fillText("Total fumble", 64, 190);
+  let size = 120;
+  const heroText = measured ? total.main : "\u2014";
+  ctx.font = `700 ${size}px ${c.head}`;
+  while (size > 48 && ctx.measureText(heroText).width > W - 128) {
+    size -= 4;
+    ctx.font = `700 ${size}px ${c.head}`;
+  }
+  ctx.fillStyle = measured ? c.down : c.muted;
+  ctx.fillText(heroText, 64, 190 + 24 + size * 0.78);
+  if (measured && total.sub) {
+    ctx.fillStyle = c.muted;
+    ctx.font = `400 28px ${c.body}`;
+    ctx.fillText(total.sub, 64, 190 + 24 + size * 0.78 + 42);
+  }
+
+  ctx.strokeStyle = c.border;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(64, 372);
+  ctx.lineTo(W - 64, 372);
+  ctx.stroke();
+
   const cols = [
-    { label: "PnL", fig: figure(display, r.totalProfitSol, known(r.totalProfitUsd, r.totalProfitSol), true), none: !traced, tone: r.totalProfitSol },
-    { label: "Fumbled", fig: figure(display, r.totalFumbleSol, known(r.totalFumbleUsd, r.totalFumbleSol)), none: false, tone: 0 },
-    { label: "Roundtripped", fig: figure(display, r.totalRoundTripSol, known(r.totalRoundTripUsd, r.totalRoundTripSol)), none: !r.positions.some((p) => p.status === "ok"), tone: 0 },
+    { label: "Missed after selling", fig: figure(display, r.totalFumbleSol, known(r.totalFumbleUsd, r.totalFumbleSol)), none: !r.sells.some((x) => x.status === "ok"), pnl: false },
+    { label: "Roundtripped", fig: figure(display, r.totalRoundTripSol, known(r.totalRoundTripUsd, r.totalRoundTripSol)), none: !r.positions.some((p) => p.status === "ok"), pnl: false },
+    { label: "PnL", fig: figure(display, r.totalProfitSol, known(r.totalProfitUsd, r.totalProfitSol), true), none: !traced, pnl: true },
   ];
   const colW = (W - 128) / cols.length;
   cols.forEach((col, i) => {
     const x = 64 + i * colW;
+    const masked = opts.privacy === true && col.pnl;
     ctx.fillStyle = c.muted;
-    ctx.font = `400 24px ${c.body}`;
-    ctx.fillText(col.label, x, 232);
-    const masked = opts.privacy === true && col.label === "PnL";
+    ctx.font = `400 22px ${c.body}`;
+    ctx.fillText(col.label, x, 420);
     const main = masked ? "***" : col.none ? "\u2014" : col.fig.main;
-    // The big figure shrinks until it fits its column.
-    let size = 64;
-    ctx.font = `700 ${size}px ${c.head}`;
-    while (size > 30 && ctx.measureText(main).width > colW - 24) {
-      size -= 2;
-      ctx.font = `700 ${size}px ${c.head}`;
+    let small = 44;
+    ctx.font = `700 ${small}px ${c.head}`;
+    while (small > 26 && ctx.measureText(main).width > colW - 24) {
+      small -= 2;
+      ctx.font = `700 ${small}px ${c.head}`;
     }
-    ctx.fillStyle = masked ? c.muted : col.none ? c.muted : col.label === "PnL" ? (col.tone >= 0 ? c.primary : c.down) : c.fg;
-    ctx.fillText(main, x, 308);
-    if (!masked && !col.none && col.fig.sub) {
-      ctx.fillStyle = c.muted;
-      ctx.font = `400 24px ${c.body}`;
-      ctx.fillText(col.fig.sub, x, 348);
-    }
+    ctx.fillStyle = masked || col.none ? c.muted : col.pnl ? (r.totalProfitSol >= 0 ? c.primary : c.down) : c.fg;
+    ctx.fillText(main, x, 474);
   });
 
-  // The biggest single fumble, in a line.
+  // The worst single fumble, in a line: the coin, and how high it went after the sale.
   const worst = worstFumble(r);
-  ctx.strokeStyle = c.border;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(64, 400);
-  ctx.lineTo(W - 64, 400);
-  ctx.stroke();
+  ctx.font = `400 24px ${c.body}`;
   if (worst) {
     const name = tokenLabel(worst.token, r.tokens).ticker;
+    const lead = "Biggest fumble  ";
+    ctx.fillStyle = c.muted;
+    ctx.fillText(lead, 64, 530);
+    let x = 64 + ctx.measureText(lead).width;
+    ctx.fillStyle = c.fg;
+    ctx.font = `700 28px ${c.head}`;
+    ctx.fillText(name, x, 530);
+    x += ctx.measureText(name).width;
     ctx.fillStyle = c.muted;
     ctx.font = `400 24px ${c.body}`;
-    ctx.fillText("Biggest fumble", 64, 452);
-    ctx.fillStyle = c.fg;
-    ctx.font = `600 38px ${c.head}`;
-    ctx.fillText(name, 64, 502);
-    ctx.fillStyle = c.muted;
-    ctx.font = `400 26px ${c.body}`;
-    const sold = figure(display, worst.soldSol, worst.soldUsd ?? null).main;
-    const left = figure(display, worst.fumbleSol ?? 0, worst.fumbleUsd ?? null).main;
-    ctx.fillText(`Sold for ${sold}, then reached ${(worst.peakMultiple ?? 1).toFixed(1)}x: ${left} left on the table`, 64, 546);
+    ctx.fillText(`  sold, then ${(worst.peakMultiple ?? 1).toFixed(1)}x higher`, x, 530);
   } else {
     ctx.fillStyle = c.muted;
-    ctx.font = `400 26px ${c.body}`;
-    ctx.fillText("No sell with a measurable fumble yet.", 64, 452);
+    ctx.fillText("No sell with a measurable fumble yet.", 64, 530);
   }
 
   // Footer: the mark and the name.

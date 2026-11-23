@@ -35,6 +35,8 @@ const empty = (wallet: string): ScanResult => ({
   positions: [],
   totalRoundTripSol: 0,
   totalRoundTripUsd: 0,
+  totalMissedSol: 0,
+  totalMissedUsd: 0,
   sells: [],
   unpriced: 0,
   totalFumbleUsd: 0,

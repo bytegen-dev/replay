@@ -3,6 +3,7 @@ import type { History } from "./helius.ts";
 import { matchLots, type SellLot } from "./lots.ts";
 import { createNameBook, type TokenInfo } from "./tokens.ts";
 import { SOL_MINT, type PriceSeries } from "./prices.ts";
+import { missedTotals } from "./missed.ts";
 import { findPositions, roundTripFor, type Position, type RoundTrip } from "./roundtrip.ts";
 import type { SavedWallet, WalletStore } from "./store.ts";
 import { parseTrades, type HeliusTx } from "./trades.ts";
@@ -112,6 +113,9 @@ export interface ScanResult {
   /** The sum of the round-trips that could be measured, in SOL and in dollars. */
   totalRoundTripSol: number;
   totalRoundTripUsd: number;
+  /** The total fumble: fumbles and round-trips together without counting a coin twice (see missed.ts), in SOL and in dollars. */
+  totalMissedSol: number;
+  totalMissedUsd: number;
   /** True when pricing stopped early because time ran out; the sells left unpriced say so. */
   ranOutOfTime: boolean;
 }
@@ -322,6 +326,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     totalSol += s.fumble.fumbleSol;
     if (!worst || s.fumble.fumbleUsd > (worst.fumble as { fumbleUsd: number }).fumbleUsd) worst = s;
   }
+  const missed = missedTotals(sells, scannedPositions);
   await persisted;
   deps.onProgress?.({ stage: "done", done: order.length, total: order.length });
   return {
@@ -338,6 +343,8 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     partialSells: lots.filter((l) => l.unmatchedTokens > 0).length,
     totalRoundTripSol: totalRoundTrip,
     totalRoundTripUsd,
+    totalMissedSol: missed.sol,
+    totalMissedUsd: missed.usd,
     unpriced: sells.filter((s) => s.fumble.status !== "ok").length,
     totalFumbleUsd: total,
     totalFumbleSol: totalSol,

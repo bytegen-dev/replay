@@ -371,8 +371,8 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
 }
 
 /** One headline number: dollars big, SOL under it, and what it means in a line. A signed one (profit) is green for a gain and red for a loss. */
-function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about: string; className?: string; texture?: boolean }) {
-  const tone = signed && !pending && !empty ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
+function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture, hero }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about: string; className?: string; texture?: boolean; hero?: boolean }) {
+  const tone = hero && !pending && !empty ? "text-destructive" : signed && !pending && !empty ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
   // A dollar value of exactly nothing next to a SOL amount means no dollar price was found, not that it is worth nothing.
   const fig = figure(display, sols, dollars === 0 && sols !== 0 ? null : dollars, signed);
   return (
@@ -383,13 +383,13 @@ function Stat({ label, dollars, sols, display, pending, empty, signed, about, cl
           aria-hidden
           // The card's top right corner is cut (18px). On a phone this block spans the whole card, so the texture is cut there too and stays inside the
           // edge; from the wide layout up the block is the left third and its corner is not on the card's edge.
-          className="tex-layer [--tex-clip:polygon(0_0,calc(100%-18px)_0,100%_18px,100%_100%,0_100%)] sm:[--tex-clip:none]"
+          className={cn("tex-layer [--tex-clip:polygon(0_0,calc(100%-18px)_0,100%_18px,100%_100%,0_100%)]", !hero && "sm:[--tex-clip:none]")}
           // Very faint, still (the site's version drifts), and fading out from the top right corner so it never competes with the numbers.
           style={{ clipPath: "var(--tex-clip)", opacity: 0.13, animation: "none", maskImage: "linear-gradient(205deg, #000 0%, rgb(0 0 0 / 0.35) 32%, transparent 62%)", WebkitMaskImage: "linear-gradient(205deg, #000 0%, rgb(0 0 0 / 0.35) 32%, transparent 62%)" } as React.CSSProperties}
         />
       )}
       <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={cn("font-heading text-4xl leading-none font-bold tabular-nums sm:text-5xl", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : fig.main}</p>
+      <p className={cn("font-heading leading-none font-bold tabular-nums", hero ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : fig.main}</p>
       <p className="h-5 text-sm tabular-nums text-muted-foreground">{pending || empty ? "" : (fig.sub ?? "")}</p>
       <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{about}</p>
     </div>
@@ -534,9 +534,10 @@ function Summary({ trades, result, asOf, display, settings, onSettings }: { trad
   return (
     <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card" style={{ "--pulse-speed": "6s" } as React.CSSProperties}>
       <FumbleSettingsDialog settings={settings} onChange={onSettings} />
-      <div className="grid sm:grid-cols-3">
-        <Stat label="Profit" texture display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="Total realized profit." />
-        <Stat label="Fumbled" display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." className="border-t border-border sm:border-t-0 sm:border-l" />
+      {/* The headline is the total fumble; the three numbers under it are what it is made of (and the PnL, for the record). */}
+      <Stat label="Total fumble" hero texture display={display} dollars={result?.totalMissedUsd ?? 0} sols={result?.totalMissedSol ?? 0} pending={!result} empty={!!result && result.measured === 0 && !result.positions.some((p) => p.status === "ok")} about="Upside you missed after selling, plus profit you gave back. Each coin counts once." />
+      <div className="grid border-t border-border sm:grid-cols-3">
+        <Stat label="Missed after selling" display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." />
         <Stat
           label="Roundtripped"
           display={display}
@@ -547,6 +548,7 @@ function Summary({ trades, result, asOf, display, settings, onSettings }: { trad
           about="Peak profit minus what you kept."
           className="border-t border-border sm:border-t-0 sm:border-l"
         />
+        <Stat label="PnL" display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="Total realized profit." className="border-t border-border sm:border-t-0 sm:border-l" />
       </div>
       <div className="flex flex-col gap-1 border-t border-border px-5 py-3 text-sm text-muted-foreground sm:px-6">
         <p>
