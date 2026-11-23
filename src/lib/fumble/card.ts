@@ -13,8 +13,9 @@ const W = 1200;
 const H = 630;
 
 /** replay-fumble-card-9msk-xhzj-2026-11-23.png */
-export function fumbleCardFileName(r: { wallet: string; scannedAt: number }): string {
+export function fumbleCardFileName(r: { wallet: string; scannedAt: number }, privacy = false): string {
   const day = new Date(r.scannedAt * 1000).toISOString().slice(0, 10);
+  if (privacy) return `replay-fumble-card-${day}-private.png`;
   return `replay-fumble-card-${r.wallet.slice(0, 4)}-${r.wallet.slice(-4)}-${day}.png`.toLowerCase();
 }
 
@@ -25,7 +26,7 @@ export function worstFumble(r: ApiResult) {
   return best;
 }
 
-export async function renderFumbleCard(r: ApiResult, now: number, display: Display): Promise<Blob> {
+export async function renderFumbleCard(r: ApiResult, now: number, display: Display, opts: { privacy?: boolean } = {}): Promise<Blob> {
   const c = await canvasTheme();
   const canvas = document.createElement("canvas");
   canvas.width = W * 2;
@@ -46,30 +47,32 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
   ctx.fillText("Fumble check", 64, 86);
   ctx.fillStyle = c.muted;
   ctx.font = `400 22px ${c.body}`;
-  ctx.fillText(shortMint(r.wallet), 64, 124);
+  const who = opts.privacy ? "***" : shortMint(r.wallet);
+  ctx.fillText(who, 64, 124);
 
   // How much was looked at: the trades, and how far back they reach.
   const reach = r.coverage.oldest ? `, from ${reachLabel(r.coverage.oldest, now)}` : "";
   ctx.fillStyle = c.muted;
-  ctx.fillText(`${r.coverage.complete ? "All" : "Latest"} ${r.trades.length} trades${reach}`, 64 + ctx.measureText(shortMint(r.wallet)).width + 28, 124);
+  ctx.fillText(`${r.coverage.complete ? "All" : "Latest"} ${r.trades.length} trades${reach}`, 64 + ctx.measureText(who).width + 28, 124);
 
-  // The three headline numbers.
+  // The headline numbers: PnL, fumbled and roundtripped (in privacy mode the PnL and the wallet address are drawn as ***).
   // A figure with nothing behind it (no sell traced to its buys, no closed position) is a dash, not a made-up zero. Each figure leads with the
   // chosen currency (SOL unless the visitor picked another) and has the other under it.
   const traced = r.sells.some((x) => x.matchedTokens > 0);
   const known = (u: number, s: number) => (u === 0 && s !== 0 ? null : u);
   const cols = [
-    { label: "Profit", fig: figure(display, r.totalProfitSol, known(r.totalProfitUsd, r.totalProfitSol), true), none: !traced, tone: r.totalProfitSol },
+    { label: "PnL", fig: figure(display, r.totalProfitSol, known(r.totalProfitUsd, r.totalProfitSol), true), none: !traced, tone: r.totalProfitSol },
     { label: "Fumbled", fig: figure(display, r.totalFumbleSol, known(r.totalFumbleUsd, r.totalFumbleSol)), none: false, tone: 0 },
     { label: "Roundtripped", fig: figure(display, r.totalRoundTripSol, known(r.totalRoundTripUsd, r.totalRoundTripSol)), none: !r.positions.some((p) => p.status === "ok"), tone: 0 },
   ];
-  const colW = (W - 128) / 3;
+  const colW = (W - 128) / cols.length;
   cols.forEach((col, i) => {
     const x = 64 + i * colW;
     ctx.fillStyle = c.muted;
     ctx.font = `400 24px ${c.body}`;
     ctx.fillText(col.label, x, 232);
-    const main = col.none ? "\u2014" : col.fig.main;
+    const masked = opts.privacy === true && col.label === "PnL";
+    const main = masked ? "***" : col.none ? "\u2014" : col.fig.main;
     // The big figure shrinks until it fits its column.
     let size = 64;
     ctx.font = `700 ${size}px ${c.head}`;
@@ -77,9 +80,9 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
       size -= 2;
       ctx.font = `700 ${size}px ${c.head}`;
     }
-    ctx.fillStyle = col.none ? c.muted : col.label === "Profit" ? (col.tone >= 0 ? c.primary : c.down) : c.fg;
+    ctx.fillStyle = masked ? c.muted : col.none ? c.muted : col.label === "PnL" ? (col.tone >= 0 ? c.primary : c.down) : c.fg;
     ctx.fillText(main, x, 308);
-    if (!col.none && col.fig.sub) {
+    if (!masked && !col.none && col.fig.sub) {
       ctx.fillStyle = c.muted;
       ctx.font = `400 24px ${c.body}`;
       ctx.fillText(col.fig.sub, x, 348);

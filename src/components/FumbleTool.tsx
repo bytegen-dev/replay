@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings } from "lucide-react";
+import { FileSpreadsheet, ImageDown, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
@@ -13,6 +13,7 @@ import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { applyChoice, DEFAULT_SETTINGS, PER_LOAD_CHOICES, readSettings, writeSettings, type FumbleSettings } from "@/lib/fumble/settings.ts";
+import { ImagePreviewDialog } from "@/components/ImagePreviewDialog";
 import { downloadFile } from "@/lib/download.ts";
 import { figure, showIn, SOL_UNIT, USD_UNIT, type Display, type Unit } from "@/lib/fumble/money.ts";
 import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
@@ -507,27 +508,8 @@ function Summary({ trades, result, asOf, display, settings, onSettings }: { trad
   const tracedSells = result ? result.sells.filter((x) => x.matchedTokens > 0).length : 0;
   const partial = result?.partialSells ?? 0;
   const cov = trades.coverage;
-  const [imaging, setImaging] = useState(false);
-  async function saveImage() {
-    if (!result) return;
-    setImaging(true);
-    setExportError(null);
-    try {
-      const blob = await renderFumbleCard(result, asOf || Math.floor(result.scannedAt), display);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fumbleCardFileName(result);
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
-    } catch (e) {
-      setExportError(e instanceof Error ? e.message : "The picture could not be made. Try again.");
-    } finally {
-      setImaging(false);
-    }
-  }
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const renderCard = useCallback((privacy: boolean) => renderFumbleCard(result!, asOf || Math.floor(result!.scannedAt), display, { privacy }), [result, asOf, display]);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   async function exportSheet() {
@@ -573,19 +555,20 @@ function Summary({ trades, result, asOf, display, settings, onSettings }: { trad
         {notes.map((n) => (
           <p key={n}>{n}</p>
         ))}
-        {/* The history is saved and stopped short of the wallet's first trade: another scan reads on from there. Only once this scan has finished. */}
-        {result && (
-          <p className="flex flex-wrap gap-x-5 gap-y-1">
-            <button type="button" onClick={() => void saveImage()} disabled={imaging} className="underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60">
-              {imaging ? "Making the picture" : "Download image"}
-            </button>
-            <button type="button" onClick={exportSheet} disabled={exporting} className="underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60">
-              {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
-            </button>
-          </p>
-        )}
         {exportError && <p className="text-destructive">{exportError}</p>}
       </div>
+      {/* The two things to take away, set apart from the notes above so they are easy to find. Only once this scan has finished. */}
+      {result && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-6">
+          <button type="button" onClick={() => setPreviewOpen(true)} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold">
+            <ImageDown className="size-4" aria-hidden /> Download image
+          </button>
+          <ImagePreviewDialog open={previewOpen} title="Your fumble card" fileName={fumbleCardFileName(result)} fileNameFor={(privacy) => fumbleCardFileName(result, privacy)} privacyMode render={renderCard} onClose={() => setPreviewOpen(false)} />
+          <button type="button" onClick={exportSheet} disabled={exporting} className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary disabled:opacity-60">
+            <FileSpreadsheet className="size-4" aria-hidden /> {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
