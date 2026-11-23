@@ -139,7 +139,7 @@ export function Faq({ items, title }: { items: FaqItem[]; title?: React.ReactNod
                 const next = items.filter((i) => t === "All" || i.topic === t);
                 if (!next.some((i) => i.q === open)) setOpen(next[0]?.q ?? null);
               }}
-              className={cn("relative flex shrink-0 items-center gap-2 border px-3 py-1.5 text-sm transition-colors duration-300", topic === t ? "border-transparent text-primary" : "border-border text-muted-foreground hover:border-primary/60 hover:text-foreground")}
+              className={cn("relative flex shrink-0 items-center gap-2 border px-3 py-1.5 text-sm transition-colors duration-300", topic === t ? "border-transparent text-primary" : "border-border text-muted-foreground hover:text-foreground")}
             >
               {t}
               <span className="text-xs tabular-nums text-muted-foreground">{t === "All" ? items.length : items.filter((i) => i.topic === t).length}</span>
