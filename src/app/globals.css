@@ -1376,9 +1376,9 @@ html[data-motion="reduce"] [data-slot="button"] {
       var(--edge);
     animation: ring-turn 6s linear infinite;
   }
-  /* .pulse-hover cards start the same light when the pointer is over them, a little faster, and let it go when it leaves. */
+  /* .pulse-hover cards start the same light when the pointer is over them, a little faster, and let it go when it leaves. A card can set --pulse-speed to turn it slower or faster. */
   .cut-card.pulse-hover:hover::before {
-    animation-duration: 2.6s;
+    animation-duration: var(--pulse-speed, 2.6s);
   }
 
   /* A hard shadow: an unblurred copy of the card's own outline, set down and to the left. drop-shadow follows what is drawn,

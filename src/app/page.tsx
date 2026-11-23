@@ -161,7 +161,7 @@ export default function LandingPage() {
                 intro={
                   <div className="flex max-w-2xl flex-col gap-2">
                     <h2 className={h2}>What did your wallet miss?</h2>
-                    <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table, and how much of its profit it gave back." />
+                    <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table, and how much profit it roundtripped." />
                   </div>
                 }
                 aside={<FumbleVisual />}

@@ -44,7 +44,7 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
     run: (wallet, emit, opts) => {
       const deadline = Date.now() + budgetMs;
       return scanWallet(wallet, {
-        history: (w, onPage, until, before) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs, onPage, untilSignature: until, before }),
+        history: (w, onPage, until, before, stopWhen) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs, onPage, untilSignature: until, before, stopWhen }),
         store,
         prices,
         solUsd,

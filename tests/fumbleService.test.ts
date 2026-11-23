@@ -339,12 +339,20 @@ test("the wallet's realized profit is what its sells brought in minus what those
 });
 
 test("without a SOL price the profit is still known in SOL, and the dollar figures are left out, not guessed", async () => {
-  const result = await realScan(WALLET, { prices: async (m) => (m === WIN ? { candles: winPrices.candles, source: "fake" } : null) });
+  const result = await realScan(WALLET, { prices: async (m) => (m === WIN ? { candles: winPrices.candles, source: "fake" } : null), solUsd: async () => null });
   assert.ok(result.totalProfitSol < -20);
   assert.equal(result.totalProfitUsd, 0);
   assert.ok(result.sells.every((x) => x.profitUsd === null));
   const api = toApiResult(result, 1);
   assert.ok(api.sells.every((x) => x.profitUsd === undefined));
+});
+
+test("when the main SOL price series is missing but the per-hour price is there, the profit still gets its dollar value from it", async () => {
+  const result = await realScan(WALLET, { prices: async (m) => (m === WIN ? { candles: winPrices.candles, source: "fake" } : null) });
+  const win = result.sells.find((x) => x.lot.sell.mint === WIN)!;
+  assert.ok(win.profitUsd !== null, "the priced sell has a dollar profit");
+  assert.ok(Math.abs(win.profitUsd! - win.lot.profitSol * winPrices.solUsdAtSale) < 1e-6, "worked out at the SOL price the fumble used");
+  assert.ok(result.totalProfitUsd < -1300);
 });
 
 test("the response carries each sell's profit and the wallet's totals", async () => {
@@ -452,4 +460,19 @@ test("reading further back never takes a cached scan and runs apart from an ordi
   const more = await scanner.scan(WALLET, undefined, { more: true });
   assert.equal(more.cached, false);
   assert.deepEqual(runs, [false, true]);
+});
+
+test("a scan with its own size is passed that size, and never takes a cached scan of the default size", async () => {
+  const runs: (number | undefined)[] = [];
+  const scanner = createScanner({
+    run: async (wallet, _emit, opts) => {
+      runs.push(opts.target);
+      return empty(wallet);
+    },
+    now: () => 1000,
+  });
+  await scanner.scan(WALLET);
+  const sized = await scanner.scan(WALLET, undefined, { target: 250 });
+  assert.equal(sized.cached, false);
+  assert.deepEqual(runs, [undefined, 250]);
 });

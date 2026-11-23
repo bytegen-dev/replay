@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
 import { getScanner, getWalletLook } from "@/lib/fumble/live.ts";
 import { BusyError } from "@/lib/fumble/service.ts";
+import { PER_LOAD_CHOICES } from "@/lib/fumble/settings.ts";
 import { isHuman } from "@/lib/human.ts";
 import { whoIs } from "@/lib/limits.ts";
 import { hitRateLimit } from "@/lib/rateLimit.ts";
@@ -27,17 +28,19 @@ export const maxDuration = 60;
  * Finished scans are reused for 20 minutes, so asking again is free and does not count against the limit.
  */
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { wallet?: unknown; more?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { wallet?: unknown; more?: unknown; limit?: unknown } | null;
   const wallet = typeof body?.wallet === "string" ? body.wallet.trim() : "";
   if (!isWalletAddress(wallet)) return NextResponse.json({ error: "That doesn't look like a Solana wallet address." }, { status: 400 });
 
   // "more" reads further back into a wallet whose history was only read part of the way: it is new work, so it never takes a cached scan.
   const more = body?.more === true;
+  // How many trades to read at a time: one of the sizes the page offers, anything else means the default.
+  const target = PER_LOAD_CHOICES.find((n) => n === body?.limit);
   const scanner = getScanner();
   if (!scanner) return NextResponse.json({ error: "The fumble scanner isn't set up yet." }, { status: 503 });
 
   // Only a scan that has to do real work costs anything, so only that is checked and counted: a finished scan being opened again is free.
-  if (more || !scanner.peek(wallet)) {
+  if (more || target !== undefined || !scanner.peek(wallet)) {
     // Anonymous visitors have to have passed the invisible bot check first (when it is set up). It is the cheapest test, so it comes first.
     const viewer = await whoIs(request);
     if (viewer.kind === "anonymous" && !isHuman(request)) return NextResponse.json({ error: "Quick check needed.", code: "human_required" }, { status: 403, headers: { "cache-control": "no-store" } });
@@ -68,7 +71,7 @@ export async function POST(request: Request) {
         }
       };
       try {
-        const { result, cached } = await scanner.scan(wallet, send, { more });
+        const { result, cached } = await scanner.scan(wallet, send, { more, target });
         send({ type: "result", cached, data: result });
       } catch (e) {
         if (!(e instanceof BusyError)) console.error("fumble scan failed:", e instanceof Error ? e.message : "unknown error");

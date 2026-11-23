@@ -13,6 +13,8 @@ interface Props {
   onChange: (code: string) => void;
   /** "full" shows the flag, code and name; "compact" shows the flag and code only, for the box beside an amount. */
   variant?: "full" | "compact";
+  /** Called when the list is opened, for a caller that wants opening the picker to count as choosing the value it shows. */
+  onOpen?: () => void;
   ariaLabel?: string;
   className?: string;
 }
@@ -82,11 +84,17 @@ function List({ value, onPick }: { value: string; onPick: (code: string) => void
   );
 }
 
-export function CurrencyPicker({ id, value, onChange, variant = "full", ariaLabel, className }: Props) {
+export function CurrencyPicker({ id, value, onChange, onOpen, variant = "full", ariaLabel, className }: Props) {
   const [open, setOpen] = useState(false);
   const cur = currencyByCode(value);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) onOpen?.();
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           id={id}

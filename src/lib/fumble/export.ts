@@ -6,7 +6,7 @@ import { fumbleFileName, shortMint } from "./view.ts";
 export { fumbleFileName };
 
 /**
- * The scan as a spreadsheet: a summary, every trade with its profit, fumble and the profit given back, and the closed positions. The totals
+ * The scan as a spreadsheet: a summary, every trade with its profit, fumble and the profit roundtripped, and the closed positions. The totals
  * on the summary are formulas over those sheets, so the numbers can be checked and followed.
  */
 
@@ -109,7 +109,7 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
   const closing = new Map(r.positions.map((p) => [p.closedBy, p]));
 
   /* ---- Trades ---- */
-  tr.addRow(["Time (UTC)", "Side", "Coin", "Name", "Tokens", "SOL", "Profit (SOL)", "Profit (USD)", "Fumble (USD)", "Fumble (SOL)", "Peak after sale (x)", "Peak date (UTC)", "Gave back (SOL)", "Gave back (USD)", "Note", "Coin address", "Transaction"]);
+  tr.addRow(["Time (UTC)", "Side", "Coin", "Name", "Tokens", "SOL", "Profit (SOL)", "Profit (USD)", "Fumble (USD)", "Fumble (SOL)", "Peak after sale (x)", "Peak date (UTC)", "Roundtripped (SOL)", "Roundtripped (USD)", "Note", "Coin address", "Transaction"]);
   tr.getRow(1).font = BOLD;
   tr.views = [{ state: "frozen", ySplit: 1 }];
   const trades = [...r.trades].sort((a, b) => b.time - a.time);
@@ -120,7 +120,7 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
     const notes: string[] = [];
     if (s && s.status !== "ok" && s.reason) notes.push(`Fumble unknown: ${s.reason}`);
     if (s && s.matchedTokens < s.tokens * 0.999) notes.push(s.matchedTokens > 0 ? "Profit covers only the part bought inside the history" : "Bought before the history, so no profit shown");
-    if (p && p.status !== "ok" && p.reason) notes.push(`Gave back unknown: ${p.reason}`);
+    if (p && p.status !== "ok" && p.reason) notes.push(`Roundtrip unknown: ${p.reason}`);
     const name = r.tokens[t.token]?.name;
     tr.getCell(`A${row}`).value = date(t.time);
     tr.getCell(`A${row}`).numFmt = DATE_FMT;
@@ -213,8 +213,8 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
     ["Profit (USD)", { formula: `SUM(Trades!H2:H${last})`, result: r.totalProfitUsd }, USD],
     ["Fumbled (USD)", { formula: `SUM(Trades!I2:I${last})`, result: r.totalFumbleUsd }, USD],
     ["Fumbled (SOL)", { formula: `SUM(Trades!J2:J${last})`, result: r.totalFumbleSol }, SOL],
-    ["Gave back (SOL)", { formula: `SUM(Positions!I2:I${lastPos})`, result: r.totalRoundTripSol }, SOL],
-    ["Gave back (USD)", { formula: `SUM(Positions!J2:J${lastPos})`, result: r.totalRoundTripUsd }, USD],
+    ["Roundtripped (SOL)", { formula: `SUM(Positions!I2:I${lastPos})`, result: r.totalRoundTripSol }, SOL],
+    ["Roundtripped (USD)", { formula: `SUM(Positions!J2:J${lastPos})`, result: r.totalRoundTripUsd }, USD],
     ["Sells with no price history", r.unknown, "0"],
   ];
   sum.getCell("A1").value = "Replay: fumble check";
@@ -230,7 +230,7 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
   const notes = [
     "Profit: what a sell brought in minus what the coins it sold cost, matched oldest buy first. Only the part bought inside the history counts.",
     "Fumbled: what the coins sold would have been worth at their highest price after the sale, minus what they were sold for.",
-    "Gave back: the profit a coin showed at its peak while it was held, minus the profit kept when the position closed.",
+    "Roundtripped: the profit a coin showed at its peak while it was held, minus the profit kept when the position closed.",
     "Dollar figures use the SOL price at the time. Prices come from Birdeye and GeckoTerminal. This describes the past and is not financial advice.",
   ];
   notes.forEach((n, i) => (sum.getCell(`A${at + i}`).value = n));

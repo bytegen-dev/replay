@@ -51,7 +51,7 @@ test("the summary totals are formulas over the trades and positions, with the sc
   assert.match(find("Fumbled (USD)").formula, /SUM\(Trades!I2:I\d+\)/);
   assert.ok(Math.abs((find("Fumbled (USD)").result as number) - r.totalFumbleUsd) < 1e-6);
   assert.ok(Math.abs((find("Profit (SOL)").result as number) - r.totalProfitSol) < 1e-9);
-  assert.match(find("Gave back (SOL)").formula, /SUM\(Positions!I2:I\d+\)/);
+  assert.match(find("Roundtripped (SOL)").formula, /SUM\(Positions!I2:I\d+\)/);
 });
 
 test("a measured sell shows its fumble and the coin's ticker, and a sell with no price says why", async () => {

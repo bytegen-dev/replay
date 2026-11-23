@@ -182,7 +182,7 @@ export class BusyError extends Error {
 }
 
 export interface ScannerOptions {
-  run: (wallet: string, emit: (e: ScanEvent) => void, opts: { more: boolean }) => Promise<ScanResult>;
+  run: (wallet: string, emit: (e: ScanEvent) => void, opts: { more: boolean; target?: number }) => Promise<ScanResult>;
   /** Seconds since 1970. */
   now?: () => number;
   /** How long a finished scan is reused, in seconds. Default 20 minutes. */
@@ -216,11 +216,13 @@ export function createScanner(opts: ScannerOptions) {
    * Scans a wallet, or returns the fresh scan already done, or joins the one already running for it (and so also gets its events,
    * including the trade list if that was already sent). `cached` says whether the result came from a previous scan.
    */
-  async function scan(wallet: string, onEvent?: (e: ScanEvent) => void, scanOpts: { more?: boolean } = {}): Promise<{ result: ApiResult; cached: boolean }> {
+  async function scan(wallet: string, onEvent?: (e: ScanEvent) => void, scanOpts: { more?: boolean; target?: number } = {}): Promise<{ result: ApiResult; cached: boolean }> {
     const more = scanOpts.more === true;
-    // Reading further back is new work: it never takes a finished scan, and it runs apart from an ordinary scan of the same wallet.
-    const key = more ? `${wallet}#more` : wallet;
-    const hit = more ? null : peek(wallet);
+    const target = scanOpts.target;
+    // Reading further back, or a scan with its own size, is new work: it never takes a finished scan, and it runs apart from an ordinary scan of the same wallet.
+    const own = more || target !== undefined;
+    const key = own ? `${wallet}#${more ? "more" : "scan"}${target ?? ""}` : wallet;
+    const hit = own ? null : peek(wallet);
     if (hit) return { result: hit, cached: true };
 
     const joined = running.get(key);
@@ -242,7 +244,7 @@ export function createScanner(opts: ScannerOptions) {
     };
     entry.promise = (async () => {
       try {
-        const raw = await opts.run(wallet, emit, { more });
+        const raw = await opts.run(wallet, emit, { more, target });
         const result = toApiResult(raw, now());
         cache.set(wallet, result);
         if (cache.size > maxCached) cache.delete(cache.keys().next().value as string); // the oldest entry goes first

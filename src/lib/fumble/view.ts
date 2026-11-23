@@ -122,7 +122,7 @@ export function signedSol(x: number): string {
   return `${x > 0 ? "+" : x < 0 ? "-" : ""}${sol(Math.abs(x))}`;
 }
 
-/** What the "gave back" column says for a row. Only the sell that closed a position has one. */
+/** What the "roundtripped" column says for a row. Only the sell that closed a position has one. */
 export type RoundTripCell =
   | { kind: "none" }
   | { kind: "gave-back"; usd: number; sol: number; share: number }
@@ -204,4 +204,21 @@ export function parseRecent(raw: string | null): RecentWallet[] {
 /** The list with this wallet put first (a wallet scanned again moves up, it is not listed twice), keeping only the latest few. */
 export function rememberWallet(list: RecentWallet[], wallet: string, at: number): RecentWallet[] {
   return [{ wallet, at }, ...list.filter((r) => r.wallet !== wallet)].slice(0, RECENT_MAX);
+}
+
+/**
+ * How far back a set of trades reaches, in words a person says: "the last 3 days", "the last 2 weeks", "the last 5 months", "the last 2 years".
+ * `oldest` is the time of the oldest trade and `now` the time it is measured from, both in seconds since 1970.
+ */
+export function reachLabel(oldest: number, now: number): string {
+  const seconds = Math.max(0, now - oldest);
+  const hours = seconds / 3600;
+  const days = hours / 24;
+  const plural = (n: number, unit: string) => (n === 1 ? `the last ${unit}` : `the last ${n} ${unit}s`);
+  if (hours < 1) return "the last hour";
+  if (days < 1) return plural(Math.floor(hours), "hour");
+  if (days < 14) return plural(Math.max(1, Math.ceil(days)), "day");
+  if (days < 56) return plural(Math.round(days / 7), "week");
+  if (days < 730) return plural(Math.round(days / 30.4), "month");
+  return plural(Math.round(days / 365), "year");
 }

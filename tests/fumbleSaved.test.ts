@@ -17,7 +17,8 @@ const newer = all.slice(0, cut);
 const older = all.slice(cut);
 
 /** A history that serves `source` as if it were the wallet's whole history, stopping at `until` when given. */
-const serve = (source: HeliusTx[], calls: { until?: string; before?: string }[] = []) => async (_w: string, _onPage?: unknown, until?: string, before?: string) => {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const serve = (source: HeliusTx[], calls: { until?: string; before?: string }[] = []) => async (_w: string, _onPage?: unknown, until?: string, before?: string, _stopWhen?: unknown) => {
   calls.push({ until, before });
   const b = before ? source.findIndex((t) => t.signature === before) : -1;
   const from = b >= 0 ? source.slice(b + 1) : source;
@@ -229,4 +230,78 @@ test("the history says it can be read further only when it is saved and stopped 
   assert.equal(complete.history.extendable, undefined);
   const noStore = await scanWallet(WALLET, { ...base, history: shallow(newer) });
   assert.equal(noStore.history.extendable, undefined);
+});
+
+/* ------------------------------ reading a hundred trades at a time ------------------------------ */
+
+test("history stops at the page where the caller says it has enough, and says the wallet has more", async () => {
+  const pages = [all.slice(0, 5), all.slice(5, 10), all.slice(10, 15), all.slice(15, 20)];
+  let n = 0;
+  const h = await fetchHistory(WALLET, { apiKey: "k", stopWhen: (txs) => txs.length >= 10, fetchImpl: async () => page(pages[n++]), sleep: async () => {} });
+  assert.equal(n, 2, "it did not read a third page");
+  assert.equal(h.txs.length, 10);
+  assert.equal(h.complete, false);
+});
+
+test("a first scan asks to stop once enough trades are found, and a rescan asks for no limit", async () => {
+  const seen: { stop: boolean }[] = [];
+  const history = async (_w: string, _p?: unknown, _u?: string, _b?: string, stopWhen?: (t: HeliusTx[]) => boolean) => {
+    seen.push({ stop: !!stopWhen });
+    return { txs: all, pages: 1, complete: true, oldest: all[all.length - 1].timestamp };
+  };
+  const store = memoryStore();
+  await scanWallet(WALLET, { ...base, history, store });
+  await scanWallet(WALLET, { ...base, history, store });
+  assert.deepEqual(seen.map((s) => s.stop), [true, false], "first scan limited, the catch-up on what is new not");
+});
+
+test("the stop test counts trades of the minimum size against the target", async () => {
+  let stop: ((t: HeliusTx[]) => boolean) | undefined;
+  const history = async (_w: string, _p?: unknown, _u?: string, _b?: string, stopWhen?: (t: HeliusTx[]) => boolean) => {
+    stop = stopWhen;
+    return { txs: all, pages: 1, complete: true, oldest: all[all.length - 1].timestamp };
+  };
+  await scanWallet(WALLET, { ...base, history }, { target: 5 });
+  assert.equal(stop!(all), true, "28 trades are more than 5");
+  assert.equal(stop!([]), false, "no transactions, no trades");
+  await scanWallet(WALLET, { ...base, history }, { target: 100 });
+  assert.equal(stop!(all), false, "28 trades are fewer than 100");
+});
+
+test("reading further back also stops at the target, counting only what it reads this time", async () => {
+  const store = memoryStore();
+  await scanWallet(WALLET, { ...base, history: shallow(older), store });
+  let stop: ((t: HeliusTx[]) => boolean) | undefined;
+  await scanWallet(
+    WALLET,
+    {
+      ...base,
+      store,
+      history: async (_w, _p, _u, _b, stopWhen) => {
+        stop = stopWhen;
+        return { txs: newer, pages: 1, complete: false, oldest: newer[newer.length - 1].timestamp };
+      },
+    },
+    { more: true, target: 3 },
+  );
+  assert.ok(stop, "a limit was asked for");
+  assert.equal(stop!([]), false);
+  assert.equal(stop!(newer), true);
+});
+
+test("a transaction that comes back on two pages is kept once", async () => {
+  // Page two starts with the transaction page one ended on.
+  const pages = [all.slice(0, 5), all.slice(4, 9), []];
+  let n = 0;
+  const h = await fetchHistory(WALLET, { apiKey: "k", fetchImpl: async () => page(pages[n++]), sleep: async () => {} });
+  assert.equal(h.txs.length, 9);
+  assert.equal(new Set(h.txs.map((t) => t.signature)).size, 9);
+});
+
+test("the partial lists shown while reading never hold a transaction twice", async () => {
+  const pages = [all.slice(0, 5), all.slice(4, 9), []];
+  let n = 0;
+  const seen: number[] = [];
+  await fetchHistory(WALLET, { apiKey: "k", fetchImpl: async () => page(pages[n++]), sleep: async () => {}, onPage: (txs) => seen.push(txs.length - new Set(txs.map((t) => t.signature)).size) });
+  assert.deepEqual(seen, [0, 0]);
 });

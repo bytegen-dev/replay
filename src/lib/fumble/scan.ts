@@ -16,7 +16,7 @@ import type { Dropped, Trade } from "./types.ts";
 
 export interface ScanDeps {
   /** Reads the wallet's history. `onPage` is called after each page with everything read so far, newest first. */
-  history: (wallet: string, onPage?: (txs: HeliusTx[], pages: number) => void, until?: string, before?: string) => Promise<History>;
+  history: (wallet: string, onPage?: (txs: HeliusTx[], pages: number) => void, until?: string, before?: string, stopWhen?: (txs: HeliusTx[]) => boolean) => Promise<History>;
   /**
    * Where a wallet's trades are saved between scans. With it, a rescan shows the saved trades at once and reads only the transactions newer
    * than the newest saved one (`until` in `history`). Without it, or when it fails, every scan reads the history from scratch.
@@ -126,9 +126,14 @@ function mergeTrades(older: Trade[], newer: Trade[]): Trade[] {
 const addDropped = (a: Dropped, b: Dropped): Dropped => ({ noTokenMove: a.noTokenMove + b.noTokenMove, multiToken: a.multiToken + b.multiToken, noSolLeg: a.noSolLeg + b.noSolLeg });
 const NO_DROPS: Dropped = { noTokenMove: 0, multiToken: 0, noSolLeg: 0 };
 
+/** How many trades (of the minimum size) a scan reads before it stops and offers to load more. */
+export const TRADES_PER_LOAD = 100;
+
 export interface ScanOptions {
   /** Read further back than the saved history reaches (a wallet whose history was read only part of the way back), instead of reading what is new. */
   more?: boolean;
+  /** Stop reading once this many trades of the minimum size have been found (in what is read this time). Default TRADES_PER_LOAD. */
+  target?: number;
 }
 
 export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptions = {}): Promise<ScanResult> {
@@ -178,7 +183,11 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     show();
     void names.ensure(list.map((t) => t.mint)).then((learned) => learned && show());
   }
-  const history = await deps.history(wallet, emitPartial, backfill ? undefined : (saved?.newestSig ?? undefined), backfill ? (saved!.oldestSig ?? undefined) : undefined);
+  // A first scan, and reading further back, stop once enough trades are found: a wallet with thousands of trades a month is read a hundred at a time,
+  // and the rest is loaded on request. Catching up on what is new since a saved scan reads all of it.
+  const target = opts.target ?? TRADES_PER_LOAD;
+  const enough = (txs: HeliusTx[]) => bigEnough(parseTrades(wallet, txs).trades).length >= target;
+  const history = await deps.history(wallet, emitPartial, backfill ? undefined : (saved?.newestSig ?? undefined), backfill ? (saved!.oldestSig ?? undefined) : undefined, saved === null || backfill ? enough : undefined);
   reading = false;
   const fresh = parseTrades(wallet, history.txs);
   // With saved trades and the newer transactions all read, the two join up. If time ran out before reaching the saved ones there is a gap
@@ -274,7 +283,10 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     // The SOL price series fetched once for the whole scan answers this; asking for the sale's own hour is only the fallback, because each
     // of those is a price call and the free tiers allow about one a second.
     const solUsd = s ? (rate ?? (await deps.solUsd(lot.sell.time))) : null;
-    const profitUsd = rate ? lot.profitSol * rate : null;
+    // The profit's dollar value uses the SOL price at the sale: the main price series if it had one, and otherwise the one the fumble used (its per-hour
+    // fallback), so a missing series does not leave the profit alone in SOL while the fumble has dollars.
+    const usdRate = rate ?? solUsd;
+    const profitUsd = usdRate ? lot.profitSol * usdRate : null;
     if (timedOut.has(lot.sell.mint)) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null });
     else if (!s) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "no price history for this token" }, source: null });
     else if (solUsd === null) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "no SOL price at the time of the sale" }, source: s.source });

@@ -1,3 +1,4 @@
+import { drawHatch } from "./canvasHatch.ts";
 import { moneyShort, niceScale, timeTicks, type GrowthPoint } from "./charts.ts";
 
 /**
@@ -67,7 +68,7 @@ function pointsAt(points: GrowthPoint[], progress: number): GrowthPoint[] {
   return [...done, { ...b, t: mix(a.t, b.t), value: mix(a.value, b.value), invested: mix(a.invested, b.invested), price: mix(a.price, b.price), avgCost: mix(a.avgCost, b.avgCost) }];
 }
 
-interface Palette {
+export interface Palette {
   bg: string;
   card: string;
   fg: string;
@@ -75,6 +76,8 @@ interface Palette {
   primary: string;
   down: string;
   border: string;
+  /** The colour of the page's slanted lines. */
+  hatch: string;
   body: string;
   head: string;
   /** The Replay mark (white outline on a dark video, dark outline on a light one), or null if it could not be loaded. */
@@ -94,6 +97,8 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
 
   ctx.fillStyle = c.bg;
   ctx.fillRect(0, 0, W, H);
+  // The site's slanted lines in the top right corner.
+  drawHatch(ctx, W, c.hatch, o.still ? 2 : 1);
 
   // Header: the title, then the numbers for the month reached.
   ctx.textBaseline = "alphabetic";
@@ -106,8 +111,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
     const tw = ctx.measureText(o.subtitle).width;
     const pad = 16;
     const boxW = tw + pad * 2;
-    // Left of the logo (which sits at the right edge) when there is one, so the two never overlap.
-    const boxX = W - 64 - (c.mark ? 52 + 16 : 0) - boxW;
+    const boxX = W - 64 - boxW;
     ctx.strokeStyle = c.primary;
     ctx.lineWidth = 2;
     ctx.strokeRect(boxX, 46, boxW, 42);
@@ -131,8 +135,7 @@ function drawFrame(ctx: CanvasRenderingContext2D, o: ReplayVideoOptions, c: Pale
     ctx.fillText(o.still ? `   ${up ? "+" : ""}${usd(reading.value - reading.invested)} (${pct})` : `   ${pct}`, 64 + w, 152);
   }
 
-  // The logo, top right.
-  if (c.mark) ctx.drawImage(c.mark, W - 64 - 52, 36, 52, 52);
+  // (The logo is in the footer; the top right has the slanted lines.)
 
   // The chart box.
   const L = 64;
@@ -274,6 +277,12 @@ function loadMark(light: boolean): Promise<HTMLImageElement | null> {
   });
 }
 
+/** The site's colours, fonts and logo as a canvas draws them, read from the page's current theme. Used by every picture the site makes. */
+export async function canvasTheme() {
+  const [mark] = await Promise.all([loadMark(isLight(css("--background", "#03090b"))), document.fonts?.ready]);
+  return makePalette(mark);
+}
+
 /** The site's colours and fonts as the canvas draws them, read from the page's current theme. */
 function makePalette(mark: HTMLImageElement | null): Palette {
   return {
@@ -284,6 +293,7 @@ function makePalette(mark: HTMLImageElement | null): Palette {
     primary: css("--primary", "#39d6a3"),
     down: css("--destructive", "#fb7185"),
     border: css("--border", "#25414a"),
+    hatch: css("--hatch", "rgba(105, 170, 193, 0.16)"),
     body: `"JetBrains Mono", ui-monospace, monospace`,
     head: `"Chakra Petch", ui-sans-serif, sans-serif`,
     mark,

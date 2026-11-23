@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ApiPosition, ApiSell, ApiTrade } from "../src/lib/fumble/service.ts";
-import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
+import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, reachLabel, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
 
 const trade = (signature: string, side: "buy" | "sell", time = 1): ApiTrade => ({ signature, side, token: "M".repeat(44), tokens: 100, sol: 1, time });
 const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
@@ -164,4 +164,28 @@ test("what was stored is checked on the way back: junk is dropped, the rest come
   assert.deepEqual(parseRecent("{not json"), []);
   assert.deepEqual(parseRecent(null), []);
   assert.deepEqual(parseRecent('{"wallet":"x"}'), []);
+});
+
+/* ------------------------------- how far back trades reach ------------------------------- */
+
+const H = 3600;
+const D = 86400;
+test("the reach of the loaded trades is said in the unit a person would use", () => {
+  const now = 2_000_000_000;
+  assert.equal(reachLabel(now - 20 * 60, now), "the last hour");
+  assert.equal(reachLabel(now - 5 * H, now), "the last 5 hours");
+  assert.equal(reachLabel(now - 1 * D, now), "the last day");
+  assert.equal(reachLabel(now - 3 * D - H, now), "the last 4 days");
+  assert.equal(reachLabel(now - 20 * D, now), "the last 3 weeks");
+  assert.equal(reachLabel(now - 75 * D, now), "the last 2 months");
+  assert.equal(reachLabel(now - 300 * D, now), "the last 10 months");
+  assert.equal(reachLabel(now - 800 * D, now), "the last 2 years");
+});
+
+test("a week of days stays in days, two years of days says months until it passes them, and a clock that is behind does not go negative", () => {
+  const now = 2_000_000_000;
+  assert.equal(reachLabel(now - 7 * D, now), "the last 7 days");
+  assert.equal(reachLabel(now - 729 * D, now), "the last 24 months");
+  assert.equal(reachLabel(now - 730 * D, now), "the last 2 years");
+  assert.equal(reachLabel(now + 500, now), "the last hour");
 });

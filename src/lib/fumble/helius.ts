@@ -38,6 +38,11 @@ export interface HistoryOptions {
   before?: string;
   /** Called after each page with everything read so far (newest first) and how many pages that took, so a caller can show trades while the rest loads. Only for a single list: with several lists nothing is partial yet. */
   onPage?: (txs: HeliusTx[], pages: number) => void;
+  /**
+   * Called after each page with everything read so far; true means that is enough, and reading stops there. The history is then reported incomplete
+   * (the wallet has more), so a later call can carry on from `before`. Only for a single list.
+   */
+  stopWhen?: (txs: HeliusTx[]) => boolean;
   /** Stop reading once this many milliseconds have passed. What was read is kept, and the history is reported incomplete. */
   maxMs?: number;
   now?: () => number;
@@ -67,6 +72,8 @@ interface TypeRead {
 async function readType(wallet: string, type: string, opts: HistoryOptions, fetchImpl: Fetch, sleep: Sleep, outOfTime: () => boolean, onPage?: HistoryOptions["onPage"]): Promise<TypeRead> {
   const maxPages = opts.maxPages ?? 30;
   const txs: HeliusTx[] = [];
+  // A transaction on the edge of two pages can come back on both. It is kept once, or it would be counted twice in the partial lists shown while reading.
+  const seen = new Set<string>();
   let before = opts.before ?? "";
   let pages = 0;
   let complete = false;
@@ -78,7 +85,11 @@ async function readType(wallet: string, type: string, opts: HistoryOptions, fetc
     const page = (await res.json()) as unknown;
     if (!Array.isArray(page)) throw new Error("Helius answered with something other than a list of transactions");
     const known = opts.untilSignature ? (page as HeliusTx[]).findIndex((t) => t.signature === opts.untilSignature) : -1;
-    txs.push(...(known >= 0 ? (page as HeliusTx[]).slice(0, known) : (page as HeliusTx[])));
+    for (const t of known >= 0 ? (page as HeliusTx[]).slice(0, known) : (page as HeliusTx[])) {
+      if (seen.has(t.signature)) continue;
+      seen.add(t.signature);
+      txs.push(t);
+    }
     if (known >= 0) {
       if (txs.length) onPage?.(txs, pages);
       complete = true;
@@ -90,6 +101,7 @@ async function readType(wallet: string, type: string, opts: HistoryOptions, fetc
       complete = true;
       break;
     }
+    if (opts.stopWhen?.(txs)) break;
     before = last!.signature;
     await sleep(150);
   }

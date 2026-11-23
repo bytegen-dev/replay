@@ -1,7 +1,8 @@
 "use client";
 
+import { Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,9 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
+import { CurrencyPicker } from "@/components/CurrencyPicker";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { applyChoice, DEFAULT_SETTINGS, PER_LOAD_CHOICES, readSettings, writeSettings, type FumbleSettings } from "@/lib/fumble/settings.ts";
 import { downloadFile } from "@/lib/download.ts";
+import { figure, showIn, SOL_UNIT, USD_UNIT, type Display, type Unit } from "@/lib/fumble/money.ts";
+import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
-import { buildRows, explorerUrl, fumbleCell, makeEventReader, pnlCell, roundTripCell, signedSol, signedUsd, sol, times, tokenLabel, usd, veryActive, fumbleFileName, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type FumbleCell, type PnlCell, type Row, type RoundTripCell, type StreamEvent } from "@/lib/fumble/view.ts";
+import { buildRows, explorerUrl, fumbleCell, makeEventReader, pnlCell, roundTripCell, times, tokenLabel, veryActive, fumbleFileName, reachLabel, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type FumbleCell, type PnlCell, type Row, type RoundTripCell, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -40,6 +46,54 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const [result, setResult] = useState<ApiResult | null>(null);
   // Set once the history read so far shows a wallet that does hundreds of transactions a day; it stays set for the rest of the scan.
   const [active, setActive] = useState(false);
+  // True while "load more" is reading: the table stays, and the progress shows under it.
+  const [loadingMore, setLoadingMore] = useState(false);
+  // The page's settings (primary currency, second value, sells only, load size), remembered in this browser. The page starts on the defaults and
+  // picks up what was saved a moment after it loads, so the server's page and the first paint agree.
+  const [settings, setSettings] = useState<FumbleSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  });
+  const update = useCallback((patch: Partial<FumbleSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      writeSettings(next);
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    const id = setTimeout(() => setSettings(readSettings()), 0);
+    return () => clearTimeout(id);
+  }, []);
+  // Today's rates for the chosen currencies that are not SOL or dollars.
+  const [rates, setRates] = useState<Record<string, { symbol: string; perUsd: number }>>({});
+  useEffect(() => {
+    let live = true;
+    for (const code of new Set([settings.currency, settings.second])) {
+      if (code === "SOL" || code === "USD" || code === "NONE") continue;
+      fetch(`/api/fx/rate?code=${encodeURIComponent(code)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j: { symbol?: string; perUsd?: number } | null) => {
+          if (live && j && typeof j.perUsd === "number" && j.perUsd > 0) setRates((prev) => ({ ...prev, [code]: { symbol: j.symbol ?? code, perUsd: j.perUsd as number } }));
+        })
+        .catch(() => {});
+    }
+    return () => {
+      live = false;
+    };
+  }, [settings.currency, settings.second]);
+  // What the figures are shown in. A currency with no rate (yet) is left out: the big figure shows in SOL, the small line is dropped.
+  const display = useMemo<Display>(() => {
+    const unit = (code: string): Unit | null => (code === "SOL" ? SOL_UNIT : code === "USD" ? USD_UNIT : rates[code] ? { code, symbol: rates[code].symbol, perUsd: rates[code].perUsd } : null);
+    const primary = unit(settings.currency) ?? SOL_UNIT;
+    let second = settings.second === "NONE" ? null : unit(settings.second);
+    // The same currency twice says nothing new: show SOL under dollars, and dollars under anything else.
+    if (second && second.code === primary.code) second = primary.code === "SOL" ? USD_UNIT : SOL_UNIT;
+    return showIn(primary, second);
+  }, [settings.currency, settings.second, rates]);
+  // When the trades on screen were last updated, for saying how far back they reach.
+  const [asOf, setAsOf] = useState(0);
   const abort = useRef<AbortController | null>(null);
   // The wallets last scanned in this browser, offered again when the page is empty. Read after the page loads, so the server's page and the first paint agree.
   const [recent, setRecent] = useState<RecentWallet[]>([]);
@@ -61,8 +115,12 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     setStatus("scanning");
     setError(null);
     setProgress({ stage: "history", done: 0, total: 0 });
-    setTrades(null);
-    setResult(null);
+    setLoadingMore(more);
+    // Loading more keeps the trades already on screen, and the new ones join them as they are read.
+    if (!more) {
+      setTrades(null);
+      setResult(null);
+    }
     setActive(false);
     window.history.replaceState(null, "", `/fumble?wallet=${wallet}`);
 
@@ -75,6 +133,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     const reader = makeEventReader((e: StreamEvent) => {
       if (e.type === "progress") setProgress({ stage: e.stage, done: e.done, total: e.total });
       else if (e.type === "trades") {
+        setAsOf(Math.floor(Date.now() / 1000));
         setTrades(e.data);
         if (veryActive(e.data.coverage, Math.floor(Date.now() / 1000))) setActive(true);
       }
@@ -94,7 +153,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     });
 
     try {
-      const post = () => fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, ...(more ? { more: true } : {}) }), signal: ctl.signal });
+      const post = () => fetch("/api/fumble/scan", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, ...(more ? { more: true } : {}), ...(settingsRef.current.perLoad !== DEFAULT_SETTINGS.perLoad ? { limit: settingsRef.current.perLoad } : {}) }), signal: ctl.signal });
       let res = await post();
       // The invisible bot check: pass it once (usually unseen, and good for 12 hours here and in Wayback), then scan again.
       if (res.status === 403) {
@@ -183,7 +242,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   }, [scan, launch]);
 
   const scanning = status === "scanning";
-  const rows = trades ? buildRows(trades.trades, result?.sells ?? null, result?.positions ?? null) : [];
+  const rows = trades ? buildRows(trades.trades, result?.sells ?? null, result?.positions ?? null).filter((r) => !settings.sellsOnly || r.trade.side === "sell") : [];
 
   return (
     <div
@@ -268,15 +327,25 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                 </div>
               )}
 
-              {scanning && !launch && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} active={active} />}
+              {scanning && !launch && !loadingMore && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} active={active} />}
         </div>
         {aside && <div className="hidden lg:order-first lg:block">{aside}</div>}
       </div>
 
       {trades && (
         <>
-          <Summary trades={trades} result={result} onMore={() => void scan(trades.wallet, true)} />
-          <TradeTable rows={rows} tokens={trades.tokens} pnl={trades.pnl} done={status === "done"} />
+          <Summary trades={trades} result={result} asOf={asOf} display={display} settings={settings} onSettings={update} />
+          <TradeTable rows={rows} tokens={trades.tokens} pnl={trades.pnl} done={status === "done"} display={display} />
+          {/* The wallet has more: another hundred trades are read from where this stopped. */}
+          {trades.coverage.extendable && (result || loadingMore) && (
+            <div className="flex flex-col items-start gap-3">
+              <Button type="button" variant="outline" disabled={scanning} onClick={() => void scan(trades.wallet, true)} className="cut-btn h-11 gap-2 rounded-none px-6 text-sm font-bold">
+                {scanning && loadingMore && <MarkLoader className="size-4" />}
+                {scanning && loadingMore ? "Loading more trades" : trades.trades.length ? "Load 100 more trades" : "Keep looking for trades"}
+              </Button>
+              {scanning && loadingMore && <ProgressLine progress={progress} hasTrades reading={trades.partial} active={active} />}
+            </div>
+          )}
         </>
       )}
     </div>
@@ -301,25 +370,164 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
 }
 
 /** One headline number: dollars big, SOL under it, and what it means in a line. A signed one (profit) is green for a gain and red for a loss. */
-function Stat({ label, dollars, sols, pending, empty, signed, about, className }: { label: string; dollars: number; sols: number; pending: boolean; empty?: boolean; signed?: boolean; about: string; className?: string }) {
-  const tone = signed && !pending && !empty ? (dollars > 0 ? "text-primary" : dollars < 0 ? "text-destructive" : "") : "";
+function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about: string; className?: string; texture?: boolean }) {
+  const tone = signed && !pending && !empty ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
+  // A dollar value of exactly nothing next to a SOL amount means no dollar price was found, not that it is worth nothing.
+  const fig = figure(display, sols, dollars === 0 && sols !== 0 ? null : dollars, signed);
   return (
-    <div className={cn("flex flex-col gap-1 p-5 sm:p-6", className)}>
+    <div className={cn("relative flex flex-col gap-1 p-5 sm:p-6 [&>p]:relative [&>p]:z-10", className)}>
+      {/* The site's dotted texture behind the card's text. */}
+      {texture && (
+        <span
+          aria-hidden
+          // The card's top right corner is cut (18px). On a phone this block spans the whole card, so the texture is cut there too and stays inside the
+          // edge; from the wide layout up the block is the left third and its corner is not on the card's edge.
+          className="tex-layer [--tex-clip:polygon(0_0,calc(100%-18px)_0,100%_18px,100%_100%,0_100%)] sm:[--tex-clip:none]"
+          // Very faint, still (the site's version drifts), and fading out from the top right corner so it never competes with the numbers.
+          style={{ clipPath: "var(--tex-clip)", opacity: 0.13, animation: "none", maskImage: "linear-gradient(205deg, #000 0%, rgb(0 0 0 / 0.35) 32%, transparent 62%)", WebkitMaskImage: "linear-gradient(205deg, #000 0%, rgb(0 0 0 / 0.35) 32%, transparent 62%)" } as React.CSSProperties}
+        />
+      )}
       <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={cn("font-heading text-4xl leading-none font-bold tabular-nums sm:text-5xl", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : signed ? signedUsd(dollars) : usd(dollars)}</p>
-      <p className="h-5 text-sm tabular-nums text-muted-foreground">{pending || empty ? "" : signed ? signedSol(sols) : sol(sols)}</p>
+      <p className={cn("font-heading text-4xl leading-none font-bold tabular-nums sm:text-5xl", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : fig.main}</p>
+      <p className="h-5 text-sm tabular-nums text-muted-foreground">{pending || empty ? "" : (fig.sub ?? "")}</p>
       <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{about}</p>
     </div>
   );
 }
 
-function Summary({ trades, result, onMore }: { trades: ApiTrades; result: ApiResult | null; onMore?: () => void }) {
+/**
+ * A currency choice: SOL, or a currency from the list (dollars first; the list includes them). Opening the list counts as choosing the currency it
+ * shows. With `none` there is also a button for no currency at all.
+ */
+function CurrencyChoice({ id, label, currency, onPick, none = false }: { id: string; label: string; currency: string; onPick: (code: string) => void; none?: boolean }) {
+  const [other, setOther] = useState("USD");
+  const box = "flex h-8 items-center border px-2.5 text-xs font-bold transition-colors";
+  const on = "border-primary text-primary";
+  const off = "border-border text-muted-foreground hover:text-foreground";
+  const otherOn = currency !== "SOL" && currency !== "NONE";
+  const shown = otherOn ? currency : other;
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap items-center gap-2">
+      {none && (
+        <button type="button" aria-pressed={currency === "NONE"} onClick={() => onPick("NONE")} className={cn(box, currency === "NONE" ? on : off)}>
+          None
+        </button>
+      )}
+      <button type="button" aria-pressed={currency === "SOL"} onClick={() => onPick("SOL")} className={cn(box, currency === "SOL" ? on : off)}>
+        SOL
+      </button>
+      <div className={cn("flex h-8 items-center border", otherOn ? on : off)}>
+        <CurrencyPicker
+          id={id}
+          ariaLabel={label}
+          variant="compact"
+          value={shown}
+          onOpen={() => !otherOn && onPick(shown)}
+          onChange={(code) => {
+            setOther(code);
+            onPick(code);
+          }}
+          className="h-8! max-h-none! min-h-0! w-[6.5rem]! border-0! bg-transparent! text-xs"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** A row of choices where exactly one is picked. */
+function Choice<T extends string | number>({ value, options, onPick, label }: { value: T; options: { value: T; text: string }[]; onPick: (v: T) => void; label: string }) {
+  return (
+    <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={String(o.value)}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onPick(o.value)}
+          className={cn("flex h-8 items-center border px-2.5 text-xs font-bold transition-colors", value === o.value ? "border-primary text-primary" : "border-border text-muted-foreground hover:text-foreground")}
+        >
+          {o.text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** The gear button in the corner of the summary, and the settings box it opens. Settings are saved in this browser. */
+function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings; onChange: (patch: Partial<FumbleSettings>) => void }) {
+  const row = "flex flex-col gap-2 py-4";
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button type="button" aria-label="Settings" title="Settings" className="absolute top-2 right-2.5 z-20 flex size-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground">
+          <Settings className="size-6" aria-hidden />
+        </button>
+      </DialogTrigger>
+      <DialogContent>
+        <div className="flex flex-col gap-1 pr-6">
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription className="sr-only">Choose the currency, the table and how many trades load at a time.</DialogDescription>
+        </div>
+        <div className="divide-y divide-border">
+          <div className={row}>
+            <p className="text-sm font-bold">Primary currency</p>
+            <CurrencyChoice id="fumble-primary" label="Primary currency" currency={settings.currency} onPick={(code) => onChange(applyChoice(settings, "primary", code))} />
+          </div>
+          <div className={row}>
+            <p className="text-sm font-bold">Secondary currency</p>
+            <CurrencyChoice id="fumble-secondary" label="Secondary currency" currency={settings.second} onPick={(code) => onChange(applyChoice(settings, "secondary", code))} none />
+            <p className="text-xs leading-snug text-muted-foreground">Converted at today&rsquo;s rate.</p>
+          </div>
+          <div className={row}>
+            <p className="text-sm font-bold">Table</p>
+            <Choice
+              label="Table"
+              value={settings.sellsOnly ? "sells" : "all"}
+              options={[
+                { value: "all", text: "All trades" },
+                { value: "sells", text: "Sells only" },
+              ]}
+              onPick={(v) => onChange({ sellsOnly: v === "sells" })}
+            />
+          </div>
+          <div className={row}>
+            <p className="text-sm font-bold">Trades per load</p>
+            <Choice label="Trades per load" value={settings.perLoad} options={PER_LOAD_CHOICES.map((n) => ({ value: n, text: String(n) }))} onPick={(perLoad) => onChange({ perLoad })} />
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Summary({ trades, result, asOf, display, settings, onSettings }: { trades: ApiTrades; result: ApiResult | null; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void }) {
   const unknown = result?.unknown ?? 0;
   const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
   const tracedSells = result ? result.sells.filter((x) => x.matchedTokens > 0).length : 0;
   const partial = result?.partialSells ?? 0;
   const cov = trades.coverage;
+  const [imaging, setImaging] = useState(false);
+  async function saveImage() {
+    if (!result) return;
+    setImaging(true);
+    setExportError(null);
+    try {
+      const blob = await renderFumbleCard(result, asOf || Math.floor(result.scannedAt), display);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fumbleCardFileName(result);
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "The picture could not be made. Try again.");
+    } finally {
+      setImaging(false);
+    }
+  }
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   async function exportSheet() {
@@ -335,24 +543,26 @@ function Summary({ trades, result, onMore }: { trades: ApiTrades; result: ApiRes
     }
   }
   const notes = [
-    !cov.complete && cov.oldest ? `Trades since ${when(cov.oldest)}. Older ones weren\u2019t read.` : null,
-    partial > 0 ? `${partial === 1 ? "1 sell includes" : `${partial} sells include`} coins bought before that, so ${partial === 1 ? "its" : "their"} profit covers only part of the sale.` : null,
-    unknown > 0 ? `${unknown === 1 ? "1 sell has" : `${unknown} sells have`} no price history, so ${unknown === 1 ? "it isn't" : "they aren't"} counted in the fumble.` : null,
-    unknownPositions > 0 ? `${unknownPositions === 1 ? "1 position has" : `${unknownPositions} positions have`} no price history, so ${unknownPositions === 1 ? "its" : "their"} round-trip isn\u2019t counted.` : null,
-    result?.ranOutOfTime ? "The scan ran out of time before pricing every coin." : null,
+    cov.oldest ? `${cov.complete ? "All" : "Latest"} ${trades.trades.length} trades, over ${reachLabel(cov.oldest, asOf || Math.floor(trades.coverage.oldest ?? 0))}.` : null,
+    partial > 0 ? `${partial} ${partial === 1 ? "sell" : "sells"} partly traced: some coins were bought before this window.` : null,
+    unknown > 0 ? `${unknown} ${unknown === 1 ? "sell" : "sells"} unpriced, left out of the fumble.` : null,
+    unknownPositions > 0 ? `${unknownPositions} ${unknownPositions === 1 ? "position" : "positions"} unpriced, left out of the roundtrip.` : null,
+    result?.ranOutOfTime ? "Ran out of time before pricing every coin." : null,
   ].filter((n): n is string => n !== null);
   return (
-    <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card">
+    <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card" style={{ "--pulse-speed": "6s" } as React.CSSProperties}>
+      <FumbleSettingsDialog settings={settings} onChange={onSettings} />
       <div className="grid sm:grid-cols-3">
-        <Stat label="Profit" dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="What your sells brought in, minus what those coins cost." />
-        <Stat label="Fumbled" dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="What your sells left on the table: each coin's highest price since you sold, minus what you sold it for." className="border-t border-border sm:border-t-0 sm:border-l" />
+        <Stat label="Profit" texture display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="Total realized profit." />
+        <Stat label="Fumbled" display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." className="border-t border-border sm:border-t-0 sm:border-l" />
         <Stat
-          label="Gave back"
+          label="Roundtripped"
+          display={display}
           dollars={result?.totalRoundTripUsd ?? 0}
           sols={result?.totalRoundTripSol ?? 0}
           pending={!result}
           empty={!!result && result.positions.length === 0}
-          about="Profit you were up on a coin and gave back: its peak profit, minus the profit you kept."
+          about="Peak profit minus what you kept."
           className="border-t border-border sm:border-t-0 sm:border-l"
         />
       </div>
@@ -366,11 +576,9 @@ function Summary({ trades, result, onMore }: { trades: ApiTrades; result: ApiRes
         {/* The history is saved and stopped short of the wallet's first trade: another scan reads on from there. Only once this scan has finished. */}
         {result && (
           <p className="flex flex-wrap gap-x-5 gap-y-1">
-            {cov.extendable && onMore && (
-              <button type="button" onClick={onMore} className="underline underline-offset-4 transition-colors hover:text-primary">
-                Scan further back
-              </button>
-            )}
+            <button type="button" onClick={() => void saveImage()} disabled={imaging} className="underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60">
+              {imaging ? "Making the picture" : "Download image"}
+            </button>
             <button type="button" onClick={exportSheet} disabled={exporting} className="underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60">
               {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
             </button>
@@ -398,7 +606,7 @@ function CoinCell({ row, tokens }: { row: Row; tokens: ApiTrades["tokens"] }) {
   );
 }
 
-function PnlView({ cell }: { cell: PnlCell }) {
+function PnlView({ cell, display }: { cell: PnlCell; display: Display }) {
   if (cell.kind === "none") return <span className="text-muted-foreground">&mdash;</span>;
   // Waiting for the rest of the history, not for prices: a sell's profit needs the buys before it.
   if (cell.kind === "pending") return <span className="animate-pulse text-muted-foreground" title="Waiting for the rest of the history">&hellip;</span>;
@@ -409,16 +617,17 @@ function PnlView({ cell }: { cell: PnlCell }) {
       </span>
     );
   const gain = cell.sol >= 0;
-  const detail = [cell.usd !== null ? signedSol(cell.sol) : null, cell.partial ? "part of the sale" : null].filter(Boolean).join(", ");
+  const fig = figure(display, cell.sol, cell.usd, true);
+  const detail = [fig.sub, cell.partial ? "part of the sale" : null].filter(Boolean).join(", ");
   return (
     <>
-      <span className={cn("block font-bold tabular-nums", gain ? "text-primary" : "text-destructive")}>{cell.usd !== null ? signedUsd(cell.usd) : signedSol(cell.sol)}</span>
+      <span className={cn("block font-bold tabular-nums", gain ? "text-primary" : "text-destructive")}>{fig.main}</span>
       {detail && <span className="block text-xs whitespace-nowrap text-muted-foreground">{detail}</span>}
     </>
   );
 }
 
-function FumbleView({ cell }: { cell: FumbleCell }) {
+function FumbleView({ cell, display }: { cell: FumbleCell; display: Display }) {
   if (cell.kind === "none") return <span className="text-muted-foreground">&mdash;</span>;
   if (cell.kind === "pricing") return <span className="animate-pulse text-muted-foreground">Pricing</span>;
   if (cell.kind === "sold-well") return <span className="text-muted-foreground">No fumble</span>;
@@ -430,15 +639,15 @@ function FumbleView({ cell }: { cell: FumbleCell }) {
     );
   return (
     <>
-      <span className="block font-bold tabular-nums text-destructive">{usd(cell.usd)}</span>
+      <span className="block font-bold tabular-nums text-destructive">{figure(display, cell.sol, cell.usd).main}</span>
       <span className="block text-xs whitespace-nowrap text-muted-foreground">
-        {sol(cell.sol)}, {times(cell.peakMultiple)} after
+        {figure(display, cell.sol, cell.usd).sub ? `${figure(display, cell.sol, cell.usd).sub}, ` : ""}{times(cell.peakMultiple)} after
       </span>
     </>
   );
 }
 
-function TripView({ cell }: { cell: RoundTripCell }) {
+function TripView({ cell, display }: { cell: RoundTripCell; display: Display }) {
   if (cell.kind === "none") return <span className="text-muted-foreground">&mdash;</span>;
   if (cell.kind === "kept") return <span className="text-muted-foreground">Sold near the peak</span>;
   if (cell.kind === "unknown")
@@ -449,9 +658,9 @@ function TripView({ cell }: { cell: RoundTripCell }) {
     );
   return (
     <>
-      <span className="block font-bold tabular-nums text-destructive">{usd(cell.usd)}</span>
+      <span className="block font-bold tabular-nums text-destructive">{figure(display, cell.sol, cell.usd).main}</span>
       <span className="block text-xs whitespace-nowrap text-muted-foreground">
-        {sol(cell.sol)}, {Math.round(cell.share * 100)}% of its profit
+        {figure(display, cell.sol, cell.usd).sub ? `${figure(display, cell.sol, cell.usd).sub}, ` : ""}{Math.round(cell.share * 100)}% of its profit
       </span>
     </>
   );
@@ -461,8 +670,8 @@ function TripView({ cell }: { cell: RoundTripCell }) {
  * The trades, in the same table the Wayback results use: a bordered box, a header that stays put, striped rows, and a first column that
  * stays put when it scrolls sideways. On a phone the rows stack instead, because six columns do not fit.
  */
-function TradeTable({ rows, tokens, pnl, done }: { rows: Row[]; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean }) {
-  if (rows.length === 0) return <p className="text-sm text-muted-foreground">No token trades of 0.1 SOL or more in the part of the history that was read.</p>;
+function TradeTable({ rows, tokens, pnl, done, display }: { rows: Row[]; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean; display: Display }) {
+  if (rows.length === 0) return <p className="text-sm text-muted-foreground">No trades of 0.1 SOL or more in what was read.</p>;
   const head = "sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]";
   return (
     <section aria-label="Trades" className="overflow-x-auto border border-border bg-background/80 backdrop-blur-xl">
@@ -474,7 +683,7 @@ function TradeTable({ rows, tokens, pnl, done }: { rows: Row[]; tokens: ApiTrade
             <TableHead className={cn(head, "text-right")}>Size</TableHead>
             <TableHead className={cn(head, "text-right")}>PnL</TableHead>
             <TableHead className={cn(head, "text-right")}>Fumble</TableHead>
-            <TableHead className={cn(head, "text-right")}>Gave back</TableHead>
+            <TableHead className={cn(head, "text-right")}>Roundtripped</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -486,13 +695,13 @@ function TradeTable({ rows, tokens, pnl, done }: { rows: Row[]; tokens: ApiTrade
               </TableCell>
               <TableCell className="text-right whitespace-nowrap tabular-nums">{r.trade.sol.toFixed(2)} SOL</TableCell>
               <TableCell className="text-right whitespace-nowrap">
-                <PnlView cell={pnlCell(r, done, pnl)} />
+                <PnlView cell={pnlCell(r, done, pnl)} display={display} />
               </TableCell>
               <TableCell className="text-right whitespace-nowrap">
-                <FumbleView cell={fumbleCell(r, done)} />
+                <FumbleView cell={fumbleCell(r, done)} display={display} />
               </TableCell>
               <TableCell className="text-right whitespace-nowrap">
-                <TripView cell={roundTripCell(r)} />
+                <TripView cell={roundTripCell(r)} display={display} />
               </TableCell>
             </TableRow>
           ))}
@@ -500,14 +709,14 @@ function TradeTable({ rows, tokens, pnl, done }: { rows: Row[]; tokens: ApiTrade
       </Table>
       <ul className="sm:hidden">
         {rows.map((r) => (
-          <PhoneRow key={r.trade.signature} row={r} tokens={tokens} pnl={pnl} done={done} />
+          <PhoneRow key={r.trade.signature} row={r} tokens={tokens} pnl={pnl} done={done} display={display} />
         ))}
       </ul>
     </section>
   );
 }
 
-function PhoneRow({ row, tokens, pnl: early, done }: { row: Row; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean }) {
+function PhoneRow({ row, tokens, pnl: early, done, display }: { row: Row; tokens: ApiTrades["tokens"]; pnl: ApiTrades["pnl"]; done: boolean; display: Display }) {
   const pnl = pnlCell(row, done, early);
   const fumble = fumbleCell(row, done);
   const trip = roundTripCell(row);
@@ -522,7 +731,7 @@ function PhoneRow({ row, tokens, pnl: early, done }: { row: Row; tokens: ApiTrad
         <span className="text-muted-foreground">{when(row.trade.time)}</span>
         {pnl.kind !== "none" && (
           <span className="text-right">
-            <PnlView cell={pnl} />
+            <PnlView cell={pnl} display={display} />
           </span>
         )}
       </div>
@@ -530,15 +739,15 @@ function PhoneRow({ row, tokens, pnl: early, done }: { row: Row; tokens: ApiTrad
         <div className={line}>
           <span className="text-muted-foreground">Fumble</span>
           <span className="text-right">
-            <FumbleView cell={fumble} />
+            <FumbleView cell={fumble} display={display} />
           </span>
         </div>
       )}
       {trip.kind !== "none" && (
         <div className={line}>
-          <span className="text-muted-foreground">Gave back</span>
+          <span className="text-muted-foreground">Roundtripped</span>
           <span className="text-right">
-            <TripView cell={trip} />
+            <TripView cell={trip} display={display} />
           </span>
         </div>
       )}
