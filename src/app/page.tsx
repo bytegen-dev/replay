@@ -126,6 +126,9 @@ export default function LandingPage() {
               <a href="#fumble" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center px-7 text-base font-bold">
                 Check your wallet
               </a>
+              <Link href="/docs" className="cut-btn inline-flex h-12 items-center justify-center px-7 text-base font-bold text-primary">
+                Read the docs
+              </Link>
             </div>
             <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
               Data from{" "}
