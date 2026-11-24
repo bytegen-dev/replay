@@ -1872,3 +1872,51 @@ html[data-motion="reduce"] .tap-ripple {
   100% { opacity: 0; }
 }
 html[data-motion="reduce"] .high-flash { display: none; }
+
+
+/* Changing the theme: the new look is shown through the Replay mark (the logo's rounded play triangle, tilted a little, and pointing back the way it came) growing out of the button that was pressed, over
+   the old look, which dims a little as it goes (see ThemeSelector and themeWipe). Only while data-theme-wipe is on. The mask is the logo's outline
+   path, filled, in a box centred on the triangle's middle; --wipe-s is how big the box ends up, enough for the triangle to cover the whole screen. */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-theme-wipe="on"]::view-transition-old(root) {
+    z-index: 0;
+    mix-blend-mode: normal;
+    animation: theme-wipe-dim var(--wipe-t, 0.9s) ease-in-out both;
+  }
+  html[data-theme-wipe="on"]::view-transition-new(root) {
+    z-index: 1;
+    mix-blend-mode: normal;
+    animation: theme-wipe-grow var(--wipe-t, 0.9s) cubic-bezier(0.5, 0, 0.2, 1) both;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='160 272 1300 1300'%3E%3Cg transform='rotate(-12 810 922)'%3E%3Cpath d='M516 489 L516 1355 A71 71 0 0 0 622.5 1416.49 L1372.48 983.49 A71 71 0 0 0 1372.48 860.51 L622.5 427.51 A71 71 0 0 0 516 489 Z'/%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='160 272 1300 1300'%3E%3Cg transform='rotate(-12 810 922)'%3E%3Cpath d='M516 489 L516 1355 A71 71 0 0 0 622.5 1416.49 L1372.48 983.49 A71 71 0 0 0 1372.48 860.51 L622.5 427.51 A71 71 0 0 0 516 489 Z'/%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+  }
+  html[data-theme-wipe="on"][data-theme-wipe-from="left"]::view-transition-new(root) {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='160 272 1300 1300'%3E%3Cg transform='rotate(-12 810 922)'%3E%3Cpath d='M516 489 L516 1355 A71 71 0 0 0 622.5 1416.49 L1372.48 983.49 A71 71 0 0 0 1372.48 860.51 L622.5 427.51 A71 71 0 0 0 516 489 Z'/%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='160 272 1300 1300'%3E%3Cg transform='rotate(-12 810 922)'%3E%3Cpath d='M516 489 L516 1355 A71 71 0 0 0 622.5 1416.49 L1372.48 983.49 A71 71 0 0 0 1372.48 860.51 L622.5 427.51 A71 71 0 0 0 516 489 Z'/%3E%3C/g%3E%3C/svg%3E");
+  }
+  html[data-theme-wipe="on"][data-theme-wipe-from="right"]::view-transition-new(root) {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='160 272 1300 1300'%3E%3Cg transform='translate(1620 0) scale(-1 1) rotate(-12 810 922)'%3E%3Cpath d='M516 489 L516 1355 A71 71 0 0 0 622.5 1416.49 L1372.48 983.49 A71 71 0 0 0 1372.48 860.51 L622.5 427.51 A71 71 0 0 0 516 489 Z'/%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='160 272 1300 1300'%3E%3Cg transform='translate(1620 0) scale(-1 1) rotate(-12 810 922)'%3E%3Cpath d='M516 489 L516 1355 A71 71 0 0 0 622.5 1416.49 L1372.48 983.49 A71 71 0 0 0 1372.48 860.51 L622.5 427.51 A71 71 0 0 0 516 489 Z'/%3E%3C/g%3E%3C/svg%3E");
+  }
+}
+@keyframes theme-wipe-grow {
+  from {
+    -webkit-mask-size: 0 0;
+    mask-size: 0 0;
+    -webkit-mask-position: var(--wipe-x, 50%) var(--wipe-y, 0px);
+    mask-position: var(--wipe-x, 50%) var(--wipe-y, 0px);
+  }
+  to {
+    -webkit-mask-size: var(--wipe-s, 600vmax) var(--wipe-s, 600vmax);
+    mask-size: var(--wipe-s, 600vmax) var(--wipe-s, 600vmax);
+    -webkit-mask-position: calc(var(--wipe-x, 50%) - var(--wipe-s, 600vmax) / 2) calc(var(--wipe-y, 0px) - var(--wipe-s, 600vmax) / 2);
+    mask-position: calc(var(--wipe-x, 50%) - var(--wipe-s, 600vmax) / 2) calc(var(--wipe-y, 0px) - var(--wipe-s, 600vmax) / 2);
+  }
+}
+@keyframes theme-wipe-dim {
+  to {
+    opacity: 0.7;
+  }
+}
