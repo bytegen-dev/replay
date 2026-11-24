@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftRight, ArrowUpRight, BookOpen, Gamepad2, History } from "lucide-react";
+import { ArrowLeftRight, ArrowUpRight, BookOpen, Gamepad2, History, ScanSearch } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
@@ -11,7 +11,8 @@ import { cn } from "@/lib/utils";
 import { AUTH_CHANGED_EVENT, openGameFromLink, openSignIn, useViewer } from "@/lib/viewerClient.ts";
 
 const TOOLS = [
-  { href: "/#trade", label: "Trade", note: "Paper and live trading, coming soon", Icon: ArrowLeftRight },
+  { href: "/recap", label: "Recap", note: "What your wallet made, and what it missed", Icon: ScanSearch },
+  { href: "/trade", label: "Trade", note: "Train your agent, paper and live trading. Coming soon", Icon: ArrowLeftRight },
   { href: "/wayback", label: "Wayback", note: "Past buys and the price on any day", Icon: History },
   { href: "/game", label: "Game", note: "Fly Tony Stonk through real prices", Icon: Gamepad2 },
   { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },

@@ -16,6 +16,12 @@ import { countTrades, coverageNote, figureCoverage, NOT_THERE, reachSpan, shortM
 const W = 1200;
 const H = 630;
 
+// Where the rows sit from the top. Each has room for the one above: the headline, a line, the three figures with a note under each, then the best trade, a clear
+// gap above the footer bar (which starts at H - 64).
+const HERO_TOP = 176;
+const DIVIDER_Y = 350;
+const BEST_Y = 520;
+
 /**
  * What the card does with each number: "show" it, draw it as *** ("mask"), or leave it out and close the gap ("hide"). The PnL also covers the best trade,
  * which is part of it. The wallet address can be shown or drawn as ***; there is nothing to leave out there.
@@ -83,8 +89,8 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
   if (showHero) {
     ctx.fillStyle = c.muted;
     ctx.font = `400 26px ${c.body}`;
-    ctx.fillText("PnL", 64, 190);
-    let size = 120;
+    ctx.fillText("PnL", 64, HERO_TOP);
+    let size = 112;
     const pnlMissing = !pnlMasked && cover.pnl.kind === "none";
     const heroText = pnlMasked ? "***" : pnlMissing ? NOT_THERE.pnl : pnl.main;
     ctx.font = `700 ${size}px ${c.head}`;
@@ -93,14 +99,14 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
       ctx.font = `700 ${size}px ${c.head}`;
     }
     ctx.fillStyle = pnlMasked || pnlMissing ? c.muted : r.totalProfitSol > 0 ? c.primary : r.totalProfitSol < 0 ? c.down : c.fg;
-    ctx.fillText(heroText, 64, 190 + 24 + size * 0.78);
+    ctx.fillText(heroText, 64, HERO_TOP + 24 + size * 0.78);
     // Under it: the other currency, and for a figure only partly worked out, how much was (or for one that could not be, why).
     const pnlNote = pnlMasked ? null : coverageNote(cover.pnl, "pnl");
     const under = [pnlMissing ? null : pnlMasked ? null : pnl.sub, pnlNote].filter(Boolean).join(", ");
     if (under) {
       ctx.fillStyle = c.muted;
       ctx.font = `400 28px ${c.body}`;
-      ctx.fillText(under, 64, 190 + 24 + size * 0.78 + 42);
+      ctx.fillText(under, 64, HERO_TOP + 24 + size * 0.78 + 40);
     }
   }
 
@@ -112,15 +118,15 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
   ];
   const cols = all.filter((col) => mode(hide[col.kind]) !== "hide");
   // With the headline there is a line, and the numbers sit below it; without it they move up and are drawn larger, since they are all there is.
-  const labelY = showHero ? 420 : 250;
-  const valueY = showHero ? 474 : 250 + 30 + 88 * 0.78;
+  const labelY = showHero ? 392 : 250;
+  const valueY = showHero ? 444 : 250 + 30 + 88 * 0.78;
   const biggest = showHero ? 44 : 88;
   if (showHero && cols.length > 0) {
     ctx.strokeStyle = c.border;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(64, 372);
-    ctx.lineTo(W - 64, 372);
+    ctx.moveTo(64, DIVIDER_Y);
+    ctx.lineTo(W - 64, DIVIDER_Y);
     ctx.stroke();
   }
   const colW = (W - 128) / Math.max(cols.length, 1);
@@ -145,13 +151,13 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
     if (colNote) {
       ctx.fillStyle = c.muted;
       ctx.font = `400 ${showHero ? 20 : 24}px ${c.body}`;
-      ctx.fillText(colNote, x, valueY + (showHero ? 30 : 38));
+      ctx.fillText(colNote, x, valueY + (showHero ? 32 : 38));
     }
   });
 
   // The best trade, in a line: the coin and what it made. Part of the PnL: masked with it, and left out when the PnL is.
   if (showHero) {
-    const lineY = cols.length > 0 ? 530 : 430;
+    const lineY = cols.length > 0 ? BEST_Y : 400;
     const best = bestTrade(r);
     ctx.font = `400 24px ${c.body}`;
     if (best) {

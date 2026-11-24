@@ -1,6 +1,7 @@
 import { drawHatch } from "../canvasHatch.ts";
 import { canvasTheme } from "../replayVideo.ts";
 import { coinMoney, compactAmount, type CoinRow } from "./coins.ts";
+import { loadCoinImage } from "./coinImage.ts";
 import type { Display } from "./money.ts";
 import { reachSpan } from "./view.ts";
 
@@ -17,24 +18,6 @@ export function tradeCardFileName(ticker: string, at: number): string {
   const day = new Date(at * 1000).toISOString().slice(0, 10);
   const name = ticker.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "coin";
   return `replay-trade-${name}-${day}.png`;
-}
-
-/**
- * The coin's picture, or null when it can't be had. It is fetched through this site (`/api/fumble/image`), so the canvas stays one that can be
- * saved; if that fails the card carries on with the coin's first letter instead.
- */
-function loadImage(src: string, ms = 5000): Promise<HTMLImageElement | null> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const done = (v: HTMLImageElement | null) => {
-      clearTimeout(timer);
-      resolve(v);
-    };
-    const timer = setTimeout(() => done(null), ms);
-    img.onload = () => done(img);
-    img.onerror = () => done(null);
-    img.src = `/api/fumble/image?src=${encodeURIComponent(src)}`;
-  });
 }
 
 export async function renderTradeCard(coin: CoinRow, ticker: string, display: Display, now: number, image?: string, opts: { hidePnl?: boolean } = {}): Promise<Blob> {
@@ -55,7 +38,7 @@ export async function renderTradeCard(coin: CoinRow, ticker: string, display: Di
 
   // Header: the coin's picture (or its first letter in a box), its name, and how long ago it was traded.
   const icon = 68;
-  const pic = image ? await loadImage(image) : null;
+  const pic = image ? await loadCoinImage(image) : null;
   ctx.fillStyle = c.card ?? c.bg;
   ctx.fillRect(64, 46, icon, icon);
   if (pic) {

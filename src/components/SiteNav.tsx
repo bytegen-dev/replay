@@ -7,7 +7,8 @@ import { cn } from "@/lib/utils";
 import { openGameFromLink } from "@/lib/viewerClient.ts";
 
 const LINKS = [
-  { href: "/#trade", label: "Trade" },
+  { href: "/recap", label: "Recap" },
+  { href: "/trade", label: "Trade" },
   { href: "/wayback", label: "Wayback" },
   { href: "/game", label: "Game" },
   { href: "/docs", label: "Docs" },

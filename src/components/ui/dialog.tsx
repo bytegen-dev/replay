@@ -22,8 +22,10 @@ function DialogContent({ className, children, ...props }: React.ComponentProps<t
         {...props}
       >
         {/* The box keeps its own corners and edge (drawn by layers on the box itself, which must not scroll); a tall dialog scrolls inside it (by wheel, touch or keys; the
-            bar itself is hidden), with the close button staying put. The gap is the box's own, so a dialog that sets one still gets it between its parts. */}
-        <div className="flex min-h-0 flex-col gap-[inherit] overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{children}</div>
+            bar itself is hidden), with the close button staying put. The padding (taken back by the negative margin, so nothing moves) is room
+            for what is drawn outside a button's box: the edge of a cut-corner button is one pixel outside it, and its hover glow reaches about 20 pixels, and both
+            would be cut off hard at the wrapper's edge. It matches the box's own padding, so the wrapper reaches the box's edge and no further. */}
+        <div className="-m-5 flex min-h-0 flex-col gap-[inherit] overflow-x-hidden overflow-y-auto overscroll-contain p-5 sm:-m-6 sm:p-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{children}</div>
         <DialogPrimitive.Close className="absolute top-4 right-4 p-1 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring" aria-label="Close">
           <XIcon className="size-4" />
         </DialogPrimitive.Close>

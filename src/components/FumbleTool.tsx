@@ -1,6 +1,7 @@
 "use client";
 
-import { Asterisk, Eye, EyeOff, FileSpreadsheet, ImageDown, RefreshCw, RotateCcw, Search, Settings, Trophy, TriangleAlert } from "lucide-react";
+import { Asterisk, Bot, Clapperboard, Eye, EyeOff, ImageDown, RefreshCw, RotateCcw, Search, Settings, Trophy, TriangleAlert } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoinTable } from "@/components/CoinTable";
@@ -18,13 +19,13 @@ import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { applyChoice, DEFAULT_SETTINGS, PER_LOAD_CHOICES, readSettings, writeSettings, type FumbleSettings, type HideMode } from "@/lib/fumble/settings.ts";
 import { ImagePreviewDialog } from "@/components/ImagePreviewDialog";
-import { downloadFile } from "@/lib/download.ts";
+import { RecapVideoDialog } from "@/components/RecapVideoDialog";
 import { figure, showIn, SOL_UNIT, USD_UNIT, type Display, type Unit } from "@/lib/fumble/money.ts";
 import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
 import { coinRows, type CoinRow } from "@/lib/fumble/coins.ts";
 import { renderTradeCard, tradeCardFileName } from "@/lib/fumble/tradeCard.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
-import { countTrades, coverageNote, earlyProfit, figureCoverage, NOT_THERE, tradeVolume, type Coverage, makeEventReader, tokenLabel, veryActive, fumbleFileName, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
+import { countTrades, coverageNote, earlyProfit, figureCoverage, NOT_THERE, tradeVolume, type Coverage, makeEventReader, tokenLabel, veryActive, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -244,6 +245,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   }, [value]);
   // Whether the wallet being shown is a known trader's, so the page can say what that means for the numbers.
   const shownWallet = trades?.wallet ?? null;
+  // The box holds something other than the wallet on screen: it is being changed (or cleared), and what is below is about to be replaced.
+  const changingWallet = !!trades && value.trim() !== trades.wallet;
   const [kolOwner, setKolOwner] = useState<{ wallet: string; name: string; twitter?: string } | null>(null);
   useEffect(() => {
     if (!shownWallet) return;
@@ -504,6 +507,9 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
 
       {trades && (
         <>
+          {/* While the address in the box is being changed, the result under it is for the wallet it had, so it fades back until a new scan replaces it (or the box
+              is put back as it was). Only the card and the table fade: the toast and the pictures that open over the page are not part of it. */}
+          <div className={cn("flex flex-col gap-6 transition-opacity duration-200 motion-reduce:transition-none", changingWallet && "opacity-40")}>
           <Summary trades={viewTrades ?? trades} result={viewResult} kolName={kolName} noTrades={!!result && trades.trades.length === 0} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
           {!(result && trades.trades.length === 0) && <CoinTable
             coins={shown}
@@ -522,6 +528,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             roundtripMode={settings.hideRoundtrip}
             fumbleMode={settings.hideFumble}
           />}
+          </div>
           {toast && (
             <Toast
               message={`${toast.ticker} hidden, and out of the totals.`}
@@ -828,20 +835,7 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
       ),
     },
   ].filter((t) => t.mode !== "hide");
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-  async function exportSheet() {
-    if (!result) return;
-    setExporting(true);
-    setExportError(null);
-    try {
-      await downloadFile("/api/fumble/export", result, fumbleFileName(result));
-    } catch (e) {
-      setExportError(e instanceof Error ? e.message : "The spreadsheet could not be made. Try again.");
-    } finally {
-      setExporting(false);
-    }
-  }
+  const [videoOpen, setVideoOpen] = useState(false);
   // One line says how much was read; anything that limits the numbers follows in a few short words, only when it applies.
   // Measured from when the page last got trades, or when the scan finished; with neither there is no span to state.
   const measuredAt = asOf || Math.floor(result?.scannedAt ?? 0);
@@ -928,7 +922,6 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
             </p>
           </>
         )}
-        {exportError && <p className="text-destructive">{exportError}</p>}
       </div>
       {/* The two things to take away, set apart from the notes above so they are easy to find. Only once this scan has finished. */}
       {result && (
@@ -940,13 +933,20 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
             </button>
           ) : (
             <button type="button" onClick={() => setPreviewOpen(true)} disabled={busy} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold disabled:opacity-60">
-              <ImageDown className="size-4" aria-hidden /> Download image
+              <ImageDown className="size-4" aria-hidden /> Download summary
             </button>
           )}
           <ImagePreviewDialog open={previewOpen} title="Your recap card" fileName={fumbleCardFileName(result, hide)} note={hiddenNote} render={renderCard} onClose={() => setPreviewOpen(false)} />
-          <button type="button" onClick={exportSheet} disabled={exporting || busy} className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary disabled:opacity-60">
-            <FileSpreadsheet className="size-4" aria-hidden /> {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
-          </button>
+          {!allHidden && (
+            <button type="button" onClick={() => setVideoOpen(true)} disabled={busy} className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary disabled:opacity-60">
+              <Clapperboard className="size-4" aria-hidden /> Generate video
+            </button>
+          )}
+          {/* The next step after seeing your own decisions: an agent that learns from them. It is not built yet, so this opens the page that says so and takes an email. */}
+          <Link href="/trade" className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary">
+            <Bot className="size-4" aria-hidden /> Train my agent
+          </Link>
+          {videoOpen && <RecapVideoDialog open onClose={() => setVideoOpen(false)} result={result} now={asOf || Math.floor(result.scannedAt)} display={display} hide={hide} />}
         </div>
       )}
     </section>

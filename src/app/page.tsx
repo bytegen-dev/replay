@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Bot, FlaskConical, Wallet } from "lucide-react";
+import { Bot, FlaskConical, ScanSearch, Wallet } from "lucide-react";
 import Link from "next/link";
 import { BandDots } from "@/components/landing/BandDots";
 import { Faq } from "@/components/landing/Faq";
@@ -123,7 +123,8 @@ export default function LandingPage() {
               text="Paste a Solana wallet to see what you missed. Or pick any stock, coin or currency and a date to see what a buy would be worth today."
             />
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <a href="#recap" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center px-7 text-base font-bold">
+              <a href="#recap" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center gap-2.5 px-7 text-base font-bold">
+                <ScanSearch className="size-5" aria-hidden />
                 Check your wallet
               </a>
               <Link href="/docs" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
