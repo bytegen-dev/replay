@@ -37,7 +37,7 @@ function loadImage(src: string, ms = 5000): Promise<HTMLImageElement | null> {
   });
 }
 
-export async function renderTradeCard(coin: CoinRow, ticker: string, display: Display, now: number, image?: string): Promise<Blob> {
+export async function renderTradeCard(coin: CoinRow, ticker: string, display: Display, now: number, image?: string, opts: { hidePnl?: boolean } = {}): Promise<Blob> {
   const c = await canvasTheme();
   const canvas = document.createElement("canvas");
   canvas.width = W * 2;
@@ -82,17 +82,19 @@ export async function renderTradeCard(coin: CoinRow, ticker: string, display: Di
   ctx.font = `400 26px ${c.body}`;
   ctx.fillText("PnL", 64, 214);
   const gain = (coin.profitSol ?? 0) >= 0;
-  const main = m.profit ? m.profit.main : coin.costUnknown ? "Cost unknown" : "—";
+  // A hidden PnL is *** (a figure only; "Cost unknown" says nothing about the amount), with no percent or second line.
+  const hidePnl = opts.hidePnl === true && !!m.profit;
+  const main = hidePnl ? "***" : m.profit ? m.profit.main : coin.costUnknown ? "Cost unknown" : "—";
   let size = 112;
   ctx.font = `700 ${size}px ${c.head}`;
   while (size > 48 && ctx.measureText(main).width > W - 128 - 260) {
     size -= 4;
     ctx.font = `700 ${size}px ${c.head}`;
   }
-  ctx.fillStyle = m.profit ? (gain ? c.primary : c.down) : c.muted;
+  ctx.fillStyle = hidePnl ? c.muted : m.profit ? (gain ? c.primary : c.down) : c.muted;
   ctx.fillText(main, 64, 214 + 20 + size * 0.78);
   const baseline = 214 + 20 + size * 0.78;
-  if (m.profit && coin.profitPct !== null) {
+  if (!hidePnl && m.profit && coin.profitPct !== null) {
     ctx.font = `600 44px ${c.head}`;
     const pct = `${coin.profitPct >= 0 ? "+" : "-"}${Math.abs(coin.profitPct * 100).toFixed(1)}%`;
     ctx.font = `700 ${size}px ${c.head}`;
@@ -100,7 +102,7 @@ export async function renderTradeCard(coin: CoinRow, ticker: string, display: Di
     ctx.font = `600 44px ${c.head}`;
     ctx.fillText(pct, x, baseline);
   }
-  if (m.profit?.sub) {
+  if (!hidePnl && m.profit?.sub) {
     ctx.fillStyle = c.muted;
     ctx.font = `400 28px ${c.body}`;
     ctx.fillText(m.profit.sub, 64, baseline + 42);

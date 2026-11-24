@@ -10,6 +10,7 @@ import { figure } from "@/lib/fumble/money.ts";
 import type { ApiTrades } from "@/lib/fumble/service.ts";
 import { agoShort, explorerUrl, tokenLabel } from "@/lib/fumble/view.ts";
 import { useDragScroll } from "@/lib/dragScroll.ts";
+import type { HideMode } from "@/lib/fumble/settings.ts";
 import { cn } from "@/lib/utils";
 
 const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -19,7 +20,7 @@ const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { year: "
  * stays put when it scrolls sideways. One row per coin: what was bought and sold (money, with the token amounts under), the average entry and exit,
  * what is left, the PnL and the total fumble, and two buttons: hide the coin, and share its PnL as a picture. On a phone the table scrolls sideways, with the token column staying put.
  */
-export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare }: {
+export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare, pnlMode = "show", fumbleMode = "show" }: {
   coins: CoinRow[];
   tokens: ApiTrades["tokens"];
   /** The scan has finished: the fumble column can say what it found, and an unworked profit is unknown rather than still coming. */
@@ -32,6 +33,9 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
   onHide: (mint: string) => void;
   onShowHidden: () => void;
   onShare: (coin: CoinRow) => void;
+  /** What to do with the PnL column and the Fumbled column: show the figures, draw them as ***, or leave the column out. */
+  pnlMode?: HideMode;
+  fumbleMode?: HideMode;
 }) {
   const box = useRef<HTMLElement>(null);
   // A mouse can drag the table sideways, as a finger does.
@@ -65,8 +69,8 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
             <TableHead className={cn(head, "text-right")}>Avg entry</TableHead>
             <TableHead className={cn(head, "text-right")}>Avg exit</TableHead>
             <TableHead className={cn(head, "text-right")}>Balance</TableHead>
-            <TableHead className={cn(head, "text-right")}>PnL</TableHead>
-            <TableHead className={cn(head, "text-right")}>Fumbled</TableHead>
+            {pnlMode !== "hide" && <TableHead className={cn(head, "text-right")}>PnL</TableHead>}
+            {fumbleMode !== "hide" && <TableHead className={cn(head, "text-right")}>Fumbled</TableHead>}
             <TableHead className={cn(head, "text-right")}>Opened</TableHead>
             <TableHead className={cn(head, "text-right")}>Actions</TableHead>
           </TableRow>
@@ -89,12 +93,16 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
                 <TableCell className="text-right whitespace-nowrap">
                   <Balance coin={c} ticker={label.ticker} />
                 </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
-                  <Pnl coin={c} display={display} done={done} />
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap">
-                  <Fumbled coin={c} display={display} done={done} />
-                </TableCell>
+                {pnlMode !== "hide" && (
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Pnl coin={c} display={display} done={done} hide={pnlMode === "mask"} />
+                  </TableCell>
+                )}
+                {fumbleMode !== "hide" && (
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Fumbled coin={c} display={display} done={done} hide={fumbleMode === "mask"} />
+                  </TableCell>
+                )}
                 <TableCell className="text-right whitespace-nowrap tabular-nums">
                   <Hint text={`Position opened on ${when(c.firstAt)}`}>{agoShort(c.firstAt, now)}</Hint>
                 </TableCell>
@@ -153,18 +161,20 @@ function Amount({ main, under }: { main: string; under: string }) {
 
 function Balance({ coin, ticker }: { coin: CoinRow; ticker: string }) {
   if (coin.balance > 0) return <span className="tabular-nums">{compactAmount(coin.balance)} {ticker}</span>;
-  return <span className="text-muted-foreground" title={coin.partial ? "Sold more than the trades read show bought: some of it was bought earlier." : undefined}>Sold all</span>;
+  return <span className="text-muted-foreground" title={coin.partial ? "Sold more than the buys read show: the rest was bought before this window, or received another way (an airdrop or transfer)." : undefined}>Sold all</span>;
 }
 
-function Pnl({ coin, display, done }: { coin: CoinRow; display: Display; done: boolean }) {
+function Pnl({ coin, display, done, hide }: { coin: CoinRow; display: Display; done: boolean; hide: boolean }) {
   if (coin.soldTokens === 0) return <span className="text-muted-foreground">Open</span>;
   if (coin.costUnknown)
     return (
-      <span className="text-muted-foreground" title="None of the coins sold were bought in the part of the history that was read, so what they cost is not known.">
+      <span className="text-muted-foreground" title="No buy was found for the coins sold, so what they cost is not known: bought before this window, or received another way (an airdrop or transfer).">
         Cost unknown
       </span>
     );
   if (coin.profitSol === null) return done ? <Dash /> : <span className="animate-pulse text-muted-foreground" title="Waiting for the rest of the history">&hellip;</span>;
+  // A figure the visitor chose to hide is ***, with no colour, percent or second line.
+  if (hide) return <span className="block font-bold tabular-nums text-muted-foreground">***</span>;
   const fig = coinMoney(coin, display).profit!;
   const gain = coin.profitSol >= 0;
   return (
@@ -179,11 +189,12 @@ function Pnl({ coin, display, done }: { coin: CoinRow; display: Display; done: b
 }
 
 /** The coin's total fumble. A coin with nothing measurable is a dash; one still being priced pulses. */
-function Fumbled({ coin, display, done }: { coin: CoinRow; display: Display; done: boolean }) {
+function Fumbled({ coin, display, done, hide }: { coin: CoinRow; display: Display; done: boolean; hide: boolean }) {
   if (coin.soldTokens === 0) return <Dash />;
   const e = coin.extra;
   if (!e) return done ? <Dash /> : <span className="animate-pulse text-muted-foreground">Pricing</span>;
   if (e.missedSol <= 0) return <span className="text-muted-foreground">None</span>;
+  if (hide) return <span className="block font-bold tabular-nums text-muted-foreground">***</span>;
   const f = figure(display, e.missedSol, e.missedUsd === 0 ? null : e.missedUsd);
   return (
     <>

@@ -8,19 +8,32 @@ import { isCurrency } from "../fxCurrencies.ts";
  *    the same as the primary there is nothing to add, so the page shows SOL under a primary of dollars and dollars under anything else.
  *  - sellsOnly: list only the sells in the table, which are the trades that have a profit and a fumble.
  *  - perLoad: how many trades a scan reads at a time, and each "load more".
+ *  - hidePnl, hideRoundtrip, hideFumble, hideVolume: what to do with each of those numbers, on the page and on the pictures: "show" it (the default),
+ *    "mask" it (drawn as ***, so it is clear something is there) or "hide" it (left out, and the rest closes up). The PnL also covers the best trade on the
+ *    picture; the fumble covers the fumble figure and the Fumbled column.
+ *  - hideWallet: the wallet address is shown, or dotted out in the box and drawn as *** on the picture. There is nothing to leave out, so no "hide".
  */
 export const SETTINGS_KEY = "replay-fumble-settings";
 
 export const PER_LOAD_CHOICES = [50, 100, 250, 500] as const;
+
+/** What to do with a number: show it, draw it as ***, or leave it out. */
+export type HideMode = "show" | "mask" | "hide";
+export const HIDE_MODES: readonly HideMode[] = ["show", "mask", "hide"];
 
 export interface FumbleSettings {
   currency: string;
   second: string;
   sellsOnly: boolean;
   perLoad: (typeof PER_LOAD_CHOICES)[number];
+  hidePnl: HideMode;
+  hideRoundtrip: HideMode;
+  hideFumble: HideMode;
+  hideVolume: HideMode;
+  hideWallet: boolean;
 }
 
-export const DEFAULT_SETTINGS: FumbleSettings = { currency: "SOL", second: "USD", sellsOnly: false, perLoad: 100 };
+export const DEFAULT_SETTINGS: FumbleSettings = { currency: "SOL", second: "USD", sellsOnly: false, perLoad: 100, hidePnl: "show", hideRoundtrip: "show", hideFumble: "show", hideVolume: "show", hideWallet: false };
 
 /**
  * The two currencies always make a pair of SOL and one other currency, or have no secondary: two currencies would crowd the figure, and SOL twice
@@ -44,6 +57,12 @@ export function applyChoice(settings: FumbleSettings, which: "primary" | "second
   return code === "SOL" ? normalizePair(settings.currency === "SOL" ? "USD" : settings.currency, "SOL") : { currency: "SOL", second: code };
 }
 
+/** A stored mode, checked. Anything unknown is "show"; a plain true (how this was first saved, when it was only on or off) means "mask". */
+function hideMode(v: unknown): HideMode {
+  if (v === true) return "mask";
+  return HIDE_MODES.find((m) => m === v) ?? "show";
+}
+
 /** What was stored, checked: anything that is not valid falls back to its default, and unreadable data gives the defaults. */
 export function parseSettings(raw: string | null): FumbleSettings {
   try {
@@ -56,6 +75,11 @@ export function parseSettings(raw: string | null): FumbleSettings {
       ...pair,
       sellsOnly: typeof j?.sellsOnly === "boolean" ? j.sellsOnly : DEFAULT_SETTINGS.sellsOnly,
       perLoad: per ?? DEFAULT_SETTINGS.perLoad,
+      hidePnl: hideMode(j?.hidePnl),
+      hideRoundtrip: hideMode(j?.hideRoundtrip),
+      hideFumble: hideMode(j?.hideFumble),
+      hideVolume: hideMode(j?.hideVolume),
+      hideWallet: typeof j?.hideWallet === "boolean" ? j.hideWallet : DEFAULT_SETTINGS.hideWallet,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

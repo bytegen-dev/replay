@@ -4,16 +4,13 @@ import { Check, Copy, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { MarkLoader } from "@/components/MarkLoader";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 
 /**
- * A picture to look at before it is saved: shown at full width, with Download and Copy under it, and, where `privacyMode` is on, a switch that draws the PnL and the wallet address as ***.
- * The dialog makes the picture itself (`render`) when it opens and again when the switch flips, so what is shown is what is saved.
+ * A picture to look at before it is saved: shown at full width, with Download and Copy under it. The dialog makes the picture itself (`render`) when it
+ * opens, so what is shown is what is saved. A `note` (such as what was left out of the picture) goes under the buttons.
  */
-export function ImagePreviewDialog({ open, title, fileName, fileNameFor, privacyMode = false, render, onClose }: { open: boolean; title: string; fileName: string; render: (privacy: boolean) => Promise<Blob>; fileNameFor?: (privacy: boolean) => string; privacyMode?: boolean; onClose: () => void }) {
-  const [privacy, setPrivacy] = useState(false);
-  const [made, setMade] = useState<{ blob: Blob; url: string; hidden: boolean } | null>(null);
+export function ImagePreviewDialog({ open, title, fileName, note, render, onClose }: { open: boolean; title: string; fileName: string; note?: string; render: () => Promise<Blob>; onClose: () => void }) {
+  const [made, setMade] = useState<{ blob: Blob; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<"done" | "failed" | null>(null);
   const canCopy = typeof window !== "undefined" && typeof ClipboardItem !== "undefined" && !!navigator.clipboard?.write;
@@ -22,17 +19,17 @@ export function ImagePreviewDialog({ open, title, fileName, fileNameFor, privacy
   useEffect(() => {
     if (!open) return;
     let live = true;
-    render(privacyMode && privacy)
+    render()
       .then((blob) => {
         const reader = new FileReader();
-        reader.onload = () => live && typeof reader.result === "string" && (setMade({ blob, url: reader.result, hidden: privacyMode && privacy }), setError(null), setCopied(null));
+        reader.onload = () => live && typeof reader.result === "string" && (setMade({ blob, url: reader.result }), setError(null), setCopied(null));
         reader.readAsDataURL(blob);
       })
       .catch((e) => live && setError(e instanceof Error ? e.message : "Couldn't make the picture."));
     return () => {
       live = false;
     };
-  }, [open, privacy, privacyMode, render]);
+  }, [open, render]);
 
   // "Copied" and "Couldn't copy" go back to the plain button after a few seconds.
   useEffect(() => {
@@ -41,14 +38,14 @@ export function ImagePreviewDialog({ open, title, fileName, fileNameFor, privacy
     return () => clearTimeout(t);
   }, [copied]);
 
-  const shown = made && made.hidden === (privacyMode && privacy) ? made : null;
+  const shown = made;
 
   function download() {
     if (!shown) return;
     const href = URL.createObjectURL(shown.blob);
     const a = document.createElement("a");
     a.href = href;
-    a.download = fileNameFor ? fileNameFor(shown.hidden) : fileName;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -100,14 +97,7 @@ export function ImagePreviewDialog({ open, title, fileName, fileNameFor, privacy
               {copied === "done" ? "Copied" : "Copy image"}
             </button>
           )}
-          {privacyMode && (
-            <div className="ml-auto flex items-center gap-3">
-              <Label htmlFor="privacy-mode" className="text-sm font-bold">
-                Privacy mode
-              </Label>
-              <Switch id="privacy-mode" checked={privacy} onCheckedChange={setPrivacy} />
-            </div>
-          )}
+          {note && <p className="w-full text-xs leading-snug text-muted-foreground">{note}</p>}
           {copied === "failed" && (
             <span role="alert" className="w-full text-sm font-bold">
               Couldn&rsquo;t copy. Download it instead.

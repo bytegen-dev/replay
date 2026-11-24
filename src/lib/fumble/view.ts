@@ -1,6 +1,7 @@
 import { isWalletAddress } from "./helius.ts";
 import type { TokenInfo } from "./tokens.ts";
 import type { ApiPosition, ApiResult, ApiSell, ApiTrade, ScanEvent } from "./service.ts";
+import { DUST } from "./roundtrip.ts";
 
 /**
  * What the Fumble page needs that is not drawing: reading the scan's stream, putting each trade next to its fumble, and writing
@@ -279,3 +280,104 @@ export function agoShort(at: number, now: number): string {
   }
   return `${n.toLocaleString("en-US")}${SHORT[SPAN_UNITS[i][0]]} ago`;
 }
+
+/**
+ * The profit known before prices: each sell's profit is traced to its buys from the trade list alone, so once the history is read the total can be
+ * shown (in SOL) while prices are still coming. Counts only the sells of trades still in the list, so a coin the visitor hid is left out, and only
+ * sells traced to at least one buy. Null while the history is still being read, because a sell's buys may be on a page not read yet.
+ */
+export function earlyProfit(t: { partial: boolean; trades: { signature: string }[]; pnl: Record<string, { profitSol: number; matchedTokens: number }> }): { count: number; sol: number } | null {
+  if (t.partial) return null;
+  const shown = new Set(t.trades.map((x) => x.signature));
+  let count = 0;
+  let sol = 0;
+  for (const [signature, p] of Object.entries(t.pnl)) {
+    if (!shown.has(signature) || p.matchedTokens <= 0) continue;
+    count += 1;
+    sol += p.profitSol;
+  }
+  return { count, sol };
+}
+
+/**
+ * Everything the wallet traded: the SOL of every buy and sell in the list, and the dollars when every coin has a priced total (one coin with a price
+ * missing makes the dollar figure unknown, so it is left out rather than understated). The SOL side needs no prices, so it is there once the history is read.
+ */
+export function tradeVolume(trades: { sol: number }[], coins: { boughtUsd: number | null; soldUsd: number | null }[] | null): { sol: number; usd: number | null } {
+  const sol = trades.reduce((sum, t) => sum + t.sol, 0);
+  if (!coins) return { sol, usd: null };
+  let usd = 0;
+  for (const c of coins) {
+    if (c.boughtUsd === null || c.soldUsd === null) return { sol, usd: null };
+    usd += c.boughtUsd + c.soldUsd;
+  }
+  return { sol, usd };
+}
+
+/**
+ * How many trades the swaps make up. A trade is a position: opened by a buy of a coin, and over when it is sold out. So buying a coin in three
+ * parts and selling it in two is one trade, and buying it again after selling out is a second. A sell with no buy before it opens nothing: the coins
+ * may have been bought before the history starts, or airdropped or transferred in, and which is not known. It is counted as a sell, not as a trade.
+ */
+export function countTrades(trades: { side: "buy" | "sell"; token: string; tokens: number; time: number }[]): number {
+  const byCoin = new Map<string, typeof trades>();
+  for (const t of trades) byCoin.set(t.token, [...(byCoin.get(t.token) ?? []), t]);
+  let count = 0;
+  for (const list of byCoin.values()) {
+    // Oldest first; a buy and a sell in the same second keep buy first.
+    const ordered = list.map((t, i) => ({ t, i })).sort((a, b) => a.t.time - b.t.time || (a.t.side === b.t.side ? a.i - b.i : a.t.side === "buy" ? -1 : 1)).map((x) => x.t);
+    let open = false;
+    let balance = 0;
+    let bought = 0;
+    for (const t of ordered) {
+      if (t.side === "buy") {
+        if (!open) {
+          count += 1;
+          open = true;
+          balance = 0;
+          bought = 0;
+        }
+        balance += t.tokens;
+        bought += t.tokens;
+      } else if (open) {
+        balance -= Math.min(t.tokens, balance);
+        if (balance <= bought * DUST) open = false;
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * How much of a figure could be worked out. "full": all of it (including the true zero of a wallet that sold nothing). "partial": only some of the sells or
+ * positions behind it could be, so the figure is what was measured, a floor and not the whole. "none": none could, so there is no figure to show, and a zero
+ * would be a false one.
+ */
+export type Coverage = { kind: "full" } | { kind: "partial"; done: number; of: number } | { kind: "none" };
+
+function coverageOf(done: number, of: number): Coverage {
+  if (of === 0 || done >= of) return { kind: "full" };
+  return done === 0 ? { kind: "none" } : { kind: "partial", done, of };
+}
+
+/**
+ * For each of the three figures that depend on prices or buys: the PnL needs each sell traced to a buy, the fumble needs each sell priced afterwards,
+ * and what was roundtripped needs each closed position priced. The volume needs neither (its dollar side simply drops out when a price is missing).
+ */
+export function figureCoverage(r: { sells: { status: "ok" | "unknown"; matchedTokens: number }[]; positions: { status: "ok" | "unknown" }[] }): { pnl: Coverage; roundtrip: Coverage; fumble: Coverage } {
+  return {
+    pnl: coverageOf(r.sells.filter((x) => x.matchedTokens > 0).length, r.sells.length),
+    fumble: coverageOf(r.sells.filter((x) => x.status === "ok").length, r.sells.length),
+    roundtrip: coverageOf(r.positions.filter((p) => p.status === "ok").length, r.positions.length),
+  };
+}
+
+/** What to say under a figure that is partial or not there: how many of the pieces behind it were worked out, or why there is nothing. Null when it is whole. */
+export function coverageNote(c: Coverage, what: "pnl" | "fumble" | "roundtrip"): string | null {
+  if (c.kind === "full") return null;
+  if (c.kind === "partial") return `${c.done} of ${c.of} ${what === "roundtrip" ? "positions priced" : what === "fumble" ? "sells priced" : "sells traced to a buy"}`;
+  return what === "pnl" ? "No buys found for these sells." : "Couldn't be priced. Refresh to try again.";
+}
+
+/** The word shown in place of a figure that is not there. */
+export const NOT_THERE: Record<"pnl" | "fumble" | "roundtrip", string> = { pnl: "Cost unknown", fumble: "Not priced", roundtrip: "Not priced" };

@@ -1,32 +1,42 @@
 import { drawHatch } from "../canvasHatch.ts";
 import { canvasTheme } from "../replayVideo.ts";
 import type { ApiResult } from "./service.ts";
+import { RECAP_NAME } from "../recapName.ts";
+import { bestTrade } from "./highlights.ts";
+import type { HideMode } from "./settings.ts";
 import { figure, type Display } from "./money.ts";
-import { reachSpan, shortMint, tokenLabel } from "./view.ts";
+import { countTrades, coverageNote, figureCoverage, NOT_THERE, reachSpan, shortMint, tokenLabel, tradeVolume } from "./view.ts";
 
 /**
- * The scan as a picture to share (PNG, 1200 by 630 drawn at twice the size): the total fumble as the headline, the numbers it comes from, how many
+ * The scan as a picture to share (PNG, 1200 by 630 drawn at twice the size): the PnL as the headline, what was roundtripped, fumbled and traded under it, how many
  * trades and how far back they reach, and the biggest single fumble. Drawn on a canvas in the site's colours, so it needs nothing from the server.
+ * The PnL, the fumble figures and the wallet address can each be hidden on their own, so someone can show what they missed and keep what they made.
  */
 
 const W = 1200;
 const H = 630;
 
-/** replay-fumble-card-9msk-xhzj-2026-11-23.png */
-export function fumbleCardFileName(r: { wallet: string; scannedAt: number }, privacy = false): string {
+/**
+ * What the card does with each number: "show" it, draw it as *** ("mask"), or leave it out and close the gap ("hide"). The PnL also covers the best trade,
+ * which is part of it. The wallet address can be shown or drawn as ***; there is nothing to leave out there.
+ */
+export interface CardHide {
+  pnl?: HideMode;
+  roundtrip?: HideMode;
+  fumble?: HideMode;
+  volume?: HideMode;
+  wallet?: boolean;
+}
+
+/** replay-recap-card-9msk-xhzj-2026-11-23.png; with the wallet address hidden the address is left out of the name too, and anything masked or hidden adds -private. */
+export function fumbleCardFileName(r: { wallet: string; scannedAt: number }, hide: CardHide = {}): string {
   const day = new Date(r.scannedAt * 1000).toISOString().slice(0, 10);
-  if (privacy) return `replay-fumble-card-${day}-private.png`;
-  return `replay-fumble-card-${r.wallet.slice(0, 4)}-${r.wallet.slice(-4)}-${day}.png`.toLowerCase();
+  const any = [hide.pnl, hide.roundtrip, hide.fumble, hide.volume].some((m) => m === "mask" || m === "hide") || hide.wallet;
+  const who = hide.wallet ? "" : `${r.wallet.slice(0, 4)}-${r.wallet.slice(-4)}-`;
+  return `replay-recap-card-${who}${day}${any ? "-private" : ""}.png`.toLowerCase();
 }
 
-/** The biggest fumble that was measured, or null when none was. */
-export function worstFumble(r: ApiResult) {
-  let best: ApiResult["sells"][number] | null = null;
-  for (const s of r.sells) if (s.status === "ok" && (s.fumbleUsd ?? 0) > (best?.fumbleUsd ?? 0)) best = s;
-  return best;
-}
-
-export async function renderFumbleCard(r: ApiResult, now: number, display: Display, opts: { privacy?: boolean } = {}): Promise<Blob> {
+export async function renderFumbleCard(r: ApiResult, now: number, display: Display, opts: { hide?: CardHide } = {}): Promise<Blob> {
   const c = await canvasTheme();
   const canvas = document.createElement("canvas");
   canvas.width = W * 2;
@@ -44,91 +54,127 @@ export async function renderFumbleCard(r: ApiResult, now: number, display: Displ
   // Header: the name of the check and whose wallet it is, with the logo.
   ctx.fillStyle = c.fg;
   ctx.font = `600 40px ${c.head}`;
-  ctx.fillText("Fumble check", 64, 86);
+  ctx.fillText(RECAP_NAME, 64, 86);
   ctx.fillStyle = c.muted;
   ctx.font = `400 22px ${c.body}`;
-  const who = opts.privacy ? "***" : shortMint(r.wallet);
+  const hide = opts.hide ?? {};
+  const who = hide.wallet ? "***" : shortMint(r.wallet);
   ctx.fillText(who, 64, 124);
 
   // How much was looked at: the trades, and how far back they reach.
   const reach = r.coverage.oldest ? `, over ${reachSpan(r.coverage.oldest, now).label}` : "";
   ctx.fillStyle = c.muted;
-  ctx.fillText(`${r.coverage.complete ? "All" : "Latest"} ${r.trades.length} trades${reach}`, 64 + ctx.measureText(who).width + 28, 124);
+  const sellCount = r.trades.filter((t) => t.side === "sell").length;
+  const buyCount = r.trades.length - sellCount;
+  const tradeTotal = countTrades(r.trades);
+  ctx.fillText(`${r.coverage.complete ? "All" : "Latest"} ${tradeTotal} ${tradeTotal === 1 ? "trade" : "trades"}, ${buyCount} ${buyCount === 1 ? "buy" : "buys"} and ${sellCount} ${sellCount === 1 ? "sell" : "sells"}${reach}`, 64 + ctx.measureText(who).width + 28, 124);
 
-  // The headline: the total fumble, big. Under it, the three numbers it comes from, smaller. A figure with nothing behind it (no priced sell or
-  // position, no sell traced to its buys) is a dash, not a made-up zero. Each figure leads with the chosen currency (SOL unless the visitor
-  // picked another) and has the other under it. In privacy mode the PnL and the wallet address are drawn as ***.
-  const traced = r.sells.some((x) => x.matchedTokens > 0);
+  // The headline: the PnL, big, green when it is a profit and red when it is a loss. Under it, the other numbers, smaller. A figure with nothing behind
+  // it because nothing was sold reads zero, which is true. A figure that could not be worked out says so in words (a zero would be false), and one that
+  // was only partly worked out shows what was, with how much in a small note under it (a picture has no tooltip). Each figure leads with the chosen
+  // currency (SOL unless the visitor picked another) and has the other under it. A masked figure is drawn as ***, with its sign and colour; a hidden one is not drawn, and what is
+  // left moves up to fill the space.
   const known = (u: number, s: number) => (u === 0 && s !== 0 ? null : u);
-  const measured = r.sells.some((x) => x.status === "ok") || r.positions.some((p) => p.status === "ok");
-  const total = figure(display, r.totalMissedSol, known(r.totalMissedUsd, r.totalMissedSol));
-  ctx.fillStyle = c.muted;
-  ctx.font = `400 26px ${c.body}`;
-  ctx.fillText("Total fumble", 64, 190);
-  let size = 120;
-  const heroText = measured ? total.main : "\u2014";
-  ctx.font = `700 ${size}px ${c.head}`;
-  while (size > 48 && ctx.measureText(heroText).width > W - 128) {
-    size -= 4;
-    ctx.font = `700 ${size}px ${c.head}`;
-  }
-  ctx.fillStyle = measured ? c.down : c.muted;
-  ctx.fillText(heroText, 64, 190 + 24 + size * 0.78);
-  if (measured && total.sub) {
+  const mode = (m: HideMode | undefined): HideMode => m ?? "show";
+  const showHero = mode(hide.pnl) !== "hide";
+  const pnlMasked = mode(hide.pnl) === "mask";
+  const pnl = figure(display, r.totalProfitSol, known(r.totalProfitUsd, r.totalProfitSol), true);
+  const cover = figureCoverage(r);
+  if (showHero) {
     ctx.fillStyle = c.muted;
-    ctx.font = `400 28px ${c.body}`;
-    ctx.fillText(total.sub, 64, 190 + 24 + size * 0.78 + 42);
+    ctx.font = `400 26px ${c.body}`;
+    ctx.fillText("PnL", 64, 190);
+    let size = 120;
+    const pnlMissing = !pnlMasked && cover.pnl.kind === "none";
+    const heroText = pnlMasked ? "***" : pnlMissing ? NOT_THERE.pnl : pnl.main;
+    ctx.font = `700 ${size}px ${c.head}`;
+    while (size > 48 && ctx.measureText(heroText).width > W - 128) {
+      size -= 4;
+      ctx.font = `700 ${size}px ${c.head}`;
+    }
+    ctx.fillStyle = pnlMasked || pnlMissing ? c.muted : r.totalProfitSol > 0 ? c.primary : r.totalProfitSol < 0 ? c.down : c.fg;
+    ctx.fillText(heroText, 64, 190 + 24 + size * 0.78);
+    // Under it: the other currency, and for a figure only partly worked out, how much was (or for one that could not be, why).
+    const pnlNote = pnlMasked ? null : coverageNote(cover.pnl, "pnl");
+    const under = [pnlMissing ? null : pnlMasked ? null : pnl.sub, pnlNote].filter(Boolean).join(", ");
+    if (under) {
+      ctx.fillStyle = c.muted;
+      ctx.font = `400 28px ${c.body}`;
+      ctx.fillText(under, 64, 190 + 24 + size * 0.78 + 42);
+    }
   }
 
-  ctx.strokeStyle = c.border;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(64, 372);
-  ctx.lineTo(W - 64, 372);
-  ctx.stroke();
-
-  const cols = [
-    { label: "Missed after selling", fig: figure(display, r.totalFumbleSol, known(r.totalFumbleUsd, r.totalFumbleSol)), none: !r.sells.some((x) => x.status === "ok"), pnl: false },
-    { label: "Roundtripped", fig: figure(display, r.totalRoundTripSol, known(r.totalRoundTripUsd, r.totalRoundTripSol)), none: !r.positions.some((p) => p.status === "ok"), pnl: false },
-    { label: "PnL", fig: figure(display, r.totalProfitSol, known(r.totalProfitUsd, r.totalProfitSol), true), none: !traced, pnl: true },
+  const volume = tradeVolume(r.trades, r.coins);
+  const all = [
+    { label: "Roundtripped", value: r.totalRoundTripSol, cover: cover.roundtrip, fig: figure(display, r.totalRoundTripSol, known(r.totalRoundTripUsd, r.totalRoundTripSol)), kind: "roundtrip" as const },
+    { label: "Fumble", value: r.totalFumbleSol, cover: cover.fumble, fig: figure(display, r.totalFumbleSol, known(r.totalFumbleUsd, r.totalFumbleSol)), kind: "fumble" as const },
+    { label: "Total volume", value: volume.sol, cover: { kind: "full" } as const, fig: figure(display, volume.sol, volume.usd), kind: "volume" as const },
   ];
-  const colW = (W - 128) / cols.length;
+  const cols = all.filter((col) => mode(hide[col.kind]) !== "hide");
+  // With the headline there is a line, and the numbers sit below it; without it they move up and are drawn larger, since they are all there is.
+  const labelY = showHero ? 420 : 250;
+  const valueY = showHero ? 474 : 250 + 30 + 88 * 0.78;
+  const biggest = showHero ? 44 : 88;
+  if (showHero && cols.length > 0) {
+    ctx.strokeStyle = c.border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(64, 372);
+    ctx.lineTo(W - 64, 372);
+    ctx.stroke();
+  }
+  const colW = (W - 128) / Math.max(cols.length, 1);
   cols.forEach((col, i) => {
     const x = 64 + i * colW;
-    const masked = opts.privacy === true && col.pnl;
+    const masked = mode(hide[col.kind]) === "mask";
     ctx.fillStyle = c.muted;
-    ctx.font = `400 22px ${c.body}`;
-    ctx.fillText(col.label, x, 420);
-    const main = masked ? "***" : col.none ? "\u2014" : col.fig.main;
-    let small = 44;
+    ctx.font = `400 ${showHero ? 22 : 26}px ${c.body}`;
+    ctx.fillText(col.label, x, labelY);
+    const missing = !masked && col.cover.kind === "none" && col.kind !== "volume";
+    const main = masked ? "***" : missing ? NOT_THERE[col.kind as "roundtrip" | "fumble"] : col.fig.main;
+    let small = biggest;
     ctx.font = `700 ${small}px ${c.head}`;
     while (small > 26 && ctx.measureText(main).width > colW - 24) {
       small -= 2;
       ctx.font = `700 ${small}px ${c.head}`;
     }
-    ctx.fillStyle = masked || col.none ? c.muted : col.pnl ? (r.totalProfitSol >= 0 ? c.primary : c.down) : c.fg;
-    ctx.fillText(main, x, 474);
+    ctx.fillStyle = masked || missing ? c.muted : col.kind === "fumble" && col.value > 0 ? c.down : c.fg;
+    ctx.fillText(main, x, valueY);
+    // Only a partial figure gets a note: for one that is not there the word already says it, and the long sentence would run into the next column.
+    const colNote = masked || col.kind === "volume" || col.cover.kind !== "partial" ? null : coverageNote(col.cover, col.kind);
+    if (colNote) {
+      ctx.fillStyle = c.muted;
+      ctx.font = `400 ${showHero ? 20 : 24}px ${c.body}`;
+      ctx.fillText(colNote, x, valueY + (showHero ? 30 : 38));
+    }
   });
 
-  // The worst single fumble, in a line: the coin, and how high it went after the sale.
-  const worst = worstFumble(r);
-  ctx.font = `400 24px ${c.body}`;
-  if (worst) {
-    const name = tokenLabel(worst.token, r.tokens).ticker;
-    const lead = "Biggest fumble  ";
-    ctx.fillStyle = c.muted;
-    ctx.fillText(lead, 64, 530);
-    let x = 64 + ctx.measureText(lead).width;
-    ctx.fillStyle = c.fg;
-    ctx.font = `700 28px ${c.head}`;
-    ctx.fillText(name, x, 530);
-    x += ctx.measureText(name).width;
-    ctx.fillStyle = c.muted;
+  // The best trade, in a line: the coin and what it made. Part of the PnL: masked with it, and left out when the PnL is.
+  if (showHero) {
+    const lineY = cols.length > 0 ? 530 : 430;
+    const best = bestTrade(r);
     ctx.font = `400 24px ${c.body}`;
-    ctx.fillText(`  sold, then ${(worst.peakMultiple ?? 1).toFixed(1)}x higher`, x, 530);
-  } else {
+    if (best) {
+      const name = tokenLabel(best.token, r.tokens).ticker;
+      const lead = "Best trade  ";
+      ctx.fillStyle = c.muted;
+      ctx.fillText(lead, 64, lineY);
+      let x = 64 + ctx.measureText(lead).width;
+      ctx.fillStyle = c.fg;
+      ctx.font = `700 28px ${c.head}`;
+      ctx.fillText(name, x, lineY);
+      x += ctx.measureText(name).width;
+      ctx.font = `700 28px ${c.head}`;
+      ctx.fillStyle = pnlMasked ? c.muted : c.primary;
+      ctx.fillText(`  ${pnlMasked ? "***" : figure(display, best.profitSol, best.profitUsd === 0 ? null : best.profitUsd, true).main}`, x, lineY);
+    } else {
+      ctx.fillStyle = c.muted;
+      ctx.fillText("No winning trade yet.", 64, lineY);
+    }
+  } else if (cols.length === 0) {
     ctx.fillStyle = c.muted;
-    ctx.fillText("No sell with a measurable fumble yet.", 64, 530);
+    ctx.font = `400 26px ${c.body}`;
+    ctx.fillText("Everything is hidden.", 64, 300);
   }
 
   // Footer: the mark and the name.

@@ -72,7 +72,8 @@ export function toApiTrades(wallet: string, t: TradeList): ApiTrades {
 }
 
 /** What a scan sends while it runs: progress, and once the history is read the trade list. */
-export type ScanEvent = ({ type: "progress" } & ScanProgress) | { type: "trades"; data: ApiTrades };
+/** `strained`: a price source said it is out of room (too many requests, or its quota is used up), so this scan may be slower or less complete. */
+export type ScanEvent = ({ type: "progress" } & ScanProgress) | { type: "trades"; data: ApiTrades } | { type: "strained" };
 
 /** What the scan works out for one coin that needs prices: the dollar value of what was bought and sold, the profit in dollars, and the coin's total fumble. */
 export interface ApiCoin {
@@ -218,7 +219,7 @@ export function createScanner(opts: ScannerOptions) {
   const maxActive = opts.maxActive ?? 3;
   const maxCached = opts.maxCached ?? 200;
   const cache = new Map<string, ApiResult>();
-  const running = new Map<string, { promise: Promise<ApiResult>; listeners: Set<(e: ScanEvent) => void>; trades: ScanEvent | null }>();
+  const running = new Map<string, { promise: Promise<ApiResult>; listeners: Set<(e: ScanEvent) => void>; trades: ScanEvent | null; strained: boolean }>();
 
   /** A finished scan of this wallet, if one is fresh enough. */
   function peek(wallet: string): ApiResult | null {
@@ -249,6 +250,7 @@ export function createScanner(opts: ScannerOptions) {
     if (joined) {
       if (onEvent) {
         if (joined.trades) onEvent(joined.trades);
+        if (joined.strained) onEvent({ type: "strained" });
         joined.listeners.add(onEvent);
       }
       return { result: await joined.promise, cached: false };
@@ -257,9 +259,10 @@ export function createScanner(opts: ScannerOptions) {
 
     const listeners = new Set<(e: ScanEvent) => void>();
     if (onEvent) listeners.add(onEvent);
-    const entry = { promise: null as unknown as Promise<ApiResult>, listeners, trades: null as ScanEvent | null };
+    const entry = { promise: null as unknown as Promise<ApiResult>, listeners, trades: null as ScanEvent | null, strained: false };
     const emit = (e: ScanEvent) => {
       if (e.type === "trades") entry.trades = e;
+      if (e.type === "strained") entry.strained = true;
       listeners.forEach((l) => l(e));
     };
     entry.promise = (async () => {

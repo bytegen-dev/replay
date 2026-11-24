@@ -26,6 +26,24 @@ const intEnv = (name: string, fallback: number) => {
   return Number.isInteger(n) && n > 0 ? n : fallback;
 };
 
+/**
+ * A price source saying it is out of room (too many requests, or its quota used up) is told to the page, so it can say the system is busy. The sources are
+ * shared by every scan on this server, so a limit hit by one is told to all the scans running, and to a scan that starts within ten minutes of it.
+ */
+const STRAIN_MEMORY_MS = 10 * 60 * 1000;
+const strainListeners = new Set<() => void>();
+let lastLimitAt = 0;
+let lastLimitLog = 0;
+function noteLimit(provider: string): void {
+  lastLimitAt = Date.now();
+  // One line a minute at most, so a long scan hitting the same limit for every coin does not flood the logs.
+  if (lastLimitAt - lastLimitLog > 60_000) {
+    lastLimitLog = lastLimitAt;
+    console.warn(`fumble: ${provider} is out of room (rate or quota limit); the next source is used`);
+  }
+  strainListeners.forEach((tell) => tell());
+}
+
 let scanner: ReturnType<typeof createScanner> | null | undefined;
 
 export function getScanner(): ReturnType<typeof createScanner> | null {
@@ -36,7 +54,7 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   // Shared by every scan on this server, so a coin two wallets traded is priced once.
   // Pyth, when it has a key, answers for SOL only (the dollar value of each trade); every other coin goes on to Birdeye and GeckoTerminal.
   const pythKey = process.env.PYTH_API_KEY;
-  const fetched = firstOf([...(pythKey ? [{ name: "pyth", get: pythProvider(pythKey) }] : []), ...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]);
+  const fetched = firstOf([...(pythKey ? [{ name: "pyth", get: pythProvider(pythKey) }] : []), ...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }], noteLimit);
   // With a database, a coin priced by any server instance is saved, so the free-tier limits are spent once per coin, not once per instance per wallet.
   const priceStore = sqlPriceStore();
   const prices = sharedPrices(priceStore ? savedPrices(fetched, priceStore) : fetched);
@@ -52,6 +70,14 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   scanner = createScanner({
     run: (wallet, emit, opts) => {
       const deadline = Date.now() + budgetMs;
+      let told = false;
+      const tell = () => {
+        if (told) return;
+        told = true;
+        emit({ type: "strained" });
+      };
+      strainListeners.add(tell);
+      if (Date.now() - lastLimitAt < STRAIN_MEMORY_MS) tell();
       return scanWallet(wallet, {
         history: (w, onPage, until, before, stopWhen) => fetchHistory(w, { apiKey: heliusKey, maxPages, maxMs: historyMs, onPage, untilSignature: until, before, stopWhen }),
         store,
@@ -61,7 +87,7 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
         outOfTime: () => Date.now() > deadline,
         onProgress: (p) => emit({ type: "progress", ...p }),
         onTrades: (t) => emit({ type: "trades", data: toApiTrades(wallet, t) }),
-      }, opts);
+      }, opts).finally(() => strainListeners.delete(tell));
     },
   });
   return scanner;

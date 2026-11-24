@@ -19,7 +19,7 @@ import type { Candle, Trade } from "./types.ts";
  */
 
 /** A position counts as closed once what is left is under this share of the tokens ever bought: selling "everything" leaves dust. */
-const DUST = 0.005;
+export const DUST = 0.005;
 
 export interface Position {
   mint: string;

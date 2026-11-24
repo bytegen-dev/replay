@@ -26,6 +26,8 @@ const nextConfig: NextConfig = {
       { source: "/price", destination: "/wayback?view=price", permanent: true },
       { source: "/hindsight", destination: "/wayback", permanent: true },
       { source: "/play", destination: "/game", permanent: true },
+      // The wallet check was called Fumble before it became the Recap; shared links and bookmarks keep working, with the wallet in the address.
+      { source: "/fumble", destination: "/recap", permanent: true },
       ...toolKeys.map((key) => ({ source: "/", has: [{ type: "query" as const, key }], destination: "/wayback", permanent: false })),
     ];
   },

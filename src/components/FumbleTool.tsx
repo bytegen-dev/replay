@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSpreadsheet, ImageDown, RefreshCw, Search, Settings, Trophy } from "lucide-react";
+import { Asterisk, Eye, EyeOff, FileSpreadsheet, ImageDown, RefreshCw, RotateCcw, Search, Settings, Trophy, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoinTable } from "@/components/CoinTable";
@@ -16,7 +16,7 @@ import { solName } from "@/lib/fumble/solName.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { applyChoice, DEFAULT_SETTINGS, PER_LOAD_CHOICES, readSettings, writeSettings, type FumbleSettings } from "@/lib/fumble/settings.ts";
+import { applyChoice, DEFAULT_SETTINGS, PER_LOAD_CHOICES, readSettings, writeSettings, type FumbleSettings, type HideMode } from "@/lib/fumble/settings.ts";
 import { ImagePreviewDialog } from "@/components/ImagePreviewDialog";
 import { downloadFile } from "@/lib/download.ts";
 import { figure, showIn, SOL_UNIT, USD_UNIT, type Display, type Unit } from "@/lib/fumble/money.ts";
@@ -24,7 +24,7 @@ import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
 import { coinRows, type CoinRow } from "@/lib/fumble/coins.ts";
 import { renderTradeCard, tradeCardFileName } from "@/lib/fumble/tradeCard.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
-import { makeEventReader, tokenLabel, veryActive, fumbleFileName, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
+import { countTrades, coverageNote, earlyProfit, figureCoverage, NOT_THERE, tradeVolume, type Coverage, makeEventReader, tokenLabel, veryActive, fumbleFileName, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -34,7 +34,7 @@ type Progress = { stage: "history" | "prices" | "done"; done: number; total: num
  * streams everything: progress, then the trades, then the finished scan.
  */
 export function FumbleTool({ launch = false, className, intro, aside }: {
-  /** Opens the Fumble page with the wallet instead of scanning here, for use on another page. Nothing is scanned or shown in this mode, and the address bar is left alone. */
+  /** Opens the Recap page with the wallet instead of scanning here, for use on another page. Nothing is scanned or shown in this mode, and the address bar is left alone. */
   launch?: boolean;
   className?: string;
   /** A heading block shown above the field, inside the same column. */
@@ -51,6 +51,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const [result, setResult] = useState<ApiResult | null>(null);
   // Set once the history read so far shows a wallet that does hundreds of transactions a day; it stays set for the rest of the scan.
   const [active, setActive] = useState(false);
+  // A price source said it is out of room during this scan (told by the server as it happens); the notice also shows when a scan ran out of time pricing.
+  const [strained, setStrained] = useState(false);
   // True while "load more" is reading: the table stays, and the progress shows under it.
   const [loadingMore, setLoadingMore] = useState(false);
   // The page's settings (primary currency, second value, sells only, load size), remembered in this browser. The page starts on the defaults and
@@ -127,7 +129,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
       setResult(null);
     }
     setActive(false);
-    window.history.replaceState(null, "", `/fumble?wallet=${wallet}`);
+    setStrained(false);
+    window.history.replaceState(null, "", `/recap?wallet=${wallet}`);
 
     let finished = false;
     const fail = (message: string) => {
@@ -137,6 +140,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     };
     const reader = makeEventReader((e: StreamEvent) => {
       if (e.type === "progress") setProgress({ stage: e.stage, done: e.done, total: e.total });
+      else if (e.type === "strained") setStrained(true);
       else if (e.type === "trades") {
         setAsOf(Math.floor(Date.now() / 1000));
         setTrades(e.data);
@@ -260,7 +264,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     setError(null);
     if (launch) {
       setStatus("scanning");
-      router.push(`/fumble?wallet=${wallet}`);
+      router.push(`/recap?wallet=${wallet}`);
       return;
     }
     void scan(wallet);
@@ -305,8 +309,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     }
     if (launch) {
       setError(null);
-      setStatus("scanning"); // the button shows it is working until the Fumble page opens
-      router.push(`/fumble?wallet=${wallet}`);
+      setStatus("scanning"); // the button shows it is working until the Recap page opens
+      router.push(`/recap?wallet=${wallet}`);
       return;
     }
     void scan(wallet);
@@ -349,7 +353,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const closeToast = useCallback(() => setToast(null), []);
   const sharedTicker = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).ticker : "";
   const sharedImage = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).image : undefined;
-  const renderShared = useCallback(() => renderTradeCard(sharing!, sharedTicker, display, asOf || Math.floor(Date.now() / 1000), sharedImage), [sharing, sharedTicker, display, asOf, sharedImage]);
+  const renderShared = useCallback(() => renderTradeCard(sharing!, sharedTicker, display, asOf || Math.floor(Date.now() / 1000), sharedImage, { hidePnl: settings.hidePnl !== "show" }), [sharing, sharedTicker, display, asOf, sharedImage, settings.hidePnl]);
 
   return (
     <div
@@ -406,7 +410,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                       autoCapitalize="off"
                       spellCheck={false}
                       aria-invalid={emptyWallet || (status === "error" && !trades)}
-                      className="h-full w-full rounded-none border-0 bg-transparent pr-3 pl-9 text-sm shadow-none focus-visible:ring-0 aria-invalid:ring-0 dark:aria-invalid:ring-0"
+                      className={cn("h-full w-full rounded-none border-0 bg-transparent pr-3 pl-9 text-sm shadow-none focus-visible:ring-0 aria-invalid:ring-0 dark:aria-invalid:ring-0", settings.hideWallet && !nameStart && "[-webkit-text-security:disc] focus:[-webkit-text-security:none]")}
                     />
                   </div>
                   <Button type="submit" disabled={scanning || emptyWallet} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">
@@ -488,6 +492,12 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
               )}
 
               {scanning && !launch && !loadingMore && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} active={active} />}
+              {!launch && (strained || !!result?.ranOutOfTime) && (
+                <p role="status" className="mt-4 flex max-w-2xl items-start gap-2.5 border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm leading-relaxed">
+                  <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
+                  <span>We are facing heavy usage and are working to optimize the system. In the meantime you might experience slower or slightly inaccurate results.</span>
+                </p>
+              )}
         </div>
         {aside && <div className="hidden lg:order-first lg:block">{aside}</div>}
       </div>
@@ -508,6 +518,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             }}
             onShowHidden={() => setHidden((h) => new Set([...h].filter((k) => !k.startsWith(`${trades.wallet}:`))))}
             onShare={setSharing}
+            pnlMode={settings.hidePnl}
+            fumbleMode={settings.hideFumble}
           />}
           {toast && (
             <Toast
@@ -578,8 +590,13 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
 }
 
 /** One headline number: dollars big, SOL under it, and what it means in a line. A signed one (profit) is green for a gain and red for a loss. */
-function Stat({ label, dollars, sols, display, pending, empty, signed, about, className, texture, hero, loading }: { label: string; dollars: number; sols: number; display: Display; pending: boolean; empty?: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean; loading?: boolean }) {
-  const tone = hero && !pending && !empty ? "text-destructive" : signed && !pending && !empty ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
+function Stat({ label, dollars, sols, display, pending, signed, about, className, texture, hero, loading, hidden, coverage, what }: { coverage?: Coverage; what?: "pnl" | "fumble" | "roundtrip"; hidden?: boolean; label: string; dollars: number; sols: number; display: Display; pending: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean; loading?: boolean }) {
+  // A figure the visitor chose to hide is ***, with no sign, colour or second line. There is no dash. A figure with nothing behind it because nothing was
+  // sold reads 0.00 SOL, which is true. One that could not be worked out says so in words (a zero would be false); one that was only partly worked out
+  // shows what was, and a warning mark by its name says how much, in a tooltip.
+  const note = !hidden && !pending && coverage && what ? coverageNote(coverage, what) : null;
+  const missing = !hidden && !pending && coverage?.kind === "none" && what ? NOT_THERE[what] : null;
+  const tone = hidden || missing ? "text-muted-foreground" : hero && !signed && !pending ? "text-destructive" : signed && !pending ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
   // A dollar value of exactly nothing next to a SOL amount means no dollar price was found, not that it is worth nothing.
   const fig = figure(display, sols, dollars === 0 && sols !== 0 ? null : dollars, signed);
   return (
@@ -595,9 +612,17 @@ function Stat({ label, dollars, sols, display, pending, empty, signed, about, cl
           style={{ clipPath: "var(--tex-clip)", opacity: 0.13, animation: "none", maskImage: "linear-gradient(205deg, #000 0%, rgb(0 0 0 / 0.35) 32%, transparent 62%)", WebkitMaskImage: "linear-gradient(205deg, #000 0%, rgb(0 0 0 / 0.35) 32%, transparent 62%)" } as React.CSSProperties}
         />
       )}
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={cn("font-heading leading-none font-bold tabular-nums", hero ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl", loading && "animate-pulse", pending && "text-muted-foreground", tone)}>{pending ? "\u2026" : empty ? "\u2014" : fig.main}</p>
-      <p className={cn("h-5 text-sm tabular-nums text-muted-foreground", loading && "animate-pulse")}>{pending || empty ? "" : (fig.sub ?? "")}</p>
+      <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        {label}
+        {note && (
+          <Hint text={note} className="inline-flex items-center text-amber-500 no-underline">
+            <TriangleAlert className="size-4" aria-hidden />
+            <span className="sr-only">Warning: {note}</span>
+          </Hint>
+        )}
+      </p>
+      <p className={cn("font-heading leading-none font-bold tabular-nums", hero ? "text-5xl sm:text-7xl" : "text-4xl sm:text-5xl", missing && (hero ? "text-3xl sm:text-4xl" : "text-2xl sm:text-3xl"), loading && "animate-pulse", pending && "text-muted-foreground", tone)}>{hidden ? "***" : pending ? "\u2026" : (missing ?? fig.main)}</p>
+      <p className={cn("h-5 text-sm tabular-nums text-muted-foreground", loading && "animate-pulse")}>{hidden || pending || missing ? "" : (fig.sub ?? "")}</p>
       {about && <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{about}</p>}
     </div>
   );
@@ -661,6 +686,26 @@ function Choice<T extends string | number>({ value, options, onPick, label }: { 
   );
 }
 
+/**
+ * One button for what to do with a number. Each press moves to the next choice and the button changes to match: an open eye for shown, stars for masked
+ * (drawn as ***), a closed eye for hidden. The wallet has no "hidden", so its button goes between the first two.
+ */
+function HideButton({ label, mode, onChange, cycle = ["show", "mask", "hide"] }: { label: string; mode: HideMode; onChange: (mode: HideMode) => void; cycle?: HideMode[] }) {
+  const next = cycle[(cycle.indexOf(mode) + 1) % cycle.length];
+  const view = { show: { Icon: Eye, text: "Shown" }, mask: { Icon: Asterisk, text: "Masked" }, hide: { Icon: EyeOff, text: "Hidden" } }[mode];
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(next)}
+      aria-label={`${label}: ${view.text.toLowerCase()}. Press to change.`}
+      className={cn("flex h-8 w-28 shrink-0 items-center gap-2 border px-2.5 text-xs font-bold transition-colors", mode === "show" ? "border-border text-muted-foreground hover:text-foreground" : "border-primary text-primary")}
+    >
+      <view.Icon className="size-3.5" aria-hidden />
+      {view.text}
+    </button>
+  );
+}
+
 /** The gear button in the corner of the summary, and the settings box it opens. Settings are saved in this browser. */
 function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings; onChange: (patch: Partial<FumbleSettings>) => void }) {
   const row = "flex flex-col gap-2 py-4";
@@ -674,7 +719,7 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
       <DialogContent>
         <div className="flex flex-col gap-1 pr-6">
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription className="sr-only">Choose the currency, the table and how many trades load at a time.</DialogDescription>
+          <DialogDescription className="sr-only">Choose the currency, the table, how many trades load at a time, and which numbers to show.</DialogDescription>
         </div>
         <div className="divide-y divide-border">
           <div className={row}>
@@ -702,21 +747,86 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
             <p className="text-sm font-bold">Trades per load</p>
             <Choice label="Trades per load" value={settings.perLoad} options={PER_LOAD_CHOICES.map((n) => ({ value: n, text: String(n) }))} onPick={(perLoad) => onChange({ perLoad })} />
           </div>
+          <div className={row}>
+            <p className="text-sm font-bold">Numbers</p>
+            <p className="text-xs leading-snug text-muted-foreground">Each button changes as you press it: shown, masked as ***, or hidden. This applies on the page and on the pictures you download or copy.</p>
+            <div className="flex flex-col gap-2 pt-1">
+              {(
+                [
+                  { key: "hidePnl", text: "PnL" },
+                  { key: "hideRoundtrip", text: "Roundtripped" },
+                  { key: "hideFumble", text: "Fumble" },
+                  { key: "hideVolume", text: "Volume" },
+                ] as const
+              ).map((o) => (
+                <div key={o.key} className="flex items-center justify-between gap-3">
+                  <span className="text-sm">{o.text}</span>
+                  <HideButton label={o.text} mode={settings[o.key]} onChange={(m) => onChange({ [o.key]: m })} />
+                </div>
+              ))}
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm">Wallet</span>
+                <HideButton label="Wallet" mode={settings.hideWallet ? "mask" : "show"} cycle={["show", "mask"]} onChange={(m) => onChange({ hideWallet: m === "mask" })} />
+              </div>
+            </div>
+            <p className="text-xs leading-snug text-muted-foreground">PnL also covers the best trade on the picture, and Fumble the Fumbled column in the table. A masked wallet is dotted out in the box until you click it.</p>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
+/** The wide layout's columns for however many of the smaller figures are left (Tailwind needs the whole class name written out). */
+const GRID_COLS: Record<number, string> = { 1: "sm:grid-cols-1", 2: "sm:grid-cols-2", 3: "sm:grid-cols-3" };
+
 function Summary({ trades, result, kolName, noTrades, asOf, display, settings, onSettings, busy, onRefresh }: { trades: ApiTrades; result: ApiResult | null; kolName: { name: string; twitter?: string } | null; noTrades: boolean; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void; busy: boolean; onRefresh: () => void }) {
   const unknown = result?.unknown ?? 0;
   const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
-  const tracedSells = result ? result.sells.filter((x) => x.matchedTokens > 0).length : 0;
+  const buys = trades.trades.length - sells;
+  const tradeTotal = countTrades(trades.trades);
+  // The PnL is traced from the trades alone (no prices), so it shows as soon as the history is read, in SOL; the dollar amount comes with the result.
+  const early = result ? null : earlyProfit(trades);
+  const volume = tradeVolume(trades.trades, result?.coins ?? null);
+  const coverage = result ? figureCoverage(result) : null;
   const partial = result?.partialSells ?? 0;
   const cov = trades.coverage;
   const [previewOpen, setPreviewOpen] = useState(false);
-  const renderCard = useCallback((privacy: boolean) => renderFumbleCard(result!, asOf || Math.floor(result!.scannedAt), display, { privacy }), [result, asOf, display]);
+  // What is hidden (on the page and on the picture) is chosen in the settings, and kept in this browser.
+  const hide = useMemo(
+    () => ({ pnl: settings.hidePnl, roundtrip: settings.hideRoundtrip, fumble: settings.hideFumble, volume: settings.hideVolume, wallet: settings.hideWallet }),
+    [settings.hidePnl, settings.hideRoundtrip, settings.hideFumble, settings.hideVolume, settings.hideWallet],
+  );
+  const renderCard = useCallback(() => renderFumbleCard(result!, asOf || Math.floor(result!.scannedAt), display, { hide }), [result, asOf, display, hide]);
+  // What the picture does not show plainly, said under its buttons, with the way to change it.
+  const named: [string, HideMode | boolean][] = [["PnL", hide.pnl], ["roundtripped", hide.roundtrip], ["fumble", hide.fumble], ["volume", hide.volume]];
+  const maskedNames = [...named.filter(([, m]) => m === "mask").map(([n]) => n), ...(hide.wallet ? ["wallet"] : [])];
+  const leftOut = named.filter(([, m]) => m === "hide").map(([n]) => n);
+  const hiddenNote = maskedNames.length || leftOut.length ? `${[maskedNames.length ? `Shown as ***: ${maskedNames.join(", ")}.` : "", leftOut.length ? `Left out: ${leftOut.join(", ")}.` : ""].filter(Boolean).join(" ")} Change this in Settings.` : undefined;
+  // Every figure left out in the settings: the card has nothing to show but the counts, so it says so and offers the way back.
+  const allHidden = [settings.hidePnl, settings.hideRoundtrip, settings.hideFumble, settings.hideVolume].every((m) => m === "hide");
+  const resetDisplay = () => onSettings({ hidePnl: "show", hideRoundtrip: "show", hideFumble: "show", hideVolume: "show" });
+  const smallTiles = [
+    {
+      mode: settings.hideRoundtrip,
+      render: (className: string) => (
+        <Stat key="roundtrip" label="Roundtripped" coverage={coverage?.roundtrip} what="roundtrip" hidden={settings.hideRoundtrip === "mask"} loading={busy} display={display} dollars={result?.totalRoundTripUsd ?? 0} sols={result?.totalRoundTripSol ?? 0} pending={!result} about="Peak profit minus realized." className={className} />
+      ),
+    },
+    {
+      mode: settings.hideFumble,
+      render: (className: string) => (
+        <Stat key="fumble" label="Fumble" coverage={coverage?.fumble} what="fumble" hidden={settings.hideFumble === "mask"} loading={busy} display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." className={className} />
+      ),
+    },
+    {
+      mode: settings.hideVolume,
+      render: (className: string) => (
+        <Stat key="volume" label="Total volume" hidden={settings.hideVolume === "mask"} loading={busy} display={display} dollars={volume.usd ?? 0} sols={volume.sol} pending={!result && trades.partial} about="Everything bought and sold." className={className} />
+      ),
+    },
+  ].filter((t) => t.mode !== "hide");
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   async function exportSheet() {
@@ -736,7 +846,7 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
   const measuredAt = asOf || Math.floor(result?.scannedAt ?? 0);
   const reach = cov.oldest && measuredAt ? reachSpan(cov.oldest, measuredAt) : null;
   const notes = [
-    partial > 0 ? `Buys for ${partial} ${partial === 1 ? "sell" : "sells"} are older than this window.` : null,
+    partial > 0 ? `No buy found for part of ${partial} ${partial === 1 ? "sell" : "sells"}: bought before this window, or received another way (an airdrop or transfer).` : null,
     result?.ranOutOfTime ? "Ran out of time pricing every coin." : unknown > 0 || unknownPositions > 0 ? "Some coins couldn't be priced." : null,
   ].filter((n): n is string => n !== null);
   // A finished scan that found nothing: one plain message instead of a card of dashes, and nothing to download.
@@ -768,26 +878,33 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
         <RefreshCw className={cn("size-6", busy && "animate-spin")} aria-hidden />
       </button>
       <FumbleSettingsDialog settings={settings} onChange={onSettings} />
-      {/* The headline is the total fumble; the three numbers under it are what it is made of (and the PnL, for the record). */}
-      <Stat label="Total fumble" hero texture loading={busy} display={display} dollars={result?.totalMissedUsd ?? 0} sols={result?.totalMissedSol ?? 0} pending={!result} empty={!!result && result.measured === 0 && !result.positions.some((p) => p.status === "ok")} />
-      <div className="grid border-t border-border sm:grid-cols-3">
-        <Stat label="Missed after selling" loading={busy} display={display} dollars={result?.totalFumbleUsd ?? 0} sols={result?.totalFumbleSol ?? 0} pending={!result} about="Upside missed after you sold." />
-        <Stat
-          label="Roundtripped"
-          loading={busy}
-          display={display}
-          dollars={result?.totalRoundTripUsd ?? 0}
-          sols={result?.totalRoundTripSol ?? 0}
-          pending={!result}
-          empty={!!result && result.positions.length === 0}
-          about="Peak profit minus realized."
-          className="border-t border-border sm:border-t-0 sm:border-l"
-        />
-        <Stat label="PnL" loading={busy} display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? 0} pending={!result} empty={!!result && tracedSells === 0} signed about="Total realized profit." className="border-t border-border sm:border-t-0 sm:border-l" />
-      </div>
+      {/* The headline is the PnL; under it, what was roundtripped, the fumble (upside missed after selling), and how much was traded. Each can be masked (***) or
+          left out in the settings, and the rest closes up. */}
+      {settings.hidePnl !== "hide" && (
+        <Stat label="PnL" hero texture coverage={coverage?.pnl} what="pnl" hidden={settings.hidePnl === "mask"} loading={busy} display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? early?.sol ?? 0} pending={!result && !early} signed />
+      )}
+      {allHidden && (
+        // Nothing is left of the figures: say so, and where it was set. The room on the right is for the refresh and settings buttons in the corner.
+        <div className="flex flex-col gap-1 p-5 pr-28 sm:p-6 sm:pr-28">
+          <p className="text-sm text-muted-foreground">Recap</p>
+          <p className="font-heading text-2xl leading-tight font-bold sm:text-3xl">All details are hidden</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            PnL, roundtripped, fumble and volume are all set to hidden in Settings.{" "}
+            <button type="button" onClick={resetDisplay} className="font-bold text-foreground underline underline-offset-4 hover:text-primary">
+              Reset
+            </button>{" "}
+            the display to see them again.
+          </p>
+        </div>
+      )}
+      {smallTiles.length > 0 && (
+        <div className={cn("grid", settings.hidePnl !== "hide" && "border-t border-border", GRID_COLS[smallTiles.length])}>
+          {smallTiles.map((tile, i) => tile.render(i === 0 ? "" : "border-t border-border sm:border-t-0 sm:border-l"))}
+        </div>
+      )}
       <div className="flex flex-col gap-2 border-t border-border px-5 py-4 text-sm text-muted-foreground sm:px-6">
         <p>
-          <span className="font-bold text-foreground tabular-nums">{trades.trades.length}</span> trades, <span className="font-bold text-foreground tabular-nums">{sells}</span> sells
+          <span className="font-bold text-foreground tabular-nums">{tradeTotal}</span> {tradeTotal === 1 ? "trade" : "trades"}, <span className="font-bold text-foreground tabular-nums">{buys}</span> {buys === 1 ? "buy" : "buys"} and <span className="font-bold text-foreground tabular-nums">{sells}</span> {sells === 1 ? "sell" : "sells"}
           {reach && (
             <>
               , over{" "}
@@ -815,10 +932,17 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
       {/* The two things to take away, set apart from the notes above so they are easy to find. Only once this scan has finished. */}
       {result && (
         <div className="flex flex-wrap items-center gap-3 border-t border-border px-5 py-4 sm:px-6">
-          <button type="button" onClick={() => setPreviewOpen(true)} disabled={busy} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold disabled:opacity-60">
-            <ImageDown className="size-4" aria-hidden /> Download image
-          </button>
-          <ImagePreviewDialog open={previewOpen} title="Your fumble card" fileName={fumbleCardFileName(result)} fileNameFor={(privacy) => fumbleCardFileName(result, privacy)} privacyMode render={renderCard} onClose={() => setPreviewOpen(false)} />
+          {allHidden ? (
+            // With nothing to show there is no picture worth saving; the button puts the numbers back (the wallet's setting is left as it is).
+            <button type="button" onClick={resetDisplay} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold">
+              <RotateCcw className="size-4" aria-hidden /> Reset display
+            </button>
+          ) : (
+            <button type="button" onClick={() => setPreviewOpen(true)} disabled={busy} className="cut-btn cut-btn-solid inline-flex h-10 items-center gap-2 px-5 text-sm font-bold disabled:opacity-60">
+              <ImageDown className="size-4" aria-hidden /> Download image
+            </button>
+          )}
+          <ImagePreviewDialog open={previewOpen} title="Your recap card" fileName={fumbleCardFileName(result, hide)} note={hiddenNote} render={renderCard} onClose={() => setPreviewOpen(false)} />
           <button type="button" onClick={exportSheet} disabled={exporting || busy} className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary disabled:opacity-60">
             <FileSpreadsheet className="size-4" aria-hidden /> {exporting ? "Preparing spreadsheet" : "Download spreadsheet"}
           </button>

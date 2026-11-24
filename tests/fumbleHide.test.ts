@@ -39,7 +39,7 @@ test("hiding every coin leaves nothing in the totals", async () => {
   for (const k of ["totalFumbleSol", "totalFumbleUsd", "totalProfitSol", "totalProfitUsd", "totalRoundTripSol", "totalMissedSol", "totalMissedUsd"] as const) assert.equal(none[k], 0);
 });
 
-test("hiding a coin takes exactly its share out of every total, and the picture's biggest fumble can no longer be it", async () => {
+test("hiding a coin takes exactly its share out of every total, and its sells are gone from the list", async () => {
   const r = await scan();
   const hide = new Set([WIN]);
   const rest = withoutCoins(r, hide);

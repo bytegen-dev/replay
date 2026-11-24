@@ -237,3 +237,64 @@ test("agoShort is one rounded unit: y, mo, w, d, h or m", () => {
   assert.equal(a(365 * D + 3 * 30.44 * D), "1y ago");
   assert.equal(a(365 * D + 8 * 30.44 * D), "2y ago");
 });
+
+test("the profit known before prices: traced sells of shown trades, nothing while history is still being read", async () => {
+  const { earlyProfit } = await import("../src/lib/fumble/view.ts");
+  const pnl = { a: { profitSol: 2, matchedTokens: 5 }, b: { profitSol: -0.5, matchedTokens: 1 }, c: { profitSol: 9, matchedTokens: 0 }, hidden: { profitSol: 100, matchedTokens: 3 } };
+  const trades = [{ signature: "a" }, { signature: "b" }, { signature: "c" }];
+  // The untraced sell (c) and the hidden coin's sell (not in the list) are left out.
+  assert.deepEqual(earlyProfit({ partial: false, trades, pnl }), { count: 2, sol: 1.5 });
+  assert.equal(earlyProfit({ partial: true, trades, pnl }), null);
+  assert.deepEqual(earlyProfit({ partial: false, trades: [], pnl: {} }), { count: 0, sol: 0 });
+});
+
+test("the volume is every trade's SOL, with dollars only when every coin is priced", async () => {
+  const { tradeVolume } = await import("../src/lib/fumble/view.ts");
+  const trades = [{ sol: 1 }, { sol: 2.5 }, { sol: 0.5 }];
+  assert.deepEqual(tradeVolume(trades, null), { sol: 4, usd: null });
+  assert.deepEqual(tradeVolume(trades, [{ boughtUsd: 100, soldUsd: 50 }, { boughtUsd: 10, soldUsd: 0 }]), { sol: 4, usd: 160 });
+  // One coin with a missing price makes the dollar total unknown rather than too low.
+  assert.deepEqual(tradeVolume(trades, [{ boughtUsd: 100, soldUsd: 50 }, { boughtUsd: null, soldUsd: 0 }]), { sol: 4, usd: null });
+  assert.deepEqual(tradeVolume([], []), { sol: 0, usd: 0 });
+});
+
+test("a trade is a position opened by a buy and over when sold out; a sell with no buy is not a trade", async () => {
+  const { countTrades } = await import("../src/lib/fumble/view.ts");
+  const b = (token: string, tokens: number, time: number) => ({ side: "buy" as const, token, tokens, time });
+  const s = (token: string, tokens: number, time: number) => ({ side: "sell" as const, token, tokens, time });
+  // Three buys and two sells of one coin that end sold out: one trade.
+  assert.equal(countTrades([b("A", 10, 1), b("A", 10, 2), b("A", 10, 3), s("A", 15, 4), s("A", 15, 5)]), 1);
+  // Bought again after selling out: a second trade. Another coin still held: a third.
+  assert.equal(countTrades([b("A", 10, 1), s("A", 10, 2), b("A", 5, 3), b("B", 7, 4)]), 3);
+  // A sell with no buy before it opens nothing (the coins may have been airdropped, transferred in, or bought before the history): not a trade.
+  assert.equal(countTrades([s("C", 5, 1), s("C", 5, 2)]), 0);
+  assert.equal(countTrades([s("C", 5, 1), b("C", 5, 2), s("C", 5, 3)]), 1);
+  // Order in the list does not matter, and nothing is no trades.
+  assert.equal(countTrades([s("A", 10, 2), b("A", 10, 1)]), 1);
+  assert.equal(countTrades([]), 0);
+});
+
+test("a figure is full, partial or not there, and a wallet that sold nothing has a true zero, not a gap", async () => {
+  const { figureCoverage, coverageNote } = await import("../src/lib/fumble/view.ts");
+  const sell = (status: "ok" | "unknown", matchedTokens: number) => ({ status, matchedTokens });
+  const pos = (status: "ok" | "unknown") => ({ status });
+  // Nothing sold, nothing closed: all three are whole (and read zero).
+  assert.deepEqual(figureCoverage({ sells: [], positions: [] }), { pnl: { kind: "full" }, fumble: { kind: "full" }, roundtrip: { kind: "full" } });
+  // Everything priced and traced.
+  assert.deepEqual(figureCoverage({ sells: [sell("ok", 1), sell("ok", 2)], positions: [pos("ok")] }).fumble, { kind: "full" });
+  // Some priced: the figure is a floor.
+  const some = figureCoverage({ sells: [sell("ok", 1), sell("unknown", 1), sell("ok", 0)], positions: [pos("ok"), pos("unknown"), pos("unknown")] });
+  assert.deepEqual(some.fumble, { kind: "partial", done: 2, of: 3 });
+  assert.deepEqual(some.pnl, { kind: "partial", done: 2, of: 3 });
+  assert.deepEqual(some.roundtrip, { kind: "partial", done: 1, of: 3 });
+  // None priced: there is no figure.
+  const none = figureCoverage({ sells: [sell("unknown", 0), sell("unknown", 0)], positions: [pos("unknown")] });
+  assert.deepEqual([none.pnl.kind, none.fumble.kind, none.roundtrip.kind], ["none", "none", "none"]);
+  // The words under them.
+  assert.equal(coverageNote({ kind: "full" }, "fumble"), null);
+  assert.equal(coverageNote({ kind: "partial", done: 3, of: 5 }, "roundtrip"), "3 of 5 positions priced");
+  assert.equal(coverageNote({ kind: "partial", done: 3, of: 5 }, "fumble"), "3 of 5 sells priced");
+  assert.equal(coverageNote({ kind: "partial", done: 3, of: 5 }, "pnl"), "3 of 5 sells traced to a buy");
+  assert.equal(coverageNote({ kind: "none" }, "pnl"), "No buys found for these sells.");
+  assert.equal(coverageNote({ kind: "none" }, "fumble"), "Couldn't be priced. Refresh to try again.");
+});

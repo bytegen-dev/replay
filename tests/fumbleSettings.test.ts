@@ -78,3 +78,18 @@ test("a saved pair that breaks the rule is put right when it is read", () => {
   const two = parseSettings('{"currency":"EUR","second":"GBP"}');
   assert.deepEqual([two.currency, two.second], ["EUR", "SOL"]);
 });
+
+test("each number is shown, masked or hidden, defaulting to shown, and the wallet is only shown or masked", () => {
+  const d = DEFAULT_SETTINGS;
+  assert.deepEqual([d.hidePnl, d.hideRoundtrip, d.hideFumble, d.hideVolume, d.hideWallet], ["show", "show", "show", "show", false]);
+  const kept = parseSettings(JSON.stringify({ hidePnl: "mask", hideRoundtrip: "hide", hideFumble: "show", hideVolume: "hide", hideWallet: true }));
+  assert.deepEqual([kept.hidePnl, kept.hideRoundtrip, kept.hideFumble, kept.hideVolume, kept.hideWallet], ["mask", "hide", "show", "hide", true]);
+  // Anything else is "show" and false.
+  const junk = parseSettings(JSON.stringify({ hidePnl: "yes", hideRoundtrip: 0, hideFumble: null, hideVolume: "HIDE", hideWallet: "true" }));
+  assert.deepEqual([junk.hidePnl, junk.hideRoundtrip, junk.hideFumble, junk.hideVolume, junk.hideWallet], ["show", "show", "show", "show", false]);
+});
+
+test("settings saved when the choice was only on or off still load: on means masked", () => {
+  const old = parseSettings(JSON.stringify({ hidePnl: true, hideRoundtrip: false, hideFumble: true, hideWallet: true }));
+  assert.deepEqual([old.hidePnl, old.hideRoundtrip, old.hideFumble, old.hideVolume, old.hideWallet], ["mask", "show", "mask", "show", true]);
+});

@@ -1,4 +1,4 @@
-import { fetchRetry, makeLimiter, NetError, type Fetch, type Sleep } from "./net.ts";
+import { fetchRetry, isLimitError, makeLimiter, NetError, saysLimit, type Fetch, type Sleep } from "./net.ts";
 import { priceAt } from "./fumble.ts";
 import type { Candle } from "./types.ts";
 
@@ -76,7 +76,7 @@ export function birdeyeProvider(apiKey: string, deps: ProviderDeps = {}, minGapM
       const url = `https://public-api.birdeye.so/defi/ohlcv?address=${encodeURIComponent(mint)}&type=${step.type}&time_from=${Math.floor(fromTime - step.seconds)}&time_to=${Math.floor(nowTime)}`;
       const res = await fetchRetry(fetchImpl, url, { headers: { "X-API-KEY": apiKey, "x-chain": "solana", accept: "application/json" } }, { sleep: deps.sleep });
       if (res.status === 404) return null;
-      if (!res.ok) throw new NetError(res.status, "public-api.birdeye.so");
+      if (!res.ok) throw new NetError(res.status, "public-api.birdeye.so", saysLimit(await res.text().catch(() => "")));
       const candles = parseBirdeye(await res.json());
       return candles && candles.length ? candles : null;
     });
@@ -133,7 +133,7 @@ export function geckoProvider(deps: ProviderDeps = {}, minGapMs = 2200): CandleP
   const get = async (path: string) => {
     const res = await fetchRetry(fetchImpl, `https://api.geckoterminal.com/api/v2${path}`, { headers: { accept: "application/json" } }, { sleep: deps.sleep });
     if (res.status === 404) return null;
-    if (!res.ok) throw new NetError(res.status, "api.geckoterminal.com");
+    if (!res.ok) throw new NetError(res.status, "api.geckoterminal.com", saysLimit(await res.text().catch(() => "")));
     return res.json() as Promise<unknown>;
   };
   return async (mint, fromTime, nowTime) => {
@@ -149,14 +149,15 @@ export function geckoProvider(deps: ProviderDeps = {}, minGapMs = 2200): CandleP
 /* ------------------------------ putting them together ------------------------------ */
 
 /** Tries each provider in turn: the first to return candles wins. A provider that fails or has nothing for the token is skipped. Null when none had it. */
-export function firstOf(providers: { name: string; get: CandleProvider }[]) {
+export function firstOf(providers: { name: string; get: CandleProvider }[], onLimit?: (provider: string) => void) {
   return async (mint: string, fromTime: number, nowTime: number): Promise<PriceSeries | null> => {
     for (const p of providers) {
       try {
         const candles = await p.get(mint, fromTime, nowTime);
         if (candles && candles.length) return { candles, source: p.name };
-      } catch {
-        /* this provider is down or limited: try the next */
+      } catch (e) {
+        /* this provider is down or limited: try the next; a limit is reported, so the page can say the system is busy */
+        if (isLimitError(e)) onLimit?.(p.name);
       }
     }
     return null;

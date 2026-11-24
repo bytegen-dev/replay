@@ -123,7 +123,7 @@ export default function LandingPage() {
               text="Paste a Solana wallet to see what you missed. Or pick any stock, coin or currency and a date to see what a buy would be worth today."
             />
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <a href="#fumble" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center px-7 text-base font-bold">
+              <a href="#recap" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center px-7 text-base font-bold">
                 Check your wallet
               </a>
               <Link href="/docs" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
@@ -151,7 +151,7 @@ export default function LandingPage() {
 
         {/* The fumble checker, on a band that runs the full width of the screen: a dot grid with a sweep of light across it
             and hairlines top and bottom, so it reads as a place of its own. */}
-        <section id="fumble" className="relative isolate scroll-mt-20 overflow-hidden border-y border-border py-14 sm:py-24">
+        <section id="recap" className="relative isolate scroll-mt-20 overflow-hidden border-y border-border py-14 sm:py-24">
           <div aria-hidden className="band-surface pointer-events-none absolute inset-0 -z-10" />
           <BandDots className="pointer-events-none absolute -z-10" />
           <div className={section}>
@@ -162,7 +162,7 @@ export default function LandingPage() {
                 intro={
                   <div className="flex max-w-2xl flex-col gap-2">
                     <h2 className={h2}>What did your wallet miss?</h2>
-                    <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table, and how much profit it roundtripped." />
+                    <SpotlightText className="text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what it made, what every sell left on the table, and how much profit it roundtripped." />
                   </div>
                 }
                 aside={<FumbleVisual />}

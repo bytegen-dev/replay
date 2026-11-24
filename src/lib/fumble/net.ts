@@ -10,10 +10,23 @@ export const realSleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** An error that never carries the request URL: some APIs take the key in the URL, and a key must not reach a log. */
 export class NetError extends Error {
   status: number;
-  constructor(status: number, host: string) {
+  /** The API said it is out of quota or credits (some answer 400 or 403 for that, with the reason only in the body). */
+  limited: boolean;
+  constructor(status: number, host: string, limited = false) {
     super(`${host} answered ${status}`);
     this.status = status;
+    this.limited = limited;
   }
+}
+
+/** Whether a failure means an API is out of room (too many requests, or its quota is used up), as opposed to being down or not knowing the coin. */
+export function isLimitError(e: unknown): boolean {
+  return e instanceof NetError && (e.limited || e.status === 429 || e.status === 402);
+}
+
+/** Whether an error answer's text says the quota or credits are used up. Only the first part of the body is looked at, and it is never kept. */
+export function saysLimit(body: string): boolean {
+  return /usage limit|rate limit|quota|compute units|credits|too many requests/i.test(body.slice(0, 500));
 }
 
 /**

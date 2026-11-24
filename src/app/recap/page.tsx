@@ -4,14 +4,15 @@ import { RollText } from "@/components/RollText";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SpotlightText } from "@/components/SpotlightText";
+import { RECAP_NAME } from "@/lib/recapName.ts";
 import { pageMeta } from "@/lib/site.ts";
 
-const TITLE = "Fumble check: what your Solana sells left on the table";
-const DESCRIPTION = "Paste a Solana wallet. See every coin it sold, how much more those coins were worth afterwards, and how much profit it roundtripped.";
+const TITLE = `${RECAP_NAME}: what your Solana trades made, and what they left on the table`;
+const DESCRIPTION = "Paste a Solana wallet. See what it made, what every sell left on the table, and how much profit it roundtripped.";
 
-export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} | Replay`, description: DESCRIPTION, path: "/fumble" });
+export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} | Replay`, description: DESCRIPTION, path: "/recap" });
 
-export default function FumblePage() {
+export default function RecapPage() {
   return (
     <div className="flex w-full flex-1 flex-col">
       {/* The header and the page together fill exactly one screen, so the footer starts right at the fold and is only seen by scrolling down. On a very
@@ -26,9 +27,9 @@ export default function FumblePage() {
             intro={
               <div className="flex flex-col gap-2">
                 <h1 className="font-heading text-4xl font-medium tracking-tight sm:text-6xl">
-                  <RollText text="Fumble check" introDelay={60} wide={[10]} glitch />
+                  <RollText text={RECAP_NAME} introDelay={60} wide={[2]} glitch />
                 </h1>
-                <SpotlightText className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what every sell left on the table, and how much profit it roundtripped." />
+                <SpotlightText className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what it made, what every sell left on the table, and how much profit it roundtripped." />
               </div>
             }
           />
