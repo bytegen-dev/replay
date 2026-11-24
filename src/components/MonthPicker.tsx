@@ -56,7 +56,7 @@ function Grid({ value, onChange, min, max, minYear: floorYear = MIN_YEAR }: Pick
           <SelectTrigger aria-label="Year" className="h-8 w-24 justify-center gap-1 rounded-none font-bold tabular-nums">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="max-h-64 rounded-none border border-border bg-popover ring-0">
+          <SelectContent position="popper" className="max-h-64 rounded-none border border-border bg-popover ring-0">
             {Array.from({ length: maxYear - minYear + 1 }, (_, i) => maxYear - i).map((y) => (
               <SelectItem key={y} value={String(y)} className="rounded-none tabular-nums">
                 {y}

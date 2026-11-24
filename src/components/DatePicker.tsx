@@ -48,7 +48,7 @@ function Calendar({ selected, min, onPick }: { selected: string | null; min?: st
             <SelectTrigger aria-label="Month" className="h-8 w-28 justify-center gap-1 rounded-none font-bold">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="max-h-64 rounded-none border border-border bg-popover ring-0">
+            <SelectContent position="popper" className="max-h-64 rounded-none border border-border bg-popover ring-0">
               {LONG.map((m, i) => (
                 <SelectItem key={m} value={String(i)} disabled={(year === maxYear && i > today.getUTCMonth()) || (year === floorYear && i < floorMonth)} className="rounded-none">
                   {m}
@@ -68,7 +68,7 @@ function Calendar({ selected, min, onPick }: { selected: string | null; min?: st
             <SelectTrigger aria-label="Year" className="-ml-px h-8 w-20 justify-center gap-1 rounded-none font-bold tabular-nums">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="max-h-64 rounded-none border border-border bg-popover ring-0">
+            <SelectContent position="popper" className="max-h-64 rounded-none border border-border bg-popover ring-0">
               {Array.from({ length: maxYear - floorYear + 1 }, (_, i) => maxYear - i).map((y) => (
                 <SelectItem key={y} value={String(y)} className="rounded-none tabular-nums">
                   {y}
