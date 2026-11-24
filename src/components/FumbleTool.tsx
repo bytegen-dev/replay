@@ -407,8 +407,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
 
       {trades && (
         <>
-          <Summary trades={viewTrades ?? trades} result={viewResult} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
-          <CoinTable
+          <Summary trades={viewTrades ?? trades} result={viewResult} noTrades={!!result && trades.trades.length === 0} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
+          {!(result && trades.trades.length === 0) && <CoinTable
             coins={shown}
             tokens={trades.tokens}
             done={status === "done"}
@@ -420,7 +420,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             }}
             onShowHidden={() => setHidden((h) => new Set([...h].filter((k) => !k.startsWith(`${trades.wallet}:`))))}
             onShare={setSharing}
-          />
+          />}
           {toast && (
             <Toast
               message={`${toast.ticker} hidden, and out of the totals.`}
@@ -601,7 +601,7 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
   );
 }
 
-function Summary({ trades, result, asOf, display, settings, onSettings, busy, onRefresh }: { trades: ApiTrades; result: ApiResult | null; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void; busy: boolean; onRefresh: () => void }) {
+function Summary({ trades, result, noTrades, asOf, display, settings, onSettings, busy, onRefresh }: { trades: ApiTrades; result: ApiResult | null; noTrades: boolean; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void; busy: boolean; onRefresh: () => void }) {
   const unknown = result?.unknown ?? 0;
   const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
@@ -630,6 +630,18 @@ function Summary({ trades, result, asOf, display, settings, onSettings, busy, on
     partial > 0 ? `Buys for ${partial} ${partial === 1 ? "sell" : "sells"} are older than this window.` : null,
     result?.ranOutOfTime ? "Ran out of time pricing every coin." : unknown > 0 || unknownPositions > 0 ? "Some coins couldn't be priced." : null,
   ].filter((n): n is string => n !== null);
+  // A finished scan that found nothing: one plain message instead of a card of dashes, and nothing to download.
+  if (noTrades)
+    return (
+      <section aria-label="Summary" className="cut-card border border-border bg-card px-5 py-6 sm:px-6">
+        <button type="button" onClick={onRefresh} disabled={busy} aria-label="Refresh" title="Look for new trades" className="absolute top-2 right-[3.25rem] z-20 flex size-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60">
+          <RefreshCw className={cn("size-6", busy && "animate-spin")} aria-hidden />
+        </button>
+        <FumbleSettingsDialog settings={settings} onChange={onSettings} />
+        <p className="pr-24 font-heading text-xl font-bold">No trades to show</p>
+        <p className="mt-2 max-w-xl pr-6 text-sm text-muted-foreground">No buys or sells of 0.1 SOL or more, paid in SOL, USDC or USDT, in this wallet&rsquo;s history.</p>
+      </section>
+    );
   return (
     <section aria-label="Summary" className="cut-card pulse-hover border border-border bg-card" style={{ "--pulse-speed": "6s" } as React.CSSProperties}>
       {/* Refresh sits beside the settings gear: it looks for trades made since this scan, and only the new transactions are read, so it is quick. */}
