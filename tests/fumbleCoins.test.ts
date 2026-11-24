@@ -80,3 +80,21 @@ test("money follows the chosen currency, and falls back to SOL without a dollar 
   assert.equal(sol.entry, "0.01 SOL");
   assert.equal(unitPrice(showIn(USD_UNIT, null), 0.01, null), "0.01 SOL");
 });
+
+test("each coin's fumble and roundtrip are its own sells' and positions', counted apart, with how many could be priced", async () => {
+  const { coinParts } = await import("../src/lib/fumble/coins.ts");
+  const sell = (token: string, status: "ok" | "unknown", fumbleSol?: number, fumbleUsd?: number) => ({ signature: "s", token, soldAt: 1, tokens: 1, soldSol: 1, matchedTokens: 1, costSol: 1, profitSol: 0, status, fumbleSol, fumbleUsd });
+  const position = (token: string, status: "ok" | "unknown", roundTripSol?: number, roundTripUsd?: number) => ({ token, openedAt: 1, closedAt: 2, closedBy: "p", costSol: 1, proceedsSol: 1, status, roundTripSol, roundTripUsd });
+  const sells = [sell("A", "ok", 1, 100), sell("A", "ok", 2, 200), sell("A", "unknown"), sell("B", "ok", 5, 500)];
+  const positions = [position("A", "ok", 0.5, 50), position("B", "unknown"), position("B", "ok", 0.25)];
+  const a = coinParts("A", { sells: sells as never, positions: positions as never });
+  // A: two of three sells priced, and the one position priced.
+  assert.deepEqual(a.fumble, { sol: 3, usd: 300, done: 2, of: 3 });
+  assert.deepEqual(a.roundtrip, { sol: 0.5, usd: 50, done: 1, of: 1 });
+  // B: one position priced and one not; the priced one has no dollar value, so the dollar total is unknown, not too low.
+  const b = coinParts("B", { sells: sells as never, positions: positions as never });
+  assert.deepEqual(b.fumble, { sol: 5, usd: 500, done: 1, of: 1 });
+  assert.deepEqual(b.roundtrip, { sol: 0.25, usd: null, done: 1, of: 2 });
+  // A coin with nothing sold or closed has nothing behind either figure.
+  assert.deepEqual(coinParts("C", { sells: sells as never, positions: positions as never }), { fumble: { sol: 0, usd: 0, done: 0, of: 0 }, roundtrip: { sol: 0, usd: 0, done: 0, of: 0 } });
+});

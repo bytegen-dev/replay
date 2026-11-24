@@ -10,7 +10,7 @@ import { isCurrency } from "../fxCurrencies.ts";
  *  - perLoad: how many trades a scan reads at a time, and each "load more".
  *  - hidePnl, hideRoundtrip, hideFumble, hideVolume: what to do with each of those numbers, on the page and on the pictures: "show" it (the default),
  *    "mask" it (drawn as ***, so it is clear something is there) or "hide" it (left out, and the rest closes up). The PnL also covers the best trade on the
- *    picture; the fumble covers the fumble figure and the Fumbled column.
+ *    picture; each also covers its column in the table (PnL, Roundtripped, Fumbled).
  *  - hideWallet: the wallet address is shown, or dotted out in the box and drawn as *** on the picture. There is nothing to leave out, so no "hide".
  */
 export const SETTINGS_KEY = "replay-fumble-settings";

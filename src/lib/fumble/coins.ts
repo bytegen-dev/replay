@@ -1,5 +1,5 @@
 import { figure, type Display } from "./money.ts";
-import type { ApiCoin, ApiTrade } from "./service.ts";
+import type { ApiCoin, ApiPosition, ApiSell, ApiTrade } from "./service.ts";
 
 /**
  * The trades by coin: one row per coin the wallet traded, not one per transaction. A row says what was bought (in money and in tokens), what was
@@ -12,6 +12,17 @@ import type { ApiCoin, ApiTrade } from "./service.ts";
 
 /** What is known about each sell's profit: the SOL made on the matched part, and how many of the tokens sold were matched to a buy. */
 export type SellProfits = Record<string, { profitSol: number; matchedTokens: number }>;
+
+/**
+ * One coin's share of the fumble, or of the roundtrip, once prices are in: the money (SOL, and dollars when every piece has a dollar value), how many of the
+ * pieces behind it (its sells for the fumble, its closed positions for the roundtrip) could be priced, and how many there are.
+ */
+export interface CoinPart {
+  sol: number;
+  usd: number | null;
+  done: number;
+  of: number;
+}
 
 export interface CoinRow {
   mint: string;
@@ -36,12 +47,36 @@ export interface CoinRow {
   costUnknown: boolean;
   /** What the scan worked out with prices (dollars, and the total fumble of this coin), once the scan has finished. */
   extra: ApiCoin | null;
+  /** The upside missed after selling this coin, and the profit on it given back (a closed position that peaked above where it ended). Null until the scan has finished. */
+  fumble: CoinPart | null;
+  roundtrip: CoinPart | null;
+}
+
+/** The sells' fumbles and the positions' roundtrips, added up for one coin. A sell or position that could not be priced adds nothing to the money but is counted in `of`. */
+export function coinParts(mint: string, parts: { sells: ApiSell[]; positions: ApiPosition[] }): { fumble: CoinPart; roundtrip: CoinPart } {
+  const sells = parts.sells.filter((x) => x.token === mint);
+  const positions = parts.positions.filter((p) => p.token === mint);
+  const fumble: CoinPart = { sol: 0, usd: 0, done: 0, of: sells.length };
+  for (const x of sells) {
+    if (x.status !== "ok") continue;
+    fumble.done += 1;
+    fumble.sol += x.fumbleSol ?? 0;
+    fumble.usd = fumble.usd !== null && x.fumbleUsd !== undefined ? fumble.usd + x.fumbleUsd : null;
+  }
+  const roundtrip: CoinPart = { sol: 0, usd: 0, done: 0, of: positions.length };
+  for (const p of positions) {
+    if (p.status !== "ok") continue;
+    roundtrip.done += 1;
+    roundtrip.sol += p.roundTripSol ?? 0;
+    roundtrip.usd = roundtrip.usd !== null && p.roundTripUsd !== undefined ? roundtrip.usd + p.roundTripUsd : null;
+  }
+  return { fumble, roundtrip };
 }
 
 /** A balance under this share of what was bought counts as sold out: selling "everything" leaves dust. */
 const DUST = 0.005;
 
-export function coinRows(trades: ApiTrade[], profits: SellProfits, extras: ApiCoin[] | null = null): CoinRow[] {
+export function coinRows(trades: ApiTrade[], profits: SellProfits, extras: ApiCoin[] | null = null, parts: { sells: ApiSell[]; positions: ApiPosition[] } | null = null): CoinRow[] {
   const extraBy = new Map((extras ?? []).map((c) => [c.token, c]));
   const by = new Map<string, ApiTrade[]>();
   for (const t of trades) by.set(t.token, [...(by.get(t.token) ?? []), t]);
@@ -96,6 +131,7 @@ export function coinRows(trades: ApiTrade[], profits: SellProfits, extras: ApiCo
       profitPct: worked && known > 0 && matchedCost > 0 ? profit / matchedCost : null,
       costUnknown: worked && known === 0,
       extra: extraBy.get(mint) ?? null,
+      ...(parts ? coinParts(mint, parts) : { fumble: null, roundtrip: null }),
     });
   }
   return out.sort((a, b) => b.lastAt - a.lastAt);

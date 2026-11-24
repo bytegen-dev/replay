@@ -4,7 +4,7 @@ import { Eye, EyeOff, Share } from "lucide-react";
 import { useRef, useState } from "react";
 import { Hint } from "@/components/Hint";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { coinMoney, compactAmount, type CoinRow } from "@/lib/fumble/coins.ts";
+import { coinMoney, compactAmount, type CoinPart, type CoinRow } from "@/lib/fumble/coins.ts";
 import type { Display } from "@/lib/fumble/money.ts";
 import { figure } from "@/lib/fumble/money.ts";
 import type { ApiTrades } from "@/lib/fumble/service.ts";
@@ -20,7 +20,7 @@ const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { year: "
  * stays put when it scrolls sideways. One row per coin: what was bought and sold (money, with the token amounts under), the average entry and exit,
  * what is left, the PnL and the total fumble, and two buttons: hide the coin, and share its PnL as a picture. On a phone the table scrolls sideways, with the token column staying put.
  */
-export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare, pnlMode = "show", fumbleMode = "show" }: {
+export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare, pnlMode = "show", roundtripMode = "show", fumbleMode = "show" }: {
   coins: CoinRow[];
   tokens: ApiTrades["tokens"];
   /** The scan has finished: the fumble column can say what it found, and an unworked profit is unknown rather than still coming. */
@@ -33,8 +33,9 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
   onHide: (mint: string) => void;
   onShowHidden: () => void;
   onShare: (coin: CoinRow) => void;
-  /** What to do with the PnL column and the Fumbled column: show the figures, draw them as ***, or leave the column out. */
+  /** What to do with the PnL, Roundtripped and Fumbled columns: show the figures, draw them as ***, or leave the column out. */
   pnlMode?: HideMode;
+  roundtripMode?: HideMode;
   fumbleMode?: HideMode;
 }) {
   const box = useRef<HTMLElement>(null);
@@ -70,6 +71,7 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
             <TableHead className={cn(head, "text-right")}>Avg exit</TableHead>
             <TableHead className={cn(head, "text-right")}>Balance</TableHead>
             {pnlMode !== "hide" && <TableHead className={cn(head, "text-right")}>PnL</TableHead>}
+            {roundtripMode !== "hide" && <TableHead className={cn(head, "text-right")}>Roundtripped</TableHead>}
             {fumbleMode !== "hide" && <TableHead className={cn(head, "text-right")}>Fumbled</TableHead>}
             <TableHead className={cn(head, "text-right")}>Opened</TableHead>
             <TableHead className={cn(head, "text-right")}>Actions</TableHead>
@@ -98,9 +100,14 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
                     <Pnl coin={c} display={display} done={done} hide={pnlMode === "mask"} />
                   </TableCell>
                 )}
+                {roundtripMode !== "hide" && (
+                  <TableCell className="text-right whitespace-nowrap">
+                    <Part coin={c} part={c.roundtrip} noun="positions" display={display} done={done} hide={roundtripMode === "mask"} />
+                  </TableCell>
+                )}
                 {fumbleMode !== "hide" && (
                   <TableCell className="text-right whitespace-nowrap">
-                    <Fumbled coin={c} display={display} done={done} hide={fumbleMode === "mask"} />
+                    <Part coin={c} part={c.fumble} noun="sells" display={display} done={done} hide={fumbleMode === "mask"} />
                   </TableCell>
                 )}
                 <TableCell className="text-right whitespace-nowrap tabular-nums">
@@ -188,18 +195,25 @@ function Pnl({ coin, display, done, hide }: { coin: CoinRow; display: Display; d
   );
 }
 
-/** The coin's total fumble. A coin with nothing measurable is a dash; one still being priced pulses. */
-function Fumbled({ coin, display, done, hide }: { coin: CoinRow; display: Display; done: boolean; hide: boolean }) {
-  if (coin.soldTokens === 0) return <Dash />;
-  const e = coin.extra;
-  if (!e) return done ? <Dash /> : <span className="animate-pulse text-muted-foreground">Pricing</span>;
-  if (e.missedSol <= 0) return <span className="text-muted-foreground">None</span>;
+/**
+ * One coin's fumble (the upside missed after its sells) or roundtrip (the profit its closed positions gave back), in words where there is no figure:
+ * "Open" while nothing is sold or closed, "Pricing" while prices come, "Not priced" when none could be found, "None" when it came to nothing. A figure
+ * that only some of the sells or positions could be priced for says how many, under it.
+ */
+function Part({ coin, part, noun, display, done, hide }: { coin: CoinRow; part: CoinPart | null; noun: string; display: Display; done: boolean; hide: boolean }) {
+  const word = (text: string) => <span className="text-muted-foreground">{text}</span>;
+  if (coin.soldTokens === 0) return word("Open");
+  if (!part) return done ? word("Not priced") : <span className="animate-pulse text-muted-foreground">Pricing</span>;
+  if (part.of === 0) return word(coin.balance > 0 ? "Open" : "None");
+  if (part.done === 0) return word("Not priced");
+  if (part.sol <= 0) return word("None");
   if (hide) return <span className="block font-bold tabular-nums text-muted-foreground">***</span>;
-  const f = figure(display, e.missedSol, e.missedUsd === 0 ? null : e.missedUsd);
+  const f = figure(display, part.sol, part.usd === null || part.usd === 0 ? null : part.usd);
   return (
     <>
       <span className="block font-bold tabular-nums text-destructive">{f.main}</span>
       {f.sub && <span className="block text-xs whitespace-nowrap text-muted-foreground">{f.sub}</span>}
+      {part.done < part.of && <span className="block text-xs whitespace-nowrap text-muted-foreground">{part.done} of {part.of} {noun} priced</span>}
     </>
   );
 }

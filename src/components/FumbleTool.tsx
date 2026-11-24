@@ -340,7 +340,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const allCoins = useMemo(() => {
     if (!trades) return [];
     const profits = result ? Object.fromEntries(result.sells.map((x) => [x.signature, { profitSol: x.profitSol, matchedTokens: x.matchedTokens }])) : trades.pnl;
-    return coinRows(trades.trades, profits, result?.coins ?? null);
+    return coinRows(trades.trades, profits, result?.coins ?? null, result ? { sells: result.sells, positions: result.positions } : null);
   }, [trades, result]);
   const keyOf = (mint: string) => `${trades?.wallet}:${mint}`;
   const shown = allCoins.filter((c) => !hidden.has(keyOf(c.mint)) && (!settings.sellsOnly || c.soldTokens > 0));
@@ -519,6 +519,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             onShowHidden={() => setHidden((h) => new Set([...h].filter((k) => !k.startsWith(`${trades.wallet}:`))))}
             onShare={setSharing}
             pnlMode={settings.hidePnl}
+            roundtripMode={settings.hideRoundtrip}
             fumbleMode={settings.hideFumble}
           />}
           {toast && (
@@ -769,7 +770,7 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
                 <HideButton label="Wallet" mode={settings.hideWallet ? "mask" : "show"} cycle={["show", "mask"]} onChange={(m) => onChange({ hideWallet: m === "mask" })} />
               </div>
             </div>
-            <p className="text-xs leading-snug text-muted-foreground">PnL also covers the best trade on the picture, and Fumble the Fumbled column in the table. A masked wallet is dotted out in the box until you click it.</p>
+            <p className="text-xs leading-snug text-muted-foreground">PnL also covers the best trade on the picture. PnL, Roundtripped and Fumble each also cover their column in the table. A masked wallet is dotted out in the box until you click it.</p>
           </div>
         </div>
       </DialogContent>
