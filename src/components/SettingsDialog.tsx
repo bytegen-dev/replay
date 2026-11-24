@@ -6,6 +6,7 @@ import { useSettings } from "@/components/SettingsProvider";
 import { ThemeSelector } from "@/components/ThemeSelector";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { FEATURE_REQUEST_HREF, SUPPORT_HREF } from "@/lib/contact.ts";
 import { DEFAULT_SETTINGS } from "@/lib/settings.ts";
 import { isTiingoKey } from "@/lib/tiingo.ts";
 import { getTiingoKey, setTiingoKey } from "@/lib/userKeys.ts";
@@ -133,7 +134,7 @@ export function SettingsDialog() {
       <DialogContent>
         <div className="flex flex-col gap-1 pr-6">
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>Saved in this browser. Changes apply straight away.</DialogDescription>
+          <DialogDescription>Make changes to fit your preferences. They&rsquo;re saved in this browser.</DialogDescription>
         </div>
 
         <div className="divide-y divide-border">
@@ -150,15 +151,25 @@ export function SettingsDialog() {
           <StockKey />
         </div>
 
-        <button
-          type="button"
-          disabled={!changed}
-          onClick={reset}
-          className="flex items-center gap-2 self-start text-sm text-muted-foreground underline-offset-4 transition-opacity hover:text-foreground hover:underline disabled:opacity-40"
-        >
-          <RotateCcw className="size-3.5" aria-hidden />
-          Reset to defaults
-        </button>
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3 text-sm">
+          <button
+            type="button"
+            disabled={!changed}
+            onClick={reset}
+            className="flex items-center gap-2 text-muted-foreground underline-offset-4 transition-opacity hover:text-foreground hover:underline disabled:opacity-40"
+          >
+            <RotateCcw className="size-3.5" aria-hidden />
+            Reset to defaults
+          </button>
+          <span className="flex items-center gap-5">
+            <a href={FEATURE_REQUEST_HREF} target="_blank" rel="noopener noreferrer" className="text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+              Request a feature
+            </a>
+            <a href={SUPPORT_HREF} className="text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+              Support
+            </a>
+          </span>
+        </div>
       </DialogContent>
     </Dialog>
   );

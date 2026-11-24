@@ -4,6 +4,7 @@ import { FooterScrub } from "@/components/FooterScrub";
 import { GameLink } from "@/components/GameLink";
 import { SettingsDialog } from "@/components/SettingsDialog";
 import { ThemeSelector } from "@/components/ThemeSelector";
+import { SUPPORT_HREF } from "@/lib/contact.ts";
 
 const PAGES = [
   { label: "Wayback", href: "/wayback" },
@@ -46,6 +47,9 @@ export function SiteFooter() {
                 {l.label}
               </a>
             ))}
+            <a href={SUPPORT_HREF} className={link}>
+              Support
+            </a>
           </nav>
         </div>
 
