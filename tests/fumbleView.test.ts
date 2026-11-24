@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ApiPosition, ApiSell, ApiTrade } from "../src/lib/fumble/service.ts";
-import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, reachSpan, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
+import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, ago, agoShort, reachSpan, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
 
 const trade = (signature: string, side: "buy" | "sell", time = 1): ApiTrade => ({ signature, side, token: "M".repeat(44), tokens: 100, sol: 1, time });
 const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
@@ -193,4 +193,47 @@ test("the hover says the whole span in hours, or in minutes under an hour, and a
   assert.equal(reachSpan(now - 30, now).full, "1 minute");
   assert.equal(reachSpan(now - 800 * D, now).full, "19,200 hours");
   assert.deepEqual(reachSpan(now + 500, now), { label: "less than a minute", full: "1 minute" });
+});
+
+test("ago reads as the two biggest units, whole years from a year and seven months, and just now under a minute", () => {
+  const now = 2_000_000_000;
+  const M = 60;
+  const H = 3600;
+  const D = 86400;
+  const a = (seconds: number) => ago(now - seconds, now);
+  assert.equal(a(20), "just now");
+  assert.equal(a(5 * M), "5 minutes ago");
+  assert.equal(a(H), "1 hour ago");
+  assert.equal(a(2 * H + 15 * M), "2 hours 15 minutes ago");
+  assert.equal(a(3 * D), "3 days ago");
+  assert.equal(a(3 * D + 4 * H), "3 days 4 hours ago");
+  assert.equal(a(2 * 7 * D + 6 * D), "2 weeks 6 days ago");
+  assert.equal(a(5 * 30.44 * D + 2 * 7 * D + 3600), "5 months 2 weeks ago");
+  assert.equal(a(3 * 30.44 * D + 3600), "3 months ago");
+  assert.equal(a(365 * D + 3 * 30.44 * D + 3600), "1 year 3 months ago");
+  assert.equal(a(365 * D + 8 * 30.44 * D), "2 years ago");
+  assert.equal(a(3 * 365 * D + 40 * D), "3 years ago");
+  assert.equal(ago(now + 500, now), "just now");
+});
+
+test("agoShort is one rounded unit: y, mo, w, d, h or m", () => {
+  const now = 2_000_000_000;
+  const M = 60;
+  const H = 3600;
+  const D = 86400;
+  const a = (seconds: number) => agoShort(now - seconds, now);
+  assert.equal(a(20), "just now");
+  assert.equal(a(5 * M), "5m ago");
+  assert.equal(a(59.6 * M), "1h ago");
+  assert.equal(a(2 * H + 15 * M), "2h ago");
+  assert.equal(a(23.6 * H), "1d ago");
+  assert.equal(a(3 * D + 4 * H), "3d ago");
+  assert.equal(a(6.6 * D), "1w ago");
+  assert.equal(a(2 * 7 * D + 6 * D), "3w ago");
+  assert.equal(a(75 * D), "2mo ago", "2 months 2 weeks");
+  assert.equal(a(88 * D), "3mo ago", "2 months 4 weeks");
+  assert.equal(a(5 * 30.44 * D + 2 * 7 * D), "5mo ago");
+  assert.equal(a(11.6 * 30.44 * D), "1y ago");
+  assert.equal(a(365 * D + 3 * 30.44 * D), "1y ago");
+  assert.equal(a(365 * D + 8 * 30.44 * D), "2y ago");
 });

@@ -114,7 +114,7 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
   const closing = new Map(r.positions.map((p) => [p.closedBy, p]));
 
   /* ---- Trades: one row per coin, the same columns as the table on the page (without its buttons) ---- */
-  co.addRow(["Coin", "Name", "First trade (UTC)", "Last trade (UTC)", "Bought (SOL)", "Bought (USD)", "Tokens bought", "Sold (SOL)", "Sold (USD)", "Tokens sold", "Avg entry (SOL)", "Avg exit (SOL)", "Avg entry (USD)", "Avg exit (USD)", "Balance (tokens)", "PnL (SOL)", "PnL (USD)", "PnL (%)", "Fumbled (SOL)", "Fumbled (USD)", "Note", "Coin address"]);
+  co.addRow(["Coin", "Name", "Position opened (UTC)", "Last trade (UTC)", "Bought (SOL)", "Bought (USD)", "Tokens bought", "Sold (SOL)", "Sold (USD)", "Tokens sold", "Avg entry (SOL)", "Avg exit (SOL)", "Avg entry (USD)", "Avg exit (USD)", "Balance (tokens)", "PnL (SOL)", "PnL (USD)", "PnL (%)", "Fumbled (SOL)", "Fumbled (USD)", "Note", "Coin address"]);
   co.getRow(1).font = BOLD;
   co.views = [{ state: "frozen", ySplit: 1 }];
   const profits = Object.fromEntries(r.sells.map((x) => [x.signature, { profitSol: x.profitSol, matchedTokens: x.matchedTokens }]));

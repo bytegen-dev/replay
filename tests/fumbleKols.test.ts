@@ -90,3 +90,11 @@ test("a failed fetch leaves the old list in use", async () => {
   const d = createKolDirectory({ apiKey: "k", store, fetchImpl: async () => json({}, 500), now: () => 999999 });
   assert.equal((await d.search("cup"))[0].wallet, A);
 });
+
+test("the directory recognises a wallet on the list, and not one that is not", async () => {
+  const store = memoryKolStore();
+  await store.save([{ name: "Cupsey", twitter: "Cupseyy", wallet: A }], 1000);
+  const d = createKolDirectory({ apiKey: "k", store, fetchImpl: async () => json({}, 500), now: () => 1100 });
+  assert.equal((await d.find(A))?.name, "Cupsey");
+  assert.equal(await d.find(B), null);
+});

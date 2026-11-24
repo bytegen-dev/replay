@@ -206,6 +206,30 @@ export function rememberWallet(list: RecentWallet[], wallet: string, at: number)
   return [{ wallet, at }, ...list.filter((r) => r.wallet !== wallet)].slice(0, RECENT_MAX);
 }
 
+const DAY = 86400;
+/** Each unit, biggest first, in seconds. A month is 30.44 days (a year over twelve), so the months of a long span add up to its years. */
+const SPAN_UNITS: [string, number][] = [
+  ["year", 365 * DAY],
+  ["month", 30.44 * DAY],
+  ["week", 7 * DAY],
+  ["day", DAY],
+  ["hour", 3600],
+  ["minute", 60],
+];
+
+/** A span as its biggest unit and the unit under it (left out when there is none to add), or null when it is under a minute. */
+function spanParts(seconds: number): { n: number; unit: string; rest: { n: number; unit: string } | null } | null {
+  for (let i = 0; i < SPAN_UNITS.length; i++) {
+    const [unit, size] = SPAN_UNITS[i];
+    if (seconds < size) continue;
+    const n = Math.floor(seconds / size);
+    const next = SPAN_UNITS[i + 1];
+    const rest = next ? Math.floor((seconds - n * size) / next[1]) : 0;
+    return { n, unit, rest: rest > 0 ? { n: rest, unit: next![0] } : null };
+  }
+  return null;
+}
+
 /**
  * How far back a set of trades reaches, as the two biggest units that apply: "3 days 4 hours", "2 hours 15 minutes", "2 weeks 6 days",
  * "5 months 2 weeks", "1 year 3 months". `full` is the same span in one unit for a hover: hours, or minutes when it is under an hour.
@@ -214,27 +238,44 @@ export function rememberWallet(list: RecentWallet[], wallet: string, at: number)
  */
 export function reachSpan(oldest: number, now: number): { label: string; full: string } {
   const seconds = Math.max(0, Math.floor(now - oldest));
-  const DAY = 86400;
-  // Each unit, biggest first, in seconds. A month is 30.44 days (a year over twelve), so the months of a long span add up to its years.
-  const units: [string, number][] = [
-    ["year", 365 * DAY],
-    ["month", 30.44 * DAY],
-    ["week", 7 * DAY],
-    ["day", DAY],
-    ["hour", 3600],
-    ["minute", 60],
-  ];
   const noun = (n: number, unit: string) => `${n.toLocaleString("en-US")} ${unit}${n === 1 ? "" : "s"}`;
-  let label = "less than a minute";
-  for (let i = 0; i < units.length; i++) {
-    const [name, size] = units[i];
-    if (seconds < size) continue;
-    const n = Math.floor(seconds / size);
-    const next = units[i + 1];
-    const rest = next ? Math.floor((seconds - n * size) / next[1]) : 0;
-    label = rest > 0 ? `${noun(n, name)} ${noun(rest, next![0])}` : noun(n, name);
-    break;
-  }
+  const parts = spanParts(seconds);
+  const label = parts ? (parts.rest ? `${noun(parts.n, parts.unit)} ${noun(parts.rest.n, parts.rest.unit)}` : noun(parts.n, parts.unit)) : "less than a minute";
   const full = seconds < 3600 ? noun(Math.max(1, Math.floor(seconds / 60)), "minute") : noun(Math.floor(seconds / 3600), "hour");
   return { label, full };
+}
+
+/**
+ * How long ago something happened, in the way it reads best: "just now", "5 minutes ago", "2 hours 15 minutes ago", "3 days 4 hours ago",
+ * "2 weeks 6 days ago", "5 months 2 weeks ago", "1 year 3 months ago", and once it is a year and seven months or more, whole years: "2 years ago".
+ * `at` is the time of the event and `now` the time it is measured from, both in seconds since 1970.
+ */
+export function ago(at: number, now: number): string {
+  const seconds = Math.max(0, Math.floor(now - at));
+  const YEAR = 365 * 86400;
+  // A year and seven months: from here the months stop mattering, so it is rounded to whole years.
+  if (seconds >= YEAR * (1 + 7 / 12)) {
+    const years = Math.round(seconds / YEAR);
+    return `${years.toLocaleString("en-US")} ${years === 1 ? "year" : "years"} ago`;
+  }
+  if (seconds < 60) return "just now";
+  return `${reachSpan(at, now).label} ago`;
+}
+
+const SHORT: Record<string, string> = { year: "y", month: "mo", week: "w", day: "d", hour: "h", minute: "m" };
+
+/**
+ * `ago` as one short unit, rounded, for a narrow place like a table: "5m ago", "2h ago", "3d ago", "3w ago", "3mo ago", "1y ago", "2y ago". Two months
+ * and four weeks is 3mo, and a number that rounds up to the next unit becomes it (59.6 minutes is 1h, not 60m).
+ */
+export function agoShort(at: number, now: number): string {
+  const seconds = Math.max(0, Math.floor(now - at));
+  let i = SPAN_UNITS.findIndex(([, size]) => seconds >= size);
+  if (i < 0) return "just now";
+  let n = Math.round(seconds / SPAN_UNITS[i][1]);
+  if (i > 0 && n * SPAN_UNITS[i][1] >= SPAN_UNITS[i - 1][1]) {
+    i -= 1;
+    n = Math.round(seconds / SPAN_UNITS[i][1]);
+  }
+  return `${n.toLocaleString("en-US")}${SHORT[SPAN_UNITS[i][0]]} ago`;
 }

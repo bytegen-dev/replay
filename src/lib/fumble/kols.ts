@@ -186,5 +186,10 @@ export function createKolDirectory(opts: KolDirectoryOptions) {
       await ensure();
       return current ? searchKols(current.kols, query, limit) : [];
     },
+    /** The KOL that owns this wallet, if it is on the list (so a pasted address is recognised too). */
+    async find(wallet: string): Promise<Kol | null> {
+      await ensure();
+      return current?.kols.find((k) => k.wallet === wallet) ?? null;
+    },
   };
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { FileSpreadsheet, ImageDown, RefreshCw, Search, Settings } from "lucide-react";
+import { FileSpreadsheet, ImageDown, RefreshCw, Search, Settings, Trophy } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoinTable } from "@/components/CoinTable";
+import { Hint } from "@/components/Hint";
 import { Toast } from "@/components/Toast";
 import { tradesWithout, withoutCoins } from "@/lib/fumble/hide.ts";
 import { MarkLoader } from "@/components/MarkLoader";
@@ -150,6 +151,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
         } catch {
           /* storage is blocked: the wallet is simply not remembered */
         }
+        // A finished scan can arrive with no trade list before it (a saved or cached one), so the time the page measures from is set here too.
+        setAsOf((t) => t || Math.floor(Date.now() / 1000));
         setTrades(e.data);
         setResult(e.data);
         setStatus("done");
@@ -235,6 +238,21 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
       ctl.abort();
     };
   }, [value]);
+  // Whether the wallet being shown is a known trader's, so the page can say what that means for the numbers.
+  const shownWallet = trades?.wallet ?? null;
+  const [kolOwner, setKolOwner] = useState<{ wallet: string; name: string; twitter?: string } | null>(null);
+  useEffect(() => {
+    if (!shownWallet) return;
+    const ctl = new AbortController();
+    fetch(`/api/fumble/kol?wallet=${shownWallet}`, { signal: ctl.signal })
+      .then((r) => r.json())
+      .then((j: { kol?: { name?: string; twitter?: string } | null }) => setKolOwner(j?.kol?.name ? { wallet: shownWallet, name: j.kol.name, ...(j.kol.twitter ? { twitter: j.kol.twitter } : {}) } : null))
+      .catch(() => {
+        /* no note: nothing is lost */
+      });
+    return () => ctl.abort();
+  }, [shownWallet]);
+  const kolName = kolOwner && kolOwner.wallet === shownWallet ? { name: kolOwner.name, twitter: kolOwner.twitter } : null;
   const kolHits = kolOpen && status !== "scanning" && kol && kol.q === value.trim() ? kol.hits : [];
   function pickKol(wallet: string) {
     setValue(wallet);
@@ -476,12 +494,13 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
 
       {trades && (
         <>
-          <Summary trades={viewTrades ?? trades} result={viewResult} noTrades={!!result && trades.trades.length === 0} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
+          <Summary trades={viewTrades ?? trades} result={viewResult} kolName={kolName} noTrades={!!result && trades.trades.length === 0} asOf={asOf} display={display} settings={settings} onSettings={update} busy={scanning} onRefresh={() => void scan(trades.wallet, false, true)} />
           {!(result && trades.trades.length === 0) && <CoinTable
             coins={shown}
             tokens={trades.tokens}
             done={status === "done"}
             display={display}
+            now={asOf || Math.floor(Date.now() / 1000)}
             hiddenCount={hiddenCount}
             onHide={(mint) => {
               setHidden((h) => new Set(h).add(keyOf(mint)));
@@ -517,6 +536,25 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             </div>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+/** A known trader's wallet: a trophy and the name, with a button to their X profile under it. */
+function KolBadge({ kol }: { kol: { name: string; twitter?: string } }) {
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <p className="flex items-center gap-2 text-base font-bold text-foreground">
+        <Trophy className="size-5 text-primary" aria-hidden /> {kol.name}
+      </p>
+      {kol.twitter && (
+        <a href={`https://x.com/${kol.twitter}`} target="_blank" rel="noopener noreferrer" aria-label={`${kol.name} on X`} className="inline-flex h-8 items-center gap-2 border border-border px-3 text-xs font-bold text-foreground transition-colors hover:border-primary hover:text-primary">
+          <svg viewBox="0 0 24 24" className="size-3.5 fill-current" aria-hidden>
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+          </svg>
+          @{kol.twitter}
+        </a>
       )}
     </div>
   );
@@ -670,7 +708,7 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
   );
 }
 
-function Summary({ trades, result, noTrades, asOf, display, settings, onSettings, busy, onRefresh }: { trades: ApiTrades; result: ApiResult | null; noTrades: boolean; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void; busy: boolean; onRefresh: () => void }) {
+function Summary({ trades, result, kolName, noTrades, asOf, display, settings, onSettings, busy, onRefresh }: { trades: ApiTrades; result: ApiResult | null; kolName: { name: string; twitter?: string } | null; noTrades: boolean; asOf: number; display: Display; settings: FumbleSettings; onSettings: (patch: Partial<FumbleSettings>) => void; busy: boolean; onRefresh: () => void }) {
   const unknown = result?.unknown ?? 0;
   const unknownPositions = result ? result.positions.filter((p) => p.status === "unknown").length : 0;
   const sells = trades.trades.filter((t) => t.side === "sell").length;
@@ -694,7 +732,9 @@ function Summary({ trades, result, noTrades, asOf, display, settings, onSettings
     }
   }
   // One line says how much was read; anything that limits the numbers follows in a few short words, only when it applies.
-  const reach = cov.oldest ? reachSpan(cov.oldest, asOf || Math.floor(trades.coverage.oldest ?? 0)) : null;
+  // Measured from when the page last got trades, or when the scan finished; with neither there is no span to state.
+  const measuredAt = asOf || Math.floor(result?.scannedAt ?? 0);
+  const reach = cov.oldest && measuredAt ? reachSpan(cov.oldest, measuredAt) : null;
   const notes = [
     partial > 0 ? `Buys for ${partial} ${partial === 1 ? "sell" : "sells"} are older than this window.` : null,
     result?.ranOutOfTime ? "Ran out of time pricing every coin." : unknown > 0 || unknownPositions > 0 ? "Some coins couldn't be priced." : null,
@@ -708,7 +748,17 @@ function Summary({ trades, result, noTrades, asOf, display, settings, onSettings
         </button>
         <FumbleSettingsDialog settings={settings} onChange={onSettings} />
         <p className="pr-24 font-heading text-xl font-bold">No trades to show</p>
-        <p className="mt-2 max-w-xl pr-6 text-sm text-muted-foreground">No buys or sells of 0.1 SOL or more, paid in SOL, USDC or USDT, in this wallet&rsquo;s history.</p>
+        <p className="mt-2 max-w-xl pr-6 text-sm text-muted-foreground">
+          {cov.extendable ? "No buys or sells of 0.1 SOL or more, paid in SOL, USDC or USDT, in the transactions read so far. Load more reads further back." : "No buys or sells of 0.1 SOL or more, paid in SOL, USDC or USDT, in this wallet\u2019s history."}
+        </p>
+        {kolName && (
+          <div className="mt-4 flex flex-col gap-2 text-xs text-muted-foreground">
+            <KolBadge kol={kolName} />
+            <p>
+              <span className="font-bold text-foreground">This looks like a KOL wallet.</span> Traders like this often trade on side wallets, so the swaps may not be here.
+            </p>
+          </div>
+        )}
       </section>
     );
   return (
@@ -741,9 +791,7 @@ function Summary({ trades, result, noTrades, asOf, display, settings, onSettings
           {reach && (
             <>
               , over{" "}
-              <span title={reach.full} className="cursor-help">
-                {reach.label}
-              </span>
+              <Hint text={reach.full}>{reach.label}</Hint>
             </>
           )}
         </p>
@@ -753,6 +801,14 @@ function Summary({ trades, result, noTrades, asOf, display, settings, onSettings
               <span key={n}>{n}</span>
             ))}
           </p>
+        )}
+        {kolName && (
+          <>
+            <KolBadge kol={kolName} />
+            <p className="text-xs">
+              <span className="font-bold text-foreground">This looks like a KOL wallet.</span> Traders like this often fumble on public wallets and take their real profits on side wallets, so this may not be the full picture.
+            </p>
+          </>
         )}
         {exportError && <p className="text-destructive">{exportError}</p>}
       </div>

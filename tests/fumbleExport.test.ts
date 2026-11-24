@@ -130,7 +130,7 @@ test("the Trades sheet has one row per coin with the page's columns and no actio
   const r = await scan();
   const ws = (await open(r)).getWorksheet("Trades")!;
   const head = (ws.getRow(1).values as string[]).slice(1);
-  assert.deepEqual(head.slice(0, 5), ["Coin", "Name", "First trade (UTC)", "Last trade (UTC)", "Bought (SOL)"]);
+  assert.deepEqual(head.slice(0, 5), ["Coin", "Name", "Position opened (UTC)", "Last trade (UTC)", "Bought (SOL)"]);
   assert.ok(!head.some((h) => /action/i.test(h)));
   assert.equal(ws.rowCount, new Set(r.trades.map((t) => t.token)).size + 1);
   // The averages are formulas over the money and token columns.

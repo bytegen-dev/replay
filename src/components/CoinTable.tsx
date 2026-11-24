@@ -1,29 +1,32 @@
 "use client";
 
-import { Eye, EyeOff, Share2 } from "lucide-react";
+import { Eye, EyeOff, Share } from "lucide-react";
 import { useRef, useState } from "react";
+import { Hint } from "@/components/Hint";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { coinMoney, compactAmount, type CoinRow } from "@/lib/fumble/coins.ts";
 import type { Display } from "@/lib/fumble/money.ts";
 import { figure } from "@/lib/fumble/money.ts";
 import type { ApiTrades } from "@/lib/fumble/service.ts";
-import { explorerUrl, tokenLabel } from "@/lib/fumble/view.ts";
+import { agoShort, explorerUrl, tokenLabel } from "@/lib/fumble/view.ts";
 import { useDragScroll } from "@/lib/dragScroll.ts";
 import { cn } from "@/lib/utils";
 
-const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
  * The trades by coin, in the same table the Wayback results use: a bordered box, a header that stays put, striped rows, and a first column that
  * stays put when it scrolls sideways. One row per coin: what was bought and sold (money, with the token amounts under), the average entry and exit,
  * what is left, the PnL and the total fumble, and two buttons: hide the coin, and share its PnL as a picture. On a phone the table scrolls sideways, with the token column staying put.
  */
-export function CoinTable({ coins, tokens, done, display, hiddenCount, onHide, onShowHidden, onShare }: {
+export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare }: {
   coins: CoinRow[];
   tokens: ApiTrades["tokens"];
   /** The scan has finished: the fumble column can say what it found, and an unworked profit is unknown rather than still coming. */
   done: boolean;
   display: Display;
+  /** The time the page is measured from, in seconds, for "x ago". */
+  now: number;
   /** How many coins are hidden from this list, and the way to bring them back. */
   hiddenCount: number;
   onHide: (mint: string) => void;
@@ -46,13 +49,14 @@ export function CoinTable({ coins, tokens, done, display, hiddenCount, onHide, o
   if (coins.length === 0)
     return (
       <section aria-label="Trades" className="border border-border bg-background/80 backdrop-blur-xl">
-        <p className="px-4 py-4 text-sm text-muted-foreground">No trades of 0.1 SOL or more to show.</p>
+        {/* Nothing is "no trades" until the scan has finished: while it is still reading, say so. */}
+        {done ? <p className="px-4 py-4 text-sm text-muted-foreground">No trades of 0.1 SOL or more to show.</p> : <p className="animate-pulse px-4 py-4 text-sm text-muted-foreground">Reading trades&hellip;</p>}
         {hidden}
       </section>
     );
   return (
     <section ref={box} aria-label="Trades" className="overflow-x-auto border border-border bg-background/80 backdrop-blur-xl">
-      <Table className="min-w-[860px]" containerClassName="cursor-grab overflow-x-auto">
+      <Table className="min-w-[900px]" containerClassName="cursor-grab overflow-x-auto">
         <TableHeader className="sticky top-0 z-10 bg-card">
           <TableRow className="hover:bg-transparent">
             <TableHead className={cn(head, "left-0 z-20 shadow-[inset_0_-1px_0_var(--border),inset_-1px_0_0_var(--border)]")}>Token</TableHead>
@@ -63,6 +67,7 @@ export function CoinTable({ coins, tokens, done, display, hiddenCount, onHide, o
             <TableHead className={cn(head, "text-right")}>Balance</TableHead>
             <TableHead className={cn(head, "text-right")}>PnL</TableHead>
             <TableHead className={cn(head, "text-right")}>Fumbled</TableHead>
+            <TableHead className={cn(head, "text-right")}>Opened</TableHead>
             <TableHead className={cn(head, "text-right")}>Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -73,7 +78,7 @@ export function CoinTable({ coins, tokens, done, display, hiddenCount, onHide, o
             return (
               <TableRow key={c.mint} className="align-top odd:bg-muted/40 hover:bg-muted/60">
                 <TableCell className="sticky left-0 z-[5] max-w-[8.5rem] bg-card sm:max-w-[13rem] whitespace-nowrap shadow-[inset_-1px_0_0_var(--border)]">
-                  <Token mint={c.mint} ticker={label.ticker} name={label.name} at={c.lastAt} image={label.image} />
+                  <Token mint={c.mint} ticker={label.ticker} name={label.name} image={label.image} />
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">
                   <Amount main={m.bought} under={`${compactAmount(c.boughtTokens)} ${label.ticker}`} />
@@ -89,6 +94,9 @@ export function CoinTable({ coins, tokens, done, display, hiddenCount, onHide, o
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">
                   <Fumbled coin={c} display={display} done={done} />
+                </TableCell>
+                <TableCell className="text-right whitespace-nowrap tabular-nums">
+                  <Hint text={`Position opened on ${when(c.firstAt)}`}>{agoShort(c.firstAt, now)}</Hint>
                 </TableCell>
                 <TableCell className="text-right whitespace-nowrap">
                   <Actions onHide={() => onHide(c.mint)} onShare={() => onShare(c)} label={label.ticker} canShare={c.soldTokens > 0} />
@@ -119,7 +127,7 @@ function CoinIcon({ src, ticker }: { src?: string; ticker: string }) {
   return <img src={src} alt="" width={32} height={32} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className={cn(box, "object-cover")} />;
 }
 
-function Token({ mint, ticker, name, at, image }: { mint: string; ticker: string; name: string | null; at: number; image?: string }) {
+function Token({ mint, ticker, name, image }: { mint: string; ticker: string; name: string | null; image?: string }) {
   return (
     <span className="flex min-w-0 items-center gap-2.5">
       <CoinIcon src={image} ticker={ticker} />
@@ -127,7 +135,7 @@ function Token({ mint, ticker, name, at, image }: { mint: string; ticker: string
       <a href={explorerUrl(mint)} target="_blank" rel="noreferrer" className="w-fit font-bold underline-offset-4 hover:text-primary hover:underline" title={mint}>
         {ticker}
       </a>
-      <span className="truncate text-xs text-muted-foreground">{name ? `${name}, ` : ""}{when(at)}</span>
+      {name && <span className="truncate text-xs text-muted-foreground">{name}</span>}
       </span>
     </span>
   );
@@ -193,7 +201,7 @@ function Actions({ onHide, onShare, label, canShare }: { onHide: () => void; onS
         <EyeOff className="size-4" aria-hidden />
       </button>
       <button type="button" onClick={onShare} disabled={!canShare} className={btn} aria-label={`Share ${label}`} title={canShare ? "Share this trade's PnL as a picture" : "Nothing sold yet, so there is no PnL to share"}>
-        <Share2 className="size-4" aria-hidden />
+        <Share className="size-4" aria-hidden />
       </button>
     </span>
   );
