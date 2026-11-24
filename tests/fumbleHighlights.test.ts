@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { bestTrade, worstFumble, worstRoundtrip } from "../src/lib/fumble/highlights.ts";
 import type { ApiPosition, ApiResult, ApiSell } from "../src/lib/fumble/service.ts";
 
-const sell = (over: Partial<ApiSell>): ApiSell => ({ signature: "s", token: "T", soldAt: 1, tokens: 1, soldSol: 1, matchedTokens: 1, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 10, ...over });
+const sell = (over: Partial<ApiSell>): ApiSell => ({ signature: "s", token: "T", soldAt: 1, tokens: 1, soldSol: 1, matchedTokens: 1, freeTokens: 0, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 10, ...over });
 const position = (over: Partial<ApiPosition>): ApiPosition => ({ token: "T", openedAt: 1, closedAt: 2, closedBy: "p", costSol: 1, proceedsSol: 1, status: "ok", roundTripSol: 0, ...over });
 const result = (sells: ApiSell[], positions: ApiPosition[] = []) => ({ sells, positions }) as unknown as ApiResult;
 

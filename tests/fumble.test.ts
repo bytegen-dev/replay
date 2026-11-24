@@ -32,10 +32,12 @@ function tx(over: { sol?: number; tokens?: Record<string, number>; wsol?: number
 
 test("every swap in the wallet's history becomes a trade, whichever router did it and however the provider labelled it", () => {
   // The history is fetched with no type filter: filtering to "SWAP" misses trades the provider mislabelled.
-  const { trades, dropped } = parseTrades(WALLET, txs);
+  const { trades, receives, dropped } = parseTrades(WALLET, txs);
   assert.equal(txs.length, 100);
   assert.equal(trades.length, 28);
-  assert.deepEqual(dropped, { noTokenMove: 69, multiToken: 0, noSolLeg: 3 }); // 67 of the 69 are pump.fun noise that never moved this wallet's tokens
+  assert.deepEqual(dropped, { noTokenMove: 69, multiToken: 0, noSolLeg: 0 }); // 67 of the 69 are pump.fun noise that never moved this wallet's tokens
+  // The three transactions that used to be dropped for having no SOL leg were all tokens arriving with nothing paid: transfers in, kept to give sells a cost.
+  assert.equal(receives.length, 3);
   const bySource = (s: string) => trades.filter((t) => t.source === s).length;
   assert.equal(bySource("JUPITER"), 10);
   assert.equal(bySource("TITAN"), 14); // the provider gives no swap summary for these: the balance changes carry them
@@ -64,8 +66,10 @@ test("transactions that are not a token swap against SOL are counted as dropped,
     tx({ tokens: { A: 100 }, sol: -0.0004 }), // dust: below the minimum SOL move
     tx({ tokens: { A: 100 }, sol: -1 }), // a real buy
   ];
-  const { trades, dropped } = parseTrades(WALLET, history);
-  assert.deepEqual(dropped, { noTokenMove: 1, multiToken: 1, noSolLeg: 2 });
+  const { trades, receives, dropped } = parseTrades(WALLET, history);
+  // The airdrop and the dust are tokens that arrived with no money worth counting: they are kept as receives, no longer dropped.
+  assert.deepEqual(dropped, { noTokenMove: 1, multiToken: 1, noSolLeg: 0 });
+  assert.deepEqual(receives.map((r) => r.tokens), [500, 100]);
   assert.equal(trades.length, 1);
   assert.equal(trades[0].side, "buy");
 });
@@ -91,30 +95,40 @@ test("a sell is matched to the oldest buys first, and a part sale leaves the res
   ];
   const [a, b] = matchLots(trades);
   assert.ok(Math.abs(a.costSol - (1 + 50 * 0.04)) < 1e-9, `cost ${a.costSol}`);
-  assert.equal(a.unmatchedTokens, 0);
+  assert.equal(a.freeTokens, 0);
   assert.ok(Math.abs(a.profitSol - (3 - 3)) < 1e-9);
   assert.ok(Math.abs(b.costSol - 2) < 1e-9);
   assert.ok(Math.abs(b.profitSol - (1 - 2)) < 1e-9);
 });
 
-test("tokens sold with no known buy are reported unmatched, and only the matched part counts for profit", () => {
+test("tokens sold with no known buy are free: the whole of what they sold for is profit, and the sell says how much of it was free", () => {
   const [lot] = matchLots([trade({ side: "buy", tokens: 100, sol: 1, time: 1 }), trade({ side: "sell", tokens: 300, sol: 6, time: 2 })]);
-  assert.equal(lot.matchedTokens, 100);
-  assert.equal(lot.unmatchedTokens, 200);
-  assert.ok(Math.abs(lot.costSol - 1) < 1e-9);
-  assert.ok(Math.abs(lot.profitSol - (2 - 1)) < 1e-9); // 100 of the 300 tokens sold for 2 of the 6 SOL
+  assert.equal(lot.matchedTokens, 300); // all of them have a cost, 200 at zero
+  assert.equal(lot.freeTokens, 200);
+  assert.ok(Math.abs(lot.costSol - 1) < 1e-9); // only the 100 bought tokens cost anything
+  assert.ok(Math.abs(lot.profitSol - (6 - 1)) < 1e-9); // all 6 SOL came in, 1 SOL was paid
+});
+
+test("tokens that were received by transfer are free lots at the time they arrived, used in order with the buys", () => {
+  const received = (tokens: number, time: number) => trade({ side: "buy", tokens, sol: 0, time, signature: `r${time}`, source: "received" });
+  // 100 tokens arrive, then 100 are bought for 4 SOL. Selling 150 uses the free 100 first (oldest), then half of the bought 100: cost 2 SOL.
+  const [lot] = matchLots([received(100, 1), trade({ side: "buy", tokens: 100, sol: 4, time: 2 }), trade({ side: "sell", tokens: 150, sol: 6, time: 3 })]);
+  assert.equal(lot.freeTokens, 100);
+  assert.ok(Math.abs(lot.costSol - 2) < 1e-9);
+  assert.ok(Math.abs(lot.profitSol - 4) < 1e-9);
 });
 
 test("different tokens keep separate lots", () => {
   const [lot] = matchLots([trade({ side: "buy", mint: "A", tokens: 100, sol: 1, time: 1 }), trade({ side: "sell", mint: "B", tokens: 100, sol: 2, time: 2 })]);
-  assert.equal(lot.matchedTokens, 0);
-  assert.equal(lot.unmatchedTokens, 100);
+  assert.equal(lot.freeTokens, 100); // B was never bought, so it is free
+  assert.equal(lot.costSol, 0);
+  assert.equal(lot.profitSol, 2);
 });
 
 test("the real wallet's big sell is matched to its buys, and it was a loss", () => {
   const trades = parseTrades(WALLET, txs).trades;
   const lot = matchLots(trades).find((l) => l.sell.mint === WIN)!;
-  assert.ok(lot.unmatchedTokens < 1, `unmatched ${lot.unmatchedTokens}`);
+  assert.ok(lot.freeTokens < 1, `free ${lot.freeTokens}`);
   assert.ok(lot.costSol > 20 && lot.costSol < 30, `cost ${lot.costSol}`);
   assert.ok(lot.profitSol < -15, `profit ${lot.profitSol}`); // paid about 24 SOL, got 6.86 back
 });

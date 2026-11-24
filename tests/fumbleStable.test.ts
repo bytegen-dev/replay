@@ -46,9 +46,11 @@ test("a trade paid in SOL is as it was, with no dollar side", () => {
 });
 
 test("dust in stablecoins is not a trade", () => {
-  const { trades, dropped } = parseTrades(W, [swap("d", 100, { [COIN]: 5, [USDC]: -0.01 })]);
+  const { trades, receives, dropped } = parseTrades(W, [swap("d", 100, { [COIN]: 5, [USDC]: -0.01 })]);
   assert.equal(trades.length, 0);
-  assert.equal(dropped.noSolLeg, 1);
+  // The few tokens that came with it are kept as a receive (worth something only if they are ever sold), not dropped.
+  assert.equal(dropped.noSolLeg, 0);
+  assert.equal(receives.length, 1);
 });
 
 test("inSol gives a stablecoin trade its SOL amount at the SOL price of the time, and leaves SOL trades alone", async () => {

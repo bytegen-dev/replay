@@ -1,6 +1,6 @@
 "use client";
 
-import { Asterisk, Bot, Clapperboard, Eye, EyeOff, ImageDown, RefreshCw, RotateCcw, Search, Settings, Trophy, TriangleAlert, Wallet } from "lucide-react";
+import { Asterisk, Bot, Clapperboard, Eye, EyeOff, ImageDown, Info, RefreshCw, RotateCcw, Search, Settings, Trophy, TriangleAlert, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -26,7 +26,7 @@ import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
 import { coinRows, type CoinRow } from "@/lib/fumble/coins.ts";
 import { renderTradeCard, tradeCardFileName } from "@/lib/fumble/tradeCard.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
-import { countTrades, coverageNote, earlyProfit, figureCoverage, NOT_THERE, tradeVolume, type Coverage, makeEventReader, tokenLabel, veryActive, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
+import { sol, countTrades, coverageNote, earlyProfit, figureCoverage, NOT_THERE, tradeVolume, type Coverage, makeEventReader, tokenLabel, veryActive, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -669,7 +669,7 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
 }
 
 /** One headline number: dollars big, SOL under it, and what it means in a line. A signed one (profit) is green for a gain and red for a loss. */
-function Stat({ label, dollars, sols, display, pending, signed, about, className, texture, hero, loading, hidden, coverage, what }: { coverage?: Coverage; what?: "pnl" | "fumble" | "roundtrip"; hidden?: boolean; label: string; dollars: number; sols: number; display: Display; pending: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean; loading?: boolean }) {
+function Stat({ label, dollars, sols, display, pending, signed, about, className, texture, hero, loading, hidden, coverage, what, info }: { info?: string; coverage?: Coverage; what?: "pnl" | "fumble" | "roundtrip"; hidden?: boolean; label: string; dollars: number; sols: number; display: Display; pending: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean; loading?: boolean }) {
   // A figure the visitor chose to hide is ***, with no sign, colour or second line. There is no dash. A figure with nothing behind it because nothing was
   // sold reads 0.00 SOL, which is true. One that could not be worked out says so in words (a zero would be false); one that was only partly worked out
   // shows what was, and a warning mark by its name says how much, in a tooltip.
@@ -697,6 +697,13 @@ function Stat({ label, dollars, sols, display, pending, signed, about, className
           <Hint text={note} className="inline-flex items-center text-amber-500 no-underline">
             <TriangleAlert className="size-4" aria-hidden />
             <span className="sr-only">Warning: {note}</span>
+          </Hint>
+        )}
+        {/* Something worth knowing about how the figure was worked out, that is not a problem: a plain info mark, in the label's own colour, with the words in a tooltip. */}
+        {info && !hidden && (
+          <Hint text={info} className="inline-flex items-center text-muted-foreground no-underline hover:text-foreground">
+            <Info className="size-4" aria-hidden />
+            <span className="sr-only">Note: {info}</span>
           </Hint>
         )}
       </p>
@@ -869,7 +876,6 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
   const early = result ? null : earlyProfit(trades);
   const volume = tradeVolume(trades.trades, result?.coins ?? null);
   const coverage = result ? figureCoverage(result) : null;
-  const partial = result?.partialSells ?? 0;
   const cov = trades.coverage;
   const [previewOpen, setPreviewOpen] = useState(false);
   // What is hidden (on the page and on the picture) is chosen in the settings, and kept in this browser.
@@ -912,7 +918,6 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
   const measuredAt = asOf || Math.floor(result?.scannedAt ?? 0);
   const reach = cov.oldest && measuredAt ? reachSpan(cov.oldest, measuredAt) : null;
   const notes = [
-    partial > 0 ? `No buy found for part of ${partial} ${partial === 1 ? "sell" : "sells"}: bought before this window, or received another way (an airdrop or transfer).` : null,
     result?.ranOutOfTime ? "Ran out of time pricing every coin." : unknown > 0 || unknownPositions > 0 ? "Some coins couldn't be priced." : null,
   ].filter((n): n is string => n !== null);
   // A finished scan that found nothing: one plain message instead of a card of dashes, and nothing to download.
@@ -947,7 +952,7 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
       {/* The headline is the PnL; under it, what was roundtripped, the fumble (upside missed after selling), and how much was traded. Each can be masked (***) or
           left out in the settings, and the rest closes up. */}
       {settings.hidePnl !== "hide" && (
-        <Stat label="PnL" hero texture coverage={coverage?.pnl} what="pnl" hidden={settings.hidePnl === "mask"} loading={busy} display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? early?.sol ?? 0} pending={!result && !early} signed />
+        <Stat label="PnL" hero texture coverage={coverage?.pnl} what="pnl" hidden={settings.hidePnl === "mask"} loading={busy} display={display} dollars={result?.totalProfitUsd ?? 0} sols={result?.totalProfitSol ?? early?.sol ?? 0} pending={!result && !early} signed info={result && result.freeSells > 0 ? `Coins with no cost found (transferred in, airdropped, or bought before this history) count as free, so their whole sale is profit: ${result.freeSells} ${result.freeSells === 1 ? "sell" : "sells"}, ${sol(result.freeProceedsSol)} of proceeds.` : undefined} />
       )}
       {allHidden && (
         // Nothing is left of the figures: say so, and where it was set. The room on the right is for the refresh and settings buttons in the corner.
@@ -1013,8 +1018,8 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
               <Clapperboard className="size-4" aria-hidden /> Generate video
             </button>
           )}
-          {/* The next step after seeing your own decisions: an agent that learns from them. It is not built yet, so this opens the page that says so and takes an email. */}
-          <Link href="/trade" className="cut-btn inline-flex h-10 items-center gap-2 px-5 text-sm font-bold text-primary">
+          {/* The next step after seeing your own decisions: an agent that learns from them. It is not built yet, so this opens the page that says so and takes an email. A quiet text link at the right end of the row, so it does not compete with the two buttons. */}
+          <Link href="/trade" className="ml-auto inline-flex items-center gap-2 text-sm font-bold text-foreground underline underline-offset-4 transition-colors hover:text-primary">
             <Bot className="size-4" aria-hidden /> Train my agent
           </Link>
           {videoOpen && <RecapVideoDialog open onClose={() => setVideoOpen(false)} result={result} now={asOf || Math.floor(result.scannedAt)} display={display} hide={hide} />}

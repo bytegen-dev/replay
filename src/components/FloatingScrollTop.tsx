@@ -22,7 +22,7 @@ export function FloatingScrollTop() {
     <div
       aria-hidden={!show}
       className={cn(
-        "fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] transition-[opacity,translate] duration-300 sm:right-6",
+        "fixed right-4 bottom-[max(1.75rem,calc(env(safe-area-inset-bottom)+0.75rem))] z-[60] transition-[opacity,translate] duration-300 sm:right-6",
         show ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-3 opacity-0",
       )}
     >

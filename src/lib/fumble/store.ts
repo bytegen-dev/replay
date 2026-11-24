@@ -1,5 +1,5 @@
 import { connectDb } from "../db.ts";
-import type { Dropped, Trade } from "./types.ts";
+import type { Dropped, Receive, Trade } from "./types.ts";
 
 /**
  * A wallet's saved history: every token-for-SOL trade found so far, and how far the reading got. A rescan then reads only what is new
@@ -11,6 +11,11 @@ import type { Dropped, Trade } from "./types.ts";
  */
 export interface SavedWallet {
   trades: Trade[];
+  /**
+   * The transfers in that were read (see Receive). Absent on a wallet saved before they were kept: that saved run is not trusted, because its sells may have
+   * been of tokens that arrived by transfer, so the history is read again once.
+   */
+  receives?: Receive[];
   /** The newest transaction read, to start the next rescan from (the signature is exact; the time is for show). */
   newestSig: string | null;
   newestTime: number | null;
@@ -40,11 +45,11 @@ export function memoryStore(max = Infinity): WalletStore & { wallets: Map<string
     wallets,
     async load(wallet) {
       const s = wallets.get(wallet);
-      return s ? { ...s, trades: [...s.trades] } : null;
+      return s ? { ...s, trades: [...s.trades], ...(s.receives ? { receives: [...s.receives] } : {}) } : null;
     },
     async save(wallet, saved) {
       wallets.delete(wallet); // saved again: it moves to the newest end
-      wallets.set(wallet, { ...saved, trades: [...saved.trades] });
+      wallets.set(wallet, { ...saved, trades: [...saved.trades], ...(saved.receives ? { receives: [...saved.receives] } : {}) });
       while (wallets.size > max) wallets.delete(wallets.keys().next().value as string);
     },
   };
@@ -64,6 +69,10 @@ function tables(sql: Sql): Promise<void> {
         wallet text NOT NULL, signature text NOT NULL, side text NOT NULL, mint text NOT NULL, tokens double precision NOT NULL,
         sol double precision NOT NULL, time bigint NOT NULL, source text, PRIMARY KEY (wallet, signature))`;
       await sql`CREATE INDEX IF NOT EXISTS fumble_trades_by_time ON fumble_trades (wallet, time DESC)`;
+      // Transfers in (see Receive), kept beside the trades. `has_receives` says whether a saved wallet has them at all: one saved before they were kept does not.
+      await sql`ALTER TABLE fumble_wallets ADD COLUMN IF NOT EXISTS has_receives boolean NOT NULL DEFAULT false`;
+      await sql`CREATE TABLE IF NOT EXISTS fumble_receives (
+        wallet text NOT NULL, signature text NOT NULL, mint text NOT NULL, tokens double precision NOT NULL, time bigint NOT NULL, PRIMARY KEY (wallet, signature))`;
     })().catch((e) => {
       ensured.delete(sql);
       throw e;
@@ -81,11 +90,13 @@ export function sqlStore(sql: Sql | null = connectDb()): WalletStore | null {
   return {
     async load(wallet) {
       await tables(sql);
-      const rows = (await sql`SELECT newest_sig, newest_time, oldest_sig, oldest_time, complete, transactions, dropped FROM fumble_wallets WHERE wallet = ${wallet}`) as Record<string, unknown>[];
+      const rows = (await sql`SELECT newest_sig, newest_time, oldest_sig, oldest_time, complete, transactions, dropped, has_receives FROM fumble_wallets WHERE wallet = ${wallet}`) as Record<string, unknown>[];
       if (!rows.length) return null;
       const w = rows[0];
       const trades = (await sql`SELECT signature, side, mint, tokens, sol, time, source FROM fumble_trades WHERE wallet = ${wallet} ORDER BY time DESC`) as Record<string, unknown>[];
+      const receives = w.has_receives === true ? ((await sql`SELECT signature, mint, tokens, time FROM fumble_receives WHERE wallet = ${wallet} ORDER BY time ASC`) as Record<string, unknown>[]) : null;
       return {
+        ...(receives ? { receives: receives.map((r) => ({ signature: r.signature as string, mint: r.mint as string, tokens: Number(r.tokens), time: Number(r.time) })) } : {}),
         newestSig: (w.newest_sig as string | null) ?? null,
         newestTime: num(w.newest_time),
         oldestSig: (w.oldest_sig as string | null) ?? null,
@@ -98,17 +109,29 @@ export function sqlStore(sql: Sql | null = connectDb()): WalletStore | null {
     },
     async save(wallet, s, added, opts) {
       await tables(sql);
-      const state = sql`INSERT INTO fumble_wallets (wallet, newest_sig, newest_time, oldest_sig, oldest_time, complete, transactions, dropped, updated_at)
-        VALUES (${wallet}, ${s.newestSig}, ${s.newestTime}, ${s.oldestSig}, ${s.oldestTime}, ${s.complete}, ${s.transactions}, ${JSON.stringify(s.dropped)}::jsonb, now())
+      const hasReceives = s.receives !== undefined;
+      const state = sql`INSERT INTO fumble_wallets (wallet, newest_sig, newest_time, oldest_sig, oldest_time, complete, transactions, dropped, has_receives, updated_at)
+        VALUES (${wallet}, ${s.newestSig}, ${s.newestTime}, ${s.oldestSig}, ${s.oldestTime}, ${s.complete}, ${s.transactions}, ${JSON.stringify(s.dropped)}::jsonb, ${hasReceives}, now())
         ON CONFLICT (wallet) DO UPDATE SET newest_sig = EXCLUDED.newest_sig, newest_time = EXCLUDED.newest_time, oldest_sig = EXCLUDED.oldest_sig,
-          oldest_time = EXCLUDED.oldest_time, complete = EXCLUDED.complete, transactions = EXCLUDED.transactions, dropped = EXCLUDED.dropped, updated_at = now()`;
-      const clear = opts?.replace ? sql`DELETE FROM fumble_trades WHERE wallet = ${wallet} AND signature <> ALL(${s.trades.map((t) => t.signature)}::text[])` : null;
-      if (!added.length) return void (clear ? await sql.transaction([state, clear]) : await state);
-      const rows = sql`INSERT INTO fumble_trades (wallet, signature, side, mint, tokens, sol, time, source)
+          oldest_time = EXCLUDED.oldest_time, complete = EXCLUDED.complete, transactions = EXCLUDED.transactions, dropped = EXCLUDED.dropped,
+          has_receives = EXCLUDED.has_receives, updated_at = now()`;
+      const statements = [state];
+      if (added.length) {
+        statements.push(sql`INSERT INTO fumble_trades (wallet, signature, side, mint, tokens, sol, time, source)
         SELECT ${wallet}, * FROM unnest(${added.map((t) => t.signature)}::text[], ${added.map((t) => t.side)}::text[], ${added.map((t) => t.mint)}::text[],
           ${added.map((t) => t.tokens)}::float8[], ${added.map((t) => t.sol)}::float8[], ${added.map((t) => t.time)}::bigint[], ${added.map((t) => t.source ?? null)}::text[])
-        ON CONFLICT (wallet, signature) DO NOTHING`;
-      await sql.transaction(clear ? [state, rows, clear] : [state, rows]);
+        ON CONFLICT (wallet, signature) DO NOTHING`);
+      }
+      if (opts?.replace) statements.push(sql`DELETE FROM fumble_trades WHERE wallet = ${wallet} AND signature <> ALL(${s.trades.map((t) => t.signature)}::text[])`);
+      // The transfers in are small, so every one is written each time (the ones already there are left alone); on a replace, any not in this run go.
+      const receives = s.receives ?? [];
+      if (receives.length) {
+        statements.push(sql`INSERT INTO fumble_receives (wallet, signature, mint, tokens, time)
+        SELECT ${wallet}, * FROM unnest(${receives.map((r) => r.signature)}::text[], ${receives.map((r) => r.mint)}::text[], ${receives.map((r) => r.tokens)}::float8[], ${receives.map((r) => r.time)}::bigint[])
+        ON CONFLICT (wallet, signature) DO NOTHING`);
+      }
+      if (opts?.replace) statements.push(sql`DELETE FROM fumble_receives WHERE wallet = ${wallet} AND signature <> ALL(${receives.map((r) => r.signature)}::text[])`);
+      await (statements.length === 1 ? statements[0] : sql.transaction(statements));
     },
   };
 }

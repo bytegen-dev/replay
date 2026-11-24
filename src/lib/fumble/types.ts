@@ -17,6 +17,20 @@ export interface Trade {
   source?: string;
 }
 
+/**
+ * Tokens that reached the wallet with no swap against SOL or a stablecoin: a transfer from another wallet, an airdrop, a mint. They are not trades, so they
+ * stay out of the buys and sells; they matter because the wallet may later sell them. Valued at the market price when they arrived (see scan.ts), they give
+ * those sells a cost, the way an airdrop is treated for tax: its cost is what it was worth when it came.
+ */
+export interface Receive {
+  mint: string;
+  /** Tokens received, in whole tokens. */
+  tokens: number;
+  /** Seconds since 1970. */
+  time: number;
+  signature: string;
+}
+
 /** One price candle. Prices are USD per token. `t` is when the candle starts, in seconds. */
 export interface Candle {
   t: number;

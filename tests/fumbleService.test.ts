@@ -44,7 +44,7 @@ const empty = (wallet: string): ScanResult => ({
   totalFumbleSol: 0,
   totalProfitSol: 0,
   totalProfitUsd: 0,
-  partialSells: 0,
+  freeSells: 0, freeProceedsSol: 0,
   worst: null,
   ranOutOfTime: false,
 });
@@ -332,18 +332,19 @@ test("a failed name lookup does not stop the scan: the list goes out with no nam
 
 test("the wallet's realized profit is what its sells brought in minus what those coins cost, in SOL and in dollars", async () => {
   const result = await realScan(WALLET, { prices: async (m) => priceSol(m) });
-  // win: paid 27.29 SOL, sold for 6.86; iNu: paid 5.01, sold for 4.75; the third sale's coins were bought before the history, so it adds nothing.
-  assert.ok(result.totalProfitSol < -20.5 && result.totalProfitSol > -20.9, `profit ${result.totalProfitSol} SOL`);
+  // win: paid 27.29 SOL, sold for 6.86; iNu: paid 5.01, sold for 4.75; the third sale's coins have no buy in the history, so they are free and its 7.61 SOL is all
+  // profit: -20.43 - 0.26 + 7.61 = -13.08.
+  assert.ok(result.totalProfitSol < -13.0 && result.totalProfitSol > -13.2, `profit ${result.totalProfitSol} SOL`);
   assert.ok(Math.abs(result.totalProfitUsd - result.totalProfitSol * 67) < 1e-6, "dollars are the SOL profit at the SOL price of the sale (the fake price is $67)");
   const byMint = new Map(result.sells.map((x) => [x.lot.sell.mint, x]));
   const win = byMint.get(WIN)!;
   assert.ok(win.lot.profitSol < -20 && win.profitUsd !== null && Math.abs(win.profitUsd - win.lot.profitSol * 67) < 1e-6);
-  assert.equal(result.partialSells, 1, "one sale had no buy in the history at all");
+  assert.equal(result.freeSells, 1, "one sale had no buy in the history at all, so it is free");
 });
 
 test("without a SOL price the profit is still known in SOL, and the dollar figures are left out, not guessed", async () => {
   const result = await realScan(WALLET, { prices: async (m) => (m === WIN ? { candles: winPrices.candles, source: "fake" } : null), solUsd: async () => null });
-  assert.ok(result.totalProfitSol < -20);
+  assert.ok(result.totalProfitSol < -13 && result.totalProfitSol > -13.2);
   assert.equal(result.totalProfitUsd, 0);
   assert.ok(result.sells.every((x) => x.profitUsd === null));
   const api = toApiResult(result, 1);
@@ -360,10 +361,11 @@ test("when the main SOL price series is missing but the per-hour price is there,
 
 test("the response carries each sell's profit and the wallet's totals", async () => {
   const api = toApiResult(await realScan(WALLET, { prices: async (m) => priceSol(m) }), 1);
-  assert.equal(api.totalProfitSol, api.sells.reduce((n, x) => n + x.profitSol, 0));
+  // The same numbers added in a different order can differ in the last digit, so this is a tolerance, not exact equality.
+  assert.ok(Math.abs(api.totalProfitSol - api.sells.reduce((n, x) => n + x.profitSol, 0)) < 1e-9);
   const win = api.sells.find((x) => x.token === WIN)!;
   assert.ok(win.profitSol < -20 && win.profitUsd! < -1300 && win.matchedTokens > 0);
-  assert.equal(api.partialSells, 1);
+  assert.equal(api.freeSells, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(api)), api);
 });
 

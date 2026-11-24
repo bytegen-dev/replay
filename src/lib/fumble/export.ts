@@ -37,6 +37,7 @@ export function parseFumbleExport(x: unknown): ApiResult | string {
     tokens: num(s.tokens) ?? 0,
     soldSol: num(s.soldSol) ?? 0,
     matchedTokens: num(s.matchedTokens) ?? 0,
+    freeTokens: num(s.freeTokens) ?? 0,
     costSol: num(s.costSol) ?? 0,
     profitSol: num(s.profitSol) ?? 0,
     ...(num(s.profitUsd) !== undefined ? { profitUsd: num(s.profitUsd) } : {}),
@@ -84,7 +85,8 @@ export function parseFumbleExport(x: unknown): ApiResult | string {
     totalFumbleSol: num(r.totalFumbleSol) ?? 0,
     totalProfitSol: num(r.totalProfitSol) ?? 0,
     totalProfitUsd: num(r.totalProfitUsd) ?? 0,
-    partialSells: num(r.partialSells) ?? 0,
+    freeSells: num(r.freeSells) ?? 0,
+    freeProceedsSol: num(r.freeProceedsSol) ?? 0,
     positions,
     totalRoundTripSol: num(r.totalRoundTripSol) ?? 0,
     totalRoundTripUsd: num(r.totalRoundTripUsd) ?? 0,
@@ -159,8 +161,7 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
       put("T", e.missedUsd, USD);
     }
     const notes: string[] = [];
-    if (c.costUnknown) notes.push("Bought before the history, so no PnL shown");
-    else if (c.partial) notes.push("Sold more than the trades read show bought; PnL covers only the part bought inside the history");
+    if (c.partial) notes.push("Sold more than the trades read show bought: the rest counts as free, so its whole sale is profit");
     co.getCell(`U${row}`).value = notes.join("; ");
     co.getCell(`V${row}`).value = c.mint;
   });
@@ -177,7 +178,7 @@ export async function buildFumbleWorkbook(r: ApiResult): Promise<Buffer> {
     const p = closing.get(t.signature);
     const notes: string[] = [];
     if (s && s.status !== "ok" && s.reason) notes.push(`Fumble unknown: ${s.reason}`);
-    if (s && s.matchedTokens < s.tokens * 0.999) notes.push(s.matchedTokens > 0 ? "Profit covers only the part bought inside the history" : "Bought before the history, so no profit shown");
+    if (s && s.freeTokens > 0) notes.push(s.freeTokens >= s.tokens * 0.999 ? "No buy found (transferred in or bought earlier): counted as free, so the whole sale is profit" : "Part of this had no buy found: counted as free");
     if (p && p.status !== "ok" && p.reason) notes.push(`Roundtrip unknown: ${p.reason}`);
     const name = r.tokens[t.token]?.name;
     tr.getCell(`A${row}`).value = date(t.time);

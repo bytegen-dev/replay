@@ -15,8 +15,10 @@ export interface ApiSell {
   soldAt: number;
   tokens: number;
   soldSol: number;
-  /** How many of the tokens sold had a known buy, and what those cost (SOL). Cost is only known for the matched part, and the profit covers only that part. With none matched there is no profit to show. */
+  /** How many of the tokens sold have a cost: all of them, since tokens with no known cost (received by transfer, or no buy found) are given a cost of zero. */
   matchedTokens: number;
+  /** How many of them were free (received by transfer, or no buy found): the whole of what they sold for is profit. */
+  freeTokens: number;
   costSol: number;
   profitSol: number;
   /** The profit in dollars, at the SOL price of the sale, when that price was found. */
@@ -123,10 +125,12 @@ export interface ApiResult extends ApiTrades {
   unknown: number;
   totalFumbleUsd: number;
   totalFumbleSol: number;
-  /** The wallet's realized profit over the sells scanned, and how many of those sells include coins whose purchase the history does not show. */
+  /** The wallet's realized profit over the sells scanned. Tokens with no known cost count as free, so their whole sale is profit. */
   totalProfitSol: number;
   totalProfitUsd: number;
-  partialSells: number;
+  /** How many sells had free tokens (received by transfer, or no buy found), and how much of what they sold for that was, in SOL. */
+  freeSells: number;
+  freeProceedsSol: number;
   /** The closed positions: measured ones first, biggest round-trip first, then the ones with no price history, oldest first. */
   positions: ApiPosition[];
   totalRoundTripSol: number;
@@ -148,6 +152,7 @@ export function toApiSell(s: ScannedSell): ApiSell {
     tokens: lot.sell.tokens,
     soldSol: lot.sell.sol,
     matchedTokens: lot.matchedTokens,
+    freeTokens: lot.freeTokens,
     costSol: lot.costSol,
     profitSol: lot.profitSol,
     ...(s.profitUsd !== null ? { profitUsd: s.profitUsd } : {}),
@@ -183,7 +188,8 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     totalFumbleSol: r.totalFumbleSol,
     totalProfitSol: r.totalProfitSol,
     totalProfitUsd: r.totalProfitUsd,
-    partialSells: r.partialSells,
+    freeSells: r.freeSells,
+    freeProceedsSol: r.freeProceedsSol,
     positions: orderPositions(r.positions.map(toApiPosition)),
     totalRoundTripSol: r.totalRoundTripSol,
     totalRoundTripUsd: r.totalRoundTripUsd,

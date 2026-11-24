@@ -7,7 +7,7 @@ import { missedTotals } from "./missed.ts";
 import { findPositions, roundTripFor, type Position, type RoundTrip } from "./roundtrip.ts";
 import type { SavedWallet, WalletStore } from "./store.ts";
 import { inSol, parseTrades, type HeliusTx } from "./trades.ts";
-import type { Dropped, Trade } from "./types.ts";
+import type { Dropped, Trade, Receive } from "./types.ts";
 
 /**
  * Scans one wallet end to end: history in, trades out, each sell of a meaningful size matched to its buys and given a fumble.
@@ -118,8 +118,9 @@ export interface ScanResult {
   /** The wallet's realized profit: every scanned sell's proceeds minus what those coins cost, in SOL and in dollars. Only the part of each sell traced to buys counts. */
   totalProfitSol: number;
   totalProfitUsd: number;
-  /** Sells that included coins bought before the history starts, so their profit covers only part of the sale. */
-  partialSells: number;
+  /** How many sells had free tokens (received by transfer, or with no buy found), and how much of what they sold for that was, in SOL. Counted as profit in full. */
+  freeSells: number;
+  freeProceedsSol: number;
   /** The sum of the round-trips that could be measured, in SOL and in dollars. */
   totalRoundTripSol: number;
   totalRoundTripUsd: number;
@@ -138,6 +139,13 @@ function mergeTrades(older: Trade[], newer: Trade[]): Trade[] {
   for (const t of older) bySig.set(t.signature, t);
   for (const t of newer) bySig.set(t.signature, t);
   return [...bySig.values()];
+}
+/** Two lists of transfers in as one, by transaction. */
+function mergeReceives(older: Receive[], newer: Receive[]): Receive[] {
+  const bySig = new Map<string, Receive>();
+  for (const r of older) bySig.set(r.signature, r);
+  for (const r of newer) bySig.set(r.signature, r);
+  return [...bySig.values()].sort((a, b) => a.time - b.time);
 }
 const addDropped = (a: Dropped, b: Dropped): Dropped => ({ noTokenMove: a.noTokenMove + b.noTokenMove, multiToken: a.multiToken + b.multiToken, noSolLeg: a.noSolLeg + b.noSolLeg });
 const NO_DROPS: Dropped = { noTokenMove: 0, multiToken: 0, noSolLeg: 0 };
@@ -168,10 +176,15 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     }
     if (saved && !saved.newestSig) saved = null;
   }
+  // A wallet saved before transfers in were kept has no record of them, and its sells of such tokens would have no cost: its history is read again, once, and
+  // the new run replaces the old (below).
+  const oldFormat = saved !== null && saved.receives === undefined;
+  if (oldFormat) saved = null;
   // Reading further back starts from the oldest saved transaction. With nothing saved, or the whole history already read, it is an ordinary scan.
   const backfill = opts.more === true && saved !== null && !saved.complete && saved.oldestSig !== null;
   const earlier = saved?.trades ?? [];
   const earlierDropped = saved?.dropped ?? NO_DROPS;
+  const earlierReceives = saved?.receives ?? [];
 
   // While the history is still being read, each page puts the trades found so far on the page: the list grows, and the names of new coins
   // follow a moment later. Nothing about profit is said yet, because the buys behind an old sell may be on a page not read.
@@ -215,6 +228,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
   const joined = saved !== null && (backfill || history.complete);
   const trades = joined ? mergeTrades(earlier, fresh.trades) : fresh.trades;
   const dropped = joined ? addDropped(earlierDropped, fresh.dropped) : fresh.dropped;
+  const receives = joined ? mergeReceives(earlierReceives, fresh.receives) : fresh.receives;
   let persisted: Promise<void> = Promise.resolve();
   const last = history.txs[history.txs.length - 1];
   let next: SavedWallet | null = null;
@@ -222,23 +236,25 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     if (backfill) {
       // Further back: the newest mark stays, the oldest moves back to where reading stopped, and the history is complete once it hits the start.
       if (history.txs.length > 0 || history.complete) {
-        next = { trades, newestSig: saved!.newestSig, newestTime: saved!.newestTime, oldestSig: last ? last.signature : saved!.oldestSig, oldestTime: last ? last.timestamp : saved!.oldestTime, complete: history.complete, transactions: saved!.transactions + history.txs.length, dropped };
+        next = { trades, receives, newestSig: saved!.newestSig, newestTime: saved!.newestTime, oldestSig: last ? last.signature : saved!.oldestSig, oldestTime: last ? last.timestamp : saved!.oldestTime, complete: history.complete, transactions: saved!.transactions + history.txs.length, dropped };
       }
     } else if (history.txs.length > 0) {
       // Not joined to the saved run (a first scan, or time ran out before reaching it): what was just read becomes the saved run. The older saved
       // trades are let go, so the run stays unbroken and Load more carries on from its oldest end instead of leaving a gap.
       next = joined
-        ? { trades, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: saved!.oldestSig, oldestTime: saved!.oldestTime, complete: saved!.complete, transactions: saved!.transactions + history.txs.length, dropped }
-        : { trades, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: last.signature, oldestTime: last.timestamp, complete: history.complete, transactions: history.txs.length, dropped };
+        ? { trades, receives, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: saved!.oldestSig, oldestTime: saved!.oldestTime, complete: saved!.complete, transactions: saved!.transactions + history.txs.length, dropped }
+        : { trades, receives, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: last.signature, oldestTime: last.timestamp, complete: history.complete, transactions: history.txs.length, dropped };
     }
   }
   if (deps.store && next) {
     const known = new Set(earlier.map((t) => t.signature));
-    persisted = deps.store.save(wallet, next, trades.filter((t) => !known.has(t.signature)), saved !== null && !joined ? { replace: true } : undefined).catch(() => {
+    persisted = deps.store.save(wallet, next, trades.filter((t) => !known.has(t.signature)), (saved !== null && !joined) || oldFormat ? { replace: true } : undefined).catch(() => {
       /* not saving is no reason to fail the scan */
     });
   }
-  const lots = matchLots(trades)
+  // Tokens that arrived by transfer have no cost, so they go in as free lots at the time they arrived (see lots.ts), beside the real buys.
+  const freeLots: Trade[] = receives.map((r) => ({ side: "buy", mint: r.mint, tokens: r.tokens, sol: 0, time: r.time, signature: r.signature, source: "received" }));
+  const lots = matchLots([...trades, ...freeLots])
     .filter((l) => l.sell.sol >= MIN_TRADE_SOL)
     .sort((a, b) => a.sell.time - b.sell.time);
 
@@ -376,7 +392,8 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     positions: scannedPositions,
     totalProfitSol,
     totalProfitUsd,
-    partialSells: lots.filter((l) => l.unmatchedTokens > 0).length,
+    freeSells: lots.filter((l) => l.freeTokens > 0).length,
+    freeProceedsSol: lots.reduce((sum, l) => sum + (l.sell.sol * l.freeTokens) / l.sell.tokens, 0),
     totalRoundTripSol: totalRoundTrip,
     totalRoundTripUsd,
     totalMissedSol: missed.sol,

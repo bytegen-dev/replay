@@ -4,7 +4,7 @@ import type { ApiPosition, ApiSell, ApiTrade } from "../src/lib/fumble/service.t
 import { buildRows, fumbleCell, makeEventReader, parseRecent, pnlCell, ago, agoShort, reachSpan, RECENT_MAX, rememberWallet, roundTripCell, shortMint, signedSol, signedUsd, sol, times, tokenLabel, usd, type StreamEvent } from "../src/lib/fumble/view.ts";
 
 const trade = (signature: string, side: "buy" | "sell", time = 1): ApiTrade => ({ signature, side, token: "M".repeat(44), tokens: 100, sol: 1, time });
-const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
+const sell = (signature: string, extra: Partial<ApiSell> = {}): ApiSell => ({ signature, token: "M".repeat(44), soldAt: 1, tokens: 100, soldSol: 1, matchedTokens: 100, freeTokens: 0, costSol: 1, profitSol: 0, status: "ok", fumbleUsd: 50, peakMultiple: 3, ...extra });
 
 test("events are read from chunks that end anywhere, even in the middle of a line", () => {
   const got: StreamEvent[] = [];

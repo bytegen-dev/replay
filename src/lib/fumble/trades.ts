@@ -1,4 +1,4 @@
-import type { Dropped, Trade } from "./types.ts";
+import type { Dropped, Receive, Trade } from "./types.ts";
 
 /**
  * Turns a wallet's transaction history (Helius "enhanced" transactions) into trades.
@@ -65,11 +65,14 @@ export interface HeliusTx {
 
 export interface ParsedHistory {
   trades: Trade[];
+  /** Tokens that arrived with nothing paid in SOL or a stablecoin (transfers in, airdrops), oldest first. Not counted as dropped: they are used to give sells a cost. */
+  receives: Receive[];
   dropped: Dropped;
 }
 
 export function parseTrades(wallet: string, txs: HeliusTx[]): ParsedHistory {
   const trades: Trade[] = [];
+  const receives: Receive[] = [];
   const dropped: Dropped = { noTokenMove: 0, multiToken: 0, noSolLeg: 0 };
 
   for (const t of txs) {
@@ -111,9 +114,13 @@ export function parseTrades(wallet: string, txs: HeliusTx[]): ParsedHistory {
     // Paid for, or paid out, in a stablecoin: the SOL is worked out later, once the SOL price at that time is known (see inSol).
     else if (delta < 0 && usd > MIN_USD_MOVE) trades.push({ ...base, side: "sell", sol: 0, usd });
     else if (delta > 0 && usd < -MIN_USD_MOVE) trades.push({ ...base, side: "buy", sol: 0, usd: -usd });
+    // Tokens that arrived with no money paid: a transfer in or an airdrop. Kept, to give any sell of them a cost (valued when they arrived). Tokens that left, or a
+    // move too small to count either way, are dropped as before.
+    else if (delta > 0) receives.push({ mint, tokens: delta, time: t.timestamp, signature: t.signature });
     else dropped.noSolLeg++;
   }
 
   trades.sort((a, b) => a.time - b.time);
-  return { trades, dropped };
+  receives.sort((a, b) => a.time - b.time);
+  return { trades, receives, dropped };
 }
