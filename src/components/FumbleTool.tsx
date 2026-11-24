@@ -285,7 +285,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const [toast, setToast] = useState<{ mint: string; ticker: string } | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
   const sharedTicker = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).ticker : "";
-  const renderShared = useCallback(() => renderTradeCard(sharing!, sharedTicker, display, asOf || Math.floor(Date.now() / 1000)), [sharing, sharedTicker, display, asOf]);
+  const sharedImage = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).image : undefined;
+  const renderShared = useCallback(() => renderTradeCard(sharing!, sharedTicker, display, asOf || Math.floor(Date.now() / 1000), sharedImage), [sharing, sharedTicker, display, asOf, sharedImage]);
 
   return (
     <div

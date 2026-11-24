@@ -21,6 +21,8 @@ export interface TokenInfo {
 }
 
 const HELIUS_IMAGES = "https://cdn.helius-rpc.com/cdn-cgi/image/";
+/** The start of every thumbnail address `cleanImage` gives out. */
+export const HELIUS_THUMBNAILS = `${HELIUS_IMAGES}width=96,height=96,fit=cover,format=auto/`;
 
 /**
  * The coin's picture, only from Helius's image proxy and resized to a thumbnail. The address a coin's creator typed can point anywhere, and a page that
@@ -28,7 +30,7 @@ const HELIUS_IMAGES = "https://cdn.helius-rpc.com/cdn-cgi/image/";
  */
 export function cleanImage(raw: unknown): string | undefined {
   if (typeof raw !== "string" || raw.length > 700 || /\s/.test(raw) || !raw.startsWith(`${HELIUS_IMAGES}/`)) return undefined;
-  return `${HELIUS_IMAGES}width=96,height=96,fit=cover,format=auto/${raw.slice(HELIUS_IMAGES.length + 1)}`;
+  return `${HELIUS_THUMBNAILS}${raw.slice(HELIUS_IMAGES.length + 1)}`;
 }
 
 /** Code point ranges removed from names: control characters, the zero-width ones, and the left-to-right and right-to-left overrides and isolates. */

@@ -19,7 +19,25 @@ export function tradeCardFileName(ticker: string, at: number): string {
   return `replay-trade-${name}-${day}.png`;
 }
 
-export async function renderTradeCard(coin: CoinRow, ticker: string, display: Display, now: number): Promise<Blob> {
+/**
+ * The coin's picture, or null when it can't be had. It is fetched through this site (`/api/fumble/image`), so the canvas stays one that can be
+ * saved; if that fails the card carries on with the coin's first letter instead.
+ */
+function loadImage(src: string, ms = 5000): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const done = (v: HTMLImageElement | null) => {
+      clearTimeout(timer);
+      resolve(v);
+    };
+    const timer = setTimeout(() => done(null), ms);
+    img.onload = () => done(img);
+    img.onerror = () => done(null);
+    img.src = `/api/fumble/image?src=${encodeURIComponent(src)}`;
+  });
+}
+
+export async function renderTradeCard(coin: CoinRow, ticker: string, display: Display, now: number, image?: string): Promise<Blob> {
   const c = await canvasTheme();
   const canvas = document.createElement("canvas");
   canvas.width = W * 2;
@@ -35,13 +53,29 @@ export async function renderTradeCard(coin: CoinRow, ticker: string, display: Di
 
   const m = coinMoney(coin, display);
 
-  // Header: the coin and how long ago it was traded.
+  // Header: the coin's picture (or its first letter in a box), its name, and how long ago it was traded.
+  const icon = 68;
+  const pic = image ? await loadImage(image) : null;
+  ctx.fillStyle = c.card ?? c.bg;
+  ctx.fillRect(64, 46, icon, icon);
+  if (pic) {
+    ctx.drawImage(pic, 64, 46, icon, icon);
+  } else {
+    ctx.fillStyle = c.muted;
+    ctx.font = `700 34px ${c.head}`;
+    ctx.textAlign = "center";
+    ctx.fillText(ticker.charAt(0).toUpperCase(), 64 + icon / 2, 46 + icon / 2 + 12);
+    ctx.textAlign = "left";
+  }
+  ctx.strokeStyle = c.hatch;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(64, 46, icon, icon);
   ctx.fillStyle = c.fg;
   ctx.font = `600 52px ${c.head}`;
-  ctx.fillText(ticker, 64, 96);
+  ctx.fillText(ticker, 64 + icon + 22, 96);
   ctx.fillStyle = c.muted;
   ctx.font = `400 22px ${c.body}`;
-  ctx.fillText(`Traded over ${reachSpan(coin.firstAt, now).label}`, 64, 134);
+  ctx.fillText(`Traded over ${reachSpan(coin.firstAt, now).label}`, 64 + icon + 22, 134);
 
   // The PnL, big, and its percent.
   ctx.fillStyle = c.muted;
