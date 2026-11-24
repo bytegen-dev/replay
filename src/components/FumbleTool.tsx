@@ -211,6 +211,43 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   }, [value]);
   const emptyWallet = looked?.status === "empty" && looked.wallet === value.trim();
 
+  // Well-known traders by name: typing a name asks for matches, shown under the box; choosing one fills in its wallet and scans it. The answer belongs to the
+  // text it was asked for, so older answers are never shown against newer text.
+  const [kol, setKol] = useState<{ q: string; hits: { name: string; twitter?: string; wallet: string }[] } | null>(null);
+  const [kolOpen, setKolOpen] = useState(false);
+  const [kolIndex, setKolIndex] = useState(-1);
+  useEffect(() => {
+    const q = value.trim();
+    if (q.length < 2 || q.length > 40 || isWalletAddress(q) || solName(q)) return;
+    const ctl = new AbortController();
+    const id = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/fumble/kol?q=${encodeURIComponent(q)}`, { signal: ctl.signal });
+        const j = (await res.json().catch(() => null)) as { results?: { name: string; twitter?: string; wallet: string }[] } | null;
+        setKol({ q, hits: Array.isArray(j?.results) ? j.results : [] });
+        setKolIndex(-1);
+      } catch {
+        if (!ctl.signal.aborted) setKol({ q, hits: [] });
+      }
+    }, 200);
+    return () => {
+      clearTimeout(id);
+      ctl.abort();
+    };
+  }, [value]);
+  const kolHits = kolOpen && status !== "scanning" && kol && kol.q === value.trim() ? kol.hits : [];
+  function pickKol(wallet: string) {
+    setValue(wallet);
+    setKolOpen(false);
+    setError(null);
+    if (launch) {
+      setStatus("scanning");
+      router.push(`/fumble?wallet=${wallet}`);
+      return;
+    }
+    void scan(wallet);
+  }
+
   // A plain word that is not an address could be a .sol name: it is offered with ".sol" after it, and Tab (or a tap on the hint) takes it.
   const typed = value.trim();
   const nameStart = typed !== "" && /^[a-z0-9_-]{1,63}$/i.test(typed) && !isWalletAddress(typed) && status !== "scanning";
@@ -309,7 +346,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
       <div className={cn(aside && "cut-card pulse-hover grid items-center gap-8 border border-border bg-card p-5 sm:p-8 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:gap-12")}>
         <div className="flex flex-col gap-6">
           {intro}
-              <form onSubmit={submit} noValidate className="max-w-2xl">
+              <form onSubmit={submit} noValidate className="relative max-w-2xl">
                 <Label htmlFor="fumble-wallet" className="sr-only">
                   Solana wallet address
                 </Label>
@@ -327,9 +364,21 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                     <Input
                       id="fumble-wallet"
                       value={value}
-                      onChange={(e) => setValue(e.target.value)}
+                      onChange={(e) => {
+                        setValue(e.target.value);
+                        setKolOpen(true);
+                      }}
+                      onFocus={() => setKolOpen(true)}
+                      onBlur={() => setKolOpen(false)}
                       onKeyDown={(e) => {
-                        if (e.key === "Tab" && !e.shiftKey && nameStart) {
+                        if (kolHits.length > 0 && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                          e.preventDefault();
+                          setKolIndex((i) => (e.key === "ArrowDown" ? (i + 1) % kolHits.length : (i - 1 + kolHits.length) % kolHits.length));
+                        } else if (e.key === "Enter" && kolIndex >= 0 && kolHits[kolIndex]) {
+                          e.preventDefault();
+                          pickKol(kolHits[kolIndex].wallet);
+                        } else if (e.key === "Escape") setKolOpen(false);
+                        else if (e.key === "Tab" && !e.shiftKey && nameStart) {
                           e.preventDefault();
                           addSol();
                         }
@@ -347,6 +396,26 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                     {scanning ? "Scanning" : "Scan"}
                   </Button>
                 </div>
+                {kolHits.length > 0 && (
+                  <div role="listbox" aria-label="Traders" className="absolute top-11 right-0 left-0 z-30 border border-border bg-card shadow-lg sm:top-12">
+                    {kolHits.map((h, i) => (
+                      <button
+                        key={h.wallet}
+                        type="button"
+                        role="option"
+                        aria-selected={i === kolIndex}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => pickKol(h.wallet)}
+                        className={cn("flex w-full items-baseline gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted", i === kolIndex && "bg-muted")}
+                      >
+                        <span className="min-w-0 truncate font-bold">{h.name}</span>
+                        {h.twitter && <span className="shrink-0 text-xs text-muted-foreground">@{h.twitter}</span>}
+                        <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">{shortMint(h.wallet)}</span>
+                      </button>
+                    ))}
+                    <p className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">Trader wallets from Solana Tracker</p>
+                  </div>
+                )}
                 {emptyWallet ? (
                   <p role="status" className="mt-2 text-sm font-bold">
                     No transactions found for this wallet.

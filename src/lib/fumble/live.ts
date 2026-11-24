@@ -1,5 +1,6 @@
 import { lookWallet, rememberedLook } from "./check.ts";
 import { fetchHistory } from "./helius.ts";
+import { createKolDirectory, memoryKolStore, sqlKolStore } from "./kols.ts";
 import { birdeyeProvider, firstOf, geckoProvider, pythProvider, sharedPrices, solPriceAt } from "./prices.ts";
 import { savedPrices, sqlPriceStore } from "./priceStore.ts";
 import { scanWallet } from "./scan.ts";
@@ -64,6 +65,16 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
     },
   });
   return scanner;
+}
+
+let kols: ReturnType<typeof createKolDirectory> | null | undefined;
+
+/** The KOL name search, or null when the server has no Solana Tracker key. Shared by every request on this server; the list is saved in the database when there is one. */
+export function getKolDirectory(): ReturnType<typeof createKolDirectory> | null {
+  if (kols !== undefined) return kols;
+  const apiKey = process.env.SOLANA_TRACKER_API_KEY;
+  if (!apiKey) return (kols = null);
+  return (kols = createKolDirectory({ apiKey, store: sqlKolStore() ?? memoryKolStore() }));
 }
 
 let looker: ReturnType<typeof rememberedLook> | null | undefined;
