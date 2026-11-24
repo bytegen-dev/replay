@@ -6,8 +6,9 @@ import { MobileMenu } from "@/components/MobileMenu";
 import { SiteNav } from "@/components/SiteNav";
 
 /**
- * One header for every page. On a wide screen: the name on the left, the tools and links in line, Subscribe on the
- * right. On a phone: the name, Subscribe and a hamburger that opens a drawer. It sticks to the top and blurs what scrolls behind it.
+ * One header for every page. On a wide screen: the name on the left, the tools and links in line, and the account button on the right ("Sign in", or the
+ * signed-in email; it draws nothing when sign-in is switched off). On a phone: only the name and a hamburger that opens a drawer, which holds the same links
+ * and the account row; the nav and the account button are hidden below the `sm` width. It sticks to the top and blurs what scrolls behind it.
  */
 export function SiteHeader() {
   return (

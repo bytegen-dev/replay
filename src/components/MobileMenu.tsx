@@ -12,7 +12,7 @@ import { AUTH_CHANGED_EVENT, openGameFromLink, openSignIn, useViewer } from "@/l
 
 const TOOLS = [
   { href: "/recap", label: "Recap", note: "What your wallet made, and what it missed", Icon: ScanSearch },
-  { href: "/trade", label: "Trade", note: "Train your agent, paper and live trading. Coming soon", Icon: ArrowLeftRight },
+  { href: "/trade", label: "Trade", note: "Train your agent, paper and live trading", Icon: ArrowLeftRight },
   { href: "/wayback", label: "Wayback", note: "Past buys and the price on any day", Icon: History },
   { href: "/game", label: "Game", note: "Fly Tony Stonk through real prices", Icon: Gamepad2 },
   { href: "/docs", label: "Docs", note: "Guides and the public API", Icon: BookOpen },

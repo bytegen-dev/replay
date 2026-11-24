@@ -7,6 +7,7 @@ import { ThemeSelector } from "@/components/ThemeSelector";
 import { SUPPORT_HREF } from "@/lib/contact.ts";
 
 const PAGES = [
+  { label: "Recap", href: "/recap" },
   { label: "Wayback", href: "/wayback" },
   { label: "Game", href: "/game" },
   { label: "Docs", href: "/docs" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { Asterisk, Bot, Clapperboard, Eye, EyeOff, ImageDown, RefreshCw, RotateCcw, Search, Settings, Trophy, TriangleAlert } from "lucide-react";
+import { Asterisk, Bot, Clapperboard, Eye, EyeOff, ImageDown, RefreshCw, RotateCcw, Search, Settings, Trophy, TriangleAlert, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
+import { WalletCancelled, watchWallets, type WalletHost, type WalletOption } from "@/lib/fumble/injectedWallet.ts";
 import { solName } from "@/lib/fumble/solName.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
@@ -223,6 +224,20 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   // text it was asked for, so older answers are never shown against newer text.
   const [kol, setKol] = useState<{ q: string; hits: { name: string; twitter?: string; wallet: string }[] } | null>(null);
   const [kolOpen, setKolOpen] = useState(false);
+  // Wallets installed in this browser, for "Use my wallet": every wallet that announces itself to the page (Phantom, Solflare, Backpack, Jupiter, OKX, Coinbase,
+  // Glow and the rest), found as they load, and looked for once more a moment later because some put themselves on the page late.
+  const [installed, setInstalled] = useState<WalletOption[]>([]);
+  const [walletBusy, setWalletBusy] = useState<string | null>(null);
+  const [walletNote, setWalletNote] = useState<string | null>(null);
+  const [choosing, setChoosing] = useState(false);
+  useEffect(() => {
+    const watcher = watchWallets(window as unknown as WalletHost, (list) => setInstalled((prev) => (prev.length === list.length && prev.every((w, i) => w.id === list[i].id) ? prev : list)));
+    const timers = [600, 2000].map((ms) => setTimeout(watcher.refresh, ms));
+    return () => {
+      timers.forEach(clearTimeout);
+      watcher.stop();
+    };
+  }, []);
   const [kolIndex, setKolIndex] = useState(-1);
   useEffect(() => {
     const q = value.trim();
@@ -271,6 +286,26 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
       return;
     }
     void scan(wallet);
+  }
+
+  // "Use my wallet": reads the address of the wallet chosen (and nothing else: no signature, no transaction) and runs the recap for it like any pasted address.
+  async function connectWith(wallet: WalletOption) {
+    if (walletBusy) return;
+    setChoosing(false);
+    setWalletBusy(wallet.label);
+    setWalletNote(null);
+    try {
+      pickKol(await wallet.read());
+    } catch (e) {
+      setWalletNote(e instanceof WalletCancelled ? "Connection cancelled." : `Couldn\u2019t read your ${wallet.label} address. Paste it instead.`);
+    } finally {
+      setWalletBusy(null);
+    }
+  }
+  // One wallet is used straight away; with several, the button opens the list to choose from.
+  function startWallet() {
+    if (installed.length === 1) void connectWith(installed[0]);
+    else setChoosing((open) => !open);
   }
 
   // A plain word that is not an address could be a .sol name: it is offered with ".sol" after it, and Tab (or a tap on the hint) takes it.
@@ -460,6 +495,42 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                 )}
               </form>
               <div data-human-slot />
+
+              {installed.length > 0 && status !== "scanning" && (
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={startWallet}
+                    disabled={walletBusy !== null}
+                    aria-expanded={installed.length > 1 ? choosing : undefined}
+                    className="inline-flex w-fit items-center gap-2 text-sm font-bold text-foreground underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60"
+                  >
+                    {walletBusy ? <MarkLoader className="size-4" /> : <Wallet className="size-4" aria-hidden />}
+                    {walletBusy ? `Waiting for ${walletBusy}` : "Use my wallet"}
+                  </button>
+                  {choosing && (
+                    <div role="group" aria-label="Choose a wallet" className="flex max-w-xl flex-wrap gap-2">
+                      {installed.map((w) => (
+                        <button key={w.id} type="button" onClick={() => void connectWith(w)} className="flex h-9 items-center gap-2 border border-border px-3 text-sm font-bold transition-colors hover:border-primary hover:text-primary">
+                          {w.icon ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- the wallet's own small icon, a data address, nothing for the image optimiser to do
+                            <img src={w.icon} alt="" className="size-5 shrink-0" />
+                          ) : (
+                            <Wallet className="size-4 shrink-0" aria-hidden />
+                          )}
+                          {w.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <span className="text-xs text-muted-foreground">Reads your address only. Nothing is signed or sent.</span>
+                  {walletNote && (
+                    <p role="status" className="text-sm font-bold">
+                      {walletNote}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {!launch && !trades && !scanning && recent.length > 0 && (
                 <div className="flex max-w-2xl flex-wrap items-center gap-2">
