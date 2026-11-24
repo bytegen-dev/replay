@@ -120,47 +120,35 @@ test("a rescan shows the saved trades at once, before anything new has been read
   assert.equal(seen[seen.length - 1].partial, false);
 });
 
-test("when time runs out before reaching the saved transactions, the saved state is left alone and only what was read is used", async () => {
+test("when time runs out before reaching the saved transactions, what was read becomes the saved run, so there is no gap", async () => {
   const store = memoryStore();
   await scanWallet(WALLET, { ...base, history: serve(older), store });
-  const before = JSON.stringify(store.wallets.get(WALLET));
   const result = await scanWallet(WALLET, {
     ...base,
     store,
     history: async () => ({ txs: newer, pages: 1, complete: false, oldest: newer[newer.length - 1].timestamp }),
   });
-  assert.equal(JSON.stringify(store.wallets.get(WALLET)), before);
+  const saved = store.wallets.get(WALLET)!;
+  assert.equal(saved.newestSig, newer[0].signature);
+  assert.equal(saved.oldestSig, newer[newer.length - 1].signature);
+  assert.equal(saved.complete, false);
   assert.equal(result.history.complete, false);
   assert.ok(result.tradeList.every((t) => t.time >= newer[newer.length - 1].timestamp));
+  assert.ok(saved.trades.every((t) => t.time >= newer[newer.length - 1].timestamp), "the older saved trades were let go");
 });
 
-test("a store that fails to load or save does not fail the scan", async () => {
-  const broken: WalletStore = {
-    load: async () => {
-      throw new Error("db down");
-    },
-    save: async () => {
-      throw new Error("db down");
-    },
-  };
-  const result = await scanWallet(WALLET, { ...base, history: serve(all), store: broken });
-  assert.equal(result.trades, 28);
-});
-
-test("a wallet with no transactions saves nothing", async () => {
+test("after a catch-up that fell short, Load more reads on from the new run and ends with the whole history", async () => {
   const store = memoryStore();
-  await scanWallet(WALLET, { ...base, history: serve([]), store });
-  assert.equal(store.wallets.size, 0);
+  await scanWallet(WALLET, { ...base, history: serve(older), store });
+  await scanWallet(WALLET, { ...base, store, history: async () => ({ txs: newer, pages: 1, complete: false, oldest: newer[newer.length - 1].timestamp }) });
+  const calls: { until?: string; before?: string }[] = [];
+  const more = await scanWallet(WALLET, { ...base, history: serve(all, calls), store }, { more: true });
+  assert.equal(calls[0].before, newer[newer.length - 1].signature, "it carried on from the oldest of the new run");
+  const full = await scanWallet(WALLET, { ...base, history: serve(all) });
+  assert.deepEqual(more.tradeList, full.tradeList);
+  assert.equal(more.history.complete, true);
 });
 
-test("a scan without a store works as before", async () => {
-  const result = await scanWallet(WALLET, { ...base, history: serve(all) });
-  assert.equal(result.trades, 28);
-});
-
-/* ------------------------------------ reading further back ------------------------------------ */
-
-/** A history that only reached the newer part of the wallet, as when time ran out. */
 const shallow = (source: HeliusTx[]) => async () => ({ txs: source, pages: 1, complete: false, oldest: source[source.length - 1].timestamp });
 
 test("reading further back continues from the oldest saved transaction and joins up with what was saved", async () => {

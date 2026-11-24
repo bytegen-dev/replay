@@ -26,8 +26,8 @@ export interface SavedWallet {
 
 export interface WalletStore {
   load(wallet: string): Promise<SavedWallet | null>;
-  /** Saves the wallet's state. `added` are the trades not saved before; the rest of `saved.trades` is already there. */
-  save(wallet: string, saved: SavedWallet, added: Trade[]): Promise<void>;
+  /** Saves the wallet's state. `added` are the trades not saved before; the rest of `saved.trades` is already there. With `replace`, `saved.trades` is the whole saved run and any other trades saved for the wallet are removed. */
+  save(wallet: string, saved: SavedWallet, added: Trade[], opts?: { replace?: boolean }): Promise<void>;
 }
 
 /**
@@ -96,18 +96,19 @@ export function sqlStore(sql: Sql | null = connectDb()): WalletStore | null {
         trades: trades.map((t) => ({ signature: t.signature as string, side: t.side as "buy" | "sell", mint: t.mint as string, tokens: Number(t.tokens), sol: Number(t.sol), time: Number(t.time), ...(t.source ? { source: t.source as string } : {}) })),
       };
     },
-    async save(wallet, s, added) {
+    async save(wallet, s, added, opts) {
       await tables(sql);
       const state = sql`INSERT INTO fumble_wallets (wallet, newest_sig, newest_time, oldest_sig, oldest_time, complete, transactions, dropped, updated_at)
         VALUES (${wallet}, ${s.newestSig}, ${s.newestTime}, ${s.oldestSig}, ${s.oldestTime}, ${s.complete}, ${s.transactions}, ${JSON.stringify(s.dropped)}::jsonb, now())
         ON CONFLICT (wallet) DO UPDATE SET newest_sig = EXCLUDED.newest_sig, newest_time = EXCLUDED.newest_time, oldest_sig = EXCLUDED.oldest_sig,
           oldest_time = EXCLUDED.oldest_time, complete = EXCLUDED.complete, transactions = EXCLUDED.transactions, dropped = EXCLUDED.dropped, updated_at = now()`;
-      if (!added.length) return void (await state);
+      const clear = opts?.replace ? sql`DELETE FROM fumble_trades WHERE wallet = ${wallet} AND signature <> ALL(${s.trades.map((t) => t.signature)}::text[])` : null;
+      if (!added.length) return void (clear ? await sql.transaction([state, clear]) : await state);
       const rows = sql`INSERT INTO fumble_trades (wallet, signature, side, mint, tokens, sol, time, source)
         SELECT ${wallet}, * FROM unnest(${added.map((t) => t.signature)}::text[], ${added.map((t) => t.side)}::text[], ${added.map((t) => t.mint)}::text[],
           ${added.map((t) => t.tokens)}::float8[], ${added.map((t) => t.sol)}::float8[], ${added.map((t) => t.time)}::bigint[], ${added.map((t) => t.source ?? null)}::text[])
         ON CONFLICT (wallet, signature) DO NOTHING`;
-      await sql.transaction([state, rows]);
+      await sql.transaction(clear ? [state, rows, clear] : [state, rows]);
     },
   };
 }

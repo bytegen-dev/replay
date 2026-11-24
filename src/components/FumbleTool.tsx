@@ -1,6 +1,6 @@
 "use client";
 
-import { FileSpreadsheet, ImageDown, RefreshCw, Settings } from "lucide-react";
+import { FileSpreadsheet, ImageDown, RefreshCw, Search, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoinTable } from "@/components/CoinTable";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
+import { solName } from "@/lib/fumble/solName.ts";
 import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -210,10 +211,30 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   }, [value]);
   const emptyWallet = looked?.status === "empty" && looked.wallet === value.trim();
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const wallet = value.trim();
+    let wallet = value.trim();
     if (emptyWallet) return;
+    // A name like bytegen.sol is turned into the wallet that owns it first.
+    if (solName(wallet)) {
+      setError(null);
+      setStatus("scanning");
+      try {
+        const res = await fetch(`/api/fumble/resolve?name=${encodeURIComponent(wallet)}`);
+        const j = (await res.json().catch(() => null)) as { wallet?: string; error?: string } | null;
+        if (!res.ok || !j?.wallet) {
+          setError(j?.error ?? "Couldn't look that name up. Try the wallet address.");
+          setStatus("error");
+          return;
+        }
+        wallet = j.wallet;
+        setValue(wallet);
+      } catch {
+        setError("Couldn't look that name up. Try the wallet address.");
+        setStatus("error");
+        return;
+      }
+    }
     if (!isWalletAddress(wallet)) {
       setError("That doesn't look like a Solana wallet address.");
       setStatus("error");
@@ -285,17 +306,18 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                 </Label>
                 <div className="flex">
                   {/* The box and the button meet with no gap, like the waitlist form: the box has its bottom-left corner cut, the button its top-right. */}
-                  <div className="cut-bl h-11 min-w-0 flex-1 sm:h-12">
+                  <div className="cut-bl relative h-11 min-w-0 flex-1 sm:h-12">
+                    <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
                     <Input
                       id="fumble-wallet"
                       value={value}
                       onChange={(e) => setValue(e.target.value)}
-                      placeholder="Solana wallet address"
+                      placeholder="Wallet address or name.sol"
                       autoComplete="off"
                       autoCapitalize="off"
                       spellCheck={false}
                       aria-invalid={emptyWallet || (status === "error" && !trades)}
-                      className="h-full w-full rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0"
+                      className="h-full w-full rounded-none border-0 bg-transparent pr-3 pl-9 text-sm shadow-none focus-visible:ring-0"
                     />
                   </div>
                   <Button type="submit" disabled={scanning || emptyWallet} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">

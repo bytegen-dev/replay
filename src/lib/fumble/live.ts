@@ -1,6 +1,6 @@
 import { lookWallet, rememberedLook } from "./check.ts";
 import { fetchHistory } from "./helius.ts";
-import { birdeyeProvider, firstOf, geckoProvider, sharedPrices, solPriceAt } from "./prices.ts";
+import { birdeyeProvider, firstOf, geckoProvider, pythProvider, sharedPrices, solPriceAt } from "./prices.ts";
 import { savedPrices, sqlPriceStore } from "./priceStore.ts";
 import { scanWallet } from "./scan.ts";
 import { memoryStore, sqlStore } from "./store.ts";
@@ -33,11 +33,14 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   if (!heliusKey) return (scanner = null);
   const birdeyeKey = process.env.BIRDEYE_API_KEY;
   // Shared by every scan on this server, so a coin two wallets traded is priced once.
-  const fetched = firstOf([...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]);
+  // Pyth, when it has a key, answers for SOL only (the dollar value of each trade); every other coin goes on to Birdeye and GeckoTerminal.
+  const pythKey = process.env.PYTH_API_KEY;
+  const fetched = firstOf([...(pythKey ? [{ name: "pyth", get: pythProvider(pythKey) }] : []), ...(birdeyeKey ? [{ name: "birdeye", get: birdeyeProvider(birdeyeKey) }] : []), { name: "geckoterminal", get: geckoProvider() }]);
   // With a database, a coin priced by any server instance is saved, so the free-tier limits are spent once per coin, not once per instance per wallet.
   const priceStore = sqlPriceStore();
   const prices = sharedPrices(priceStore ? savedPrices(fetched, priceStore) : fetched);
-  const solUsd = solPriceAt(prices);
+  // One line for each hour of SOL price looked up, saying which source answered (or that none did), so the logs show whether Pyth is doing its job.
+  const solUsd = solPriceAt(prices, (source) => console.info(`fumble: SOL price from ${source ?? "no source"}`));
   const tokens = heliusTokens(heliusKey);
   const maxPages = intEnv("FUMBLE_MAX_PAGES", 30);
   const budgetMs = intEnv("FUMBLE_BUDGET_SECONDS", 50) * 1000;

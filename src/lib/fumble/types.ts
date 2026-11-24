@@ -8,6 +8,8 @@ export interface Trade {
   tokens: number;
   /** SOL spent (buy) or received (sell), after network fees and tips but not counting account rent. */
   sol: number;
+  /** Set only while a trade paid in a stablecoin waits for its SOL amount: the dollars paid or received. `sol` is 0 until then (see `inSol`). */
+  usd?: number;
   /** Seconds since 1970. */
   time: number;
   signature: string;

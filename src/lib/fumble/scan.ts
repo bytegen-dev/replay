@@ -6,7 +6,7 @@ import { SOL_MINT, type PriceSeries } from "./prices.ts";
 import { missedTotals } from "./missed.ts";
 import { findPositions, roundTripFor, type Position, type RoundTrip } from "./roundtrip.ts";
 import type { SavedWallet, WalletStore } from "./store.ts";
-import { parseTrades, type HeliusTx } from "./trades.ts";
+import { inSol, parseTrades, type HeliusTx } from "./trades.ts";
 import type { Dropped, Trade } from "./types.ts";
 
 /**
@@ -202,12 +202,15 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
   // A first scan, and reading further back, stop once enough trades are found: a wallet with thousands of trades a month is read a hundred at a time,
   // and the rest is loaded on request. Catching up on what is new since a saved scan reads all of it.
   const target = opts.target ?? TRADES_PER_LOAD;
-  const enough = (txs: HeliusTx[]) => bigEnough(parseTrades(wallet, txs).trades).length >= target;
+  // A trade paid in a stablecoin has no SOL amount yet, so about the minimum is taken as 15 dollars, close enough to decide when to stop reading.
+  const enough = (txs: HeliusTx[]) => parseTrades(wallet, txs).trades.filter((t) => t.sol >= MIN_TRADE_SOL || (t.usd ?? 0) >= 15).length >= target;
   const history = await deps.history(wallet, emitPartial, backfill ? undefined : (saved?.newestSig ?? undefined), backfill ? (saved!.oldestSig ?? undefined) : undefined, saved === null || backfill ? enough : undefined);
   reading = false;
   const fresh = parseTrades(wallet, history.txs);
+  // Trades paid in a stablecoin get their SOL amount now, at the SOL price of the time (and are saved that way).
+  fresh.trades = await inSol(fresh.trades, deps.solUsd, fresh.dropped);
   // With saved trades and the newer transactions all read, the two join up. If time ran out before reaching the saved ones there is a gap
-  // between them, so only what was just read is used, as on a first scan, and the saved state is left as it was.
+  // between them, so only what was just read is used, as on a first scan, and it replaces the saved run (below).
   // Reading further back always joins: it starts exactly where the saved history ends.
   const joined = saved !== null && (backfill || history.complete);
   const trades = joined ? mergeTrades(earlier, fresh.trades) : fresh.trades;
@@ -221,7 +224,9 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
       if (history.txs.length > 0 || history.complete) {
         next = { trades, newestSig: saved!.newestSig, newestTime: saved!.newestTime, oldestSig: last ? last.signature : saved!.oldestSig, oldestTime: last ? last.timestamp : saved!.oldestTime, complete: history.complete, transactions: saved!.transactions + history.txs.length, dropped };
       }
-    } else if (history.txs.length > 0 && (joined || saved === null)) {
+    } else if (history.txs.length > 0) {
+      // Not joined to the saved run (a first scan, or time ran out before reaching it): what was just read becomes the saved run. The older saved
+      // trades are let go, so the run stays unbroken and Load more carries on from its oldest end instead of leaving a gap.
       next = joined
         ? { trades, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: saved!.oldestSig, oldestTime: saved!.oldestTime, complete: saved!.complete, transactions: saved!.transactions + history.txs.length, dropped }
         : { trades, newestSig: history.txs[0].signature, newestTime: history.txs[0].timestamp, oldestSig: last.signature, oldestTime: last.timestamp, complete: history.complete, transactions: history.txs.length, dropped };
@@ -229,7 +234,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
   }
   if (deps.store && next) {
     const known = new Set(earlier.map((t) => t.signature));
-    persisted = deps.store.save(wallet, next, trades.filter((t) => !known.has(t.signature))).catch(() => {
+    persisted = deps.store.save(wallet, next, trades.filter((t) => !known.has(t.signature)), saved !== null && !joined ? { replace: true } : undefined).catch(() => {
       /* not saving is no reason to fail the scan */
     });
   }

@@ -167,14 +167,47 @@ export function firstOf(providers: { name: string; get: CandleProvider }[]) {
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
 
 /**
+ * Pyth's price history for SOL/USD (the Pro History API, which needs a key; the free key allows about 10 calls every 10 seconds). It only knows listed
+ * assets, so it answers for SOL and says "none" for every other token, and the Birdeye and GeckoTerminal providers carry on from there.
+ * The response is TradingView-style: parallel lists of times (seconds), highs, lows and closes.
+ */
+export function parsePyth(json: unknown): Candle[] | null {
+  const b = json as { s?: string; t?: number[]; h?: number[]; l?: number[]; c?: number[] } | null;
+  if (!b || b.s !== "ok" || !Array.isArray(b.t) || !Array.isArray(b.h) || !Array.isArray(b.c)) return null;
+  const out: Candle[] = [];
+  b.t.forEach((t, i) => {
+    const h = b.h![i];
+    const c = b.c![i];
+    if (t > 0 && h > 0 && c > 0) out.push({ t, h, l: b.l?.[i] ?? h, c });
+  });
+  return out.sort((a, b2) => a.t - b2.t);
+}
+
+export function pythProvider(apiKey: string, deps: ProviderDeps = {}, minGapMs = 1100): CandleProvider {
+  const fetchImpl: Fetch = deps.fetchImpl ?? ((u, i) => fetch(u, i));
+  const limited = makeLimiter(minGapMs, deps.sleep, deps.now);
+  return (mint, fromTime, nowTime) => {
+    if (mint !== SOL_MINT) return Promise.resolve(null);
+    return limited(async () => {
+      const url = `https://pyth.dourolabs.app/v1/fixed_rate@200ms/history?symbol=${encodeURIComponent("Crypto.SOL/USD")}&resolution=1&from=${Math.floor(fromTime)}&to=${Math.floor(nowTime)}`;
+      const res = await fetchRetry(fetchImpl, url, { headers: { authorization: `Bearer ${apiKey}`, accept: "application/json" } }, { sleep: deps.sleep });
+      if (res.status === 404) return null;
+      if (!res.ok) throw new NetError(res.status, "pyth.dourolabs.app");
+      const candles = parsePyth(await res.json());
+      return candles && candles.length ? candles : null;
+    });
+  };
+}
+
+/**
  * The SOL price in USD at a moment. One call covers an hour of minute candles, so every sale in the same hour shares it.
  * Null when no provider had the SOL price (the sale then cannot be valued).
  */
-export function solPriceAt(prices: (mint: string, from: number, now: number) => Promise<PriceSeries | null>) {
+export function solPriceAt(prices: (mint: string, from: number, now: number) => Promise<PriceSeries | null>, onSource?: (source: string | null) => void) {
   const byHour = new Map<number, Promise<Candle[] | null>>();
   return async (time: number): Promise<number | null> => {
     const hour = Math.floor(time / 3600) * 3600;
-    if (!byHour.has(hour)) byHour.set(hour, prices(SOL_MINT, hour, hour + 3600).then((s) => s?.candles ?? null));
+    if (!byHour.has(hour)) byHour.set(hour, prices(SOL_MINT, hour, hour + 3600).then((s) => (onSource?.(s?.source ?? null), s?.candles ?? null)));
     const candles = await byHour.get(hour)!;
     // A failed lookup is not remembered, so a hiccup does not poison that hour for everyone after.
     if (!candles) byHour.delete(hour);
