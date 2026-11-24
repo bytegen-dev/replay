@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ScrollTopButton } from "@/components/ScrollTopButton";
 import { GOLD_ENDS, GOLD_STARTS, goldPrice } from "@/lib/gold.ts";
 import { encodeRange, shiftYm } from "@/lib/urlState.ts";
 
@@ -131,7 +130,6 @@ export function FooterScrub() {
         ) : (
           <span className="text-xs text-muted-foreground sm:text-sm">no price here, our gold history starts in {goldSince}</span>
         )}
-        <ScrollTopButton className="ml-auto text-xs text-muted-foreground underline underline-offset-4 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary sm:text-sm" />
       </div>
 
       {/* Once a month is pinned on the timeline: what you picked, and one click to run it. */}
