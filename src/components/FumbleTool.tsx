@@ -211,6 +211,14 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   }, [value]);
   const emptyWallet = looked?.status === "empty" && looked.wallet === value.trim();
 
+  // A plain word that is not an address could be a .sol name: it is offered with ".sol" after it, and Tab (or a tap on the hint) takes it.
+  const typed = value.trim();
+  const nameStart = typed !== "" && /^[a-z0-9_-]{1,63}$/i.test(typed) && !isWalletAddress(typed) && status !== "scanning";
+  function addSol() {
+    setValue(`${typed}.sol`);
+    setError(null);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     let wallet = value.trim();
@@ -236,7 +244,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
       }
     }
     if (!isWalletAddress(wallet)) {
-      setError("That doesn't look like a Solana wallet address.");
+      setError("Enter a wallet address, or a name ending in .sol.");
       setStatus("error");
       return;
     }
@@ -309,16 +317,29 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                   {/* The box and the button meet with no gap, like the waitlist form: the box has its bottom-left corner cut, the button its top-right. */}
                   <div className="cut-bl relative h-11 min-w-0 flex-1 sm:h-12">
                     <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                    {/* The ".sol" that Tab would add, shown after what was typed (an invisible copy of the text holds its place). */}
+                    {nameStart && (
+                      <div aria-hidden className="input-ghost pointer-events-none absolute inset-y-0 right-3 left-9 flex items-center overflow-hidden text-sm">
+                        <span className="invisible whitespace-pre">{value}</span>
+                        <span className="text-muted-foreground">.sol</span>
+                      </div>
+                    )}
                     <Input
                       id="fumble-wallet"
                       value={value}
                       onChange={(e) => setValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Tab" && !e.shiftKey && nameStart) {
+                          e.preventDefault();
+                          addSol();
+                        }
+                      }}
                       placeholder="Wallet address or name.sol"
                       autoComplete="off"
                       autoCapitalize="off"
                       spellCheck={false}
                       aria-invalid={emptyWallet || (status === "error" && !trades)}
-                      className="h-full w-full rounded-none border-0 bg-transparent pr-3 pl-9 text-sm shadow-none focus-visible:ring-0"
+                      className="h-full w-full rounded-none border-0 bg-transparent pr-3 pl-9 text-sm shadow-none focus-visible:ring-0 aria-invalid:ring-0 dark:aria-invalid:ring-0"
                     />
                   </div>
                   <Button type="submit" disabled={scanning || emptyWallet} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">
@@ -329,6 +350,12 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                 {emptyWallet ? (
                   <p role="status" className="mt-2 text-sm font-bold">
                     No transactions found for this wallet.
+                  </p>
+                ) : nameStart ? (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    <button type="button" onClick={addSol} className="font-bold text-foreground underline underline-offset-4 hover:text-primary">
+                      Press Tab to add .sol
+                    </button>
                   </p>
                 ) : (
                   error && (
