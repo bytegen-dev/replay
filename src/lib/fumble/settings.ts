@@ -11,7 +11,8 @@ import { isCurrency } from "../fxCurrencies.ts";
  *  - hidePnl, hideRoundtrip, hideFumble, hideVolume: what to do with each of those numbers, on the page and on the pictures: "show" it (the default),
  *    "mask" it (drawn as ***, so it is clear something is there) or "hide" it (left out, and the rest closes up). The PnL also covers the best trade on the
  *    picture; each also covers its column in the table (PnL, Roundtripped, Fumbled).
- *  - hideWallet: the wallet address is shown, or dotted out in the box and drawn as *** on the picture. There is nothing to leave out, so no "hide".
+ *  - hideWallet: the wallet address is shown, or drawn as *** on the pictures and the video. The address box on the page is never masked: it holds what the
+ *    visitor typed or picked. There is nothing to leave out, so no "hide".
  */
 export const SETTINGS_KEY = "replay-fumble-settings";
 

@@ -448,7 +448,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                       autoCapitalize="off"
                       spellCheck={false}
                       aria-invalid={emptyWallet || (status === "error" && !trades)}
-                      className={cn("h-full w-full rounded-none border-0 bg-transparent pr-3 pl-9 text-sm shadow-none focus-visible:ring-0 aria-invalid:ring-0 dark:aria-invalid:ring-0", settings.hideWallet && !nameStart && "[-webkit-text-security:disc] focus:[-webkit-text-security:none]")}
+                      className="h-full w-full rounded-none border-0 bg-transparent pr-3 pl-9 text-sm shadow-none focus-visible:ring-0 aria-invalid:ring-0 dark:aria-invalid:ring-0"
                     />
                   </div>
                   <Button type="submit" disabled={scanning || emptyWallet} className="cut-tr cut-primary h-11 shrink-0 gap-2 rounded-none border-0 px-5 text-sm font-bold text-primary-foreground sm:h-12 sm:px-7 sm:text-base">
@@ -848,7 +848,7 @@ function FumbleSettingsDialog({ settings, onChange }: { settings: FumbleSettings
                 <HideButton label="Wallet" mode={settings.hideWallet ? "mask" : "show"} cycle={["show", "mask"]} onChange={(m) => onChange({ hideWallet: m === "mask" })} />
               </div>
             </div>
-            <p className="text-xs leading-snug text-muted-foreground">PnL also covers the best trade on the picture. PnL, Roundtripped and Fumble each also cover their column in the table. A masked wallet is dotted out in the box until you click it.</p>
+            <p className="text-xs leading-snug text-muted-foreground">PnL also covers the best trade on the picture. PnL, Roundtripped and Fumble each also cover their column in the table. A masked wallet is shown as *** on the pictures and the video; the address box always shows what you typed.</p>
           </div>
         </div>
       </DialogContent>

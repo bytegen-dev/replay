@@ -1,10 +1,10 @@
-import { ScanSearch } from "lucide-react";
 import type { Metadata } from "next";
 import { FumbleTool } from "@/components/FumbleTool";
 import { RollText } from "@/components/RollText";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SpotlightText } from "@/components/SpotlightText";
+import { TrackingScanIcon } from "@/components/TrackingScanIcon";
 import { RECAP_NAME } from "@/lib/recapName.ts";
 import { pageMeta } from "@/lib/site.ts";
 
@@ -27,9 +27,9 @@ export default function RecapPage() {
             className="mt-0"
             intro={
               <div className="flex flex-col gap-2">
-                {/* The same icon as the Recap link in the menu, so the page and the link read as one; sized with the title (em), so it grows with it. */}
+                {/* The same icon as the Recap link in the menu, so the page and the link read as one; sized with the title (em), so it grows with it. Its lens follows the pointer. */}
                 <h1 className="flex items-center gap-3 font-heading text-6xl font-medium tracking-tight sm:gap-4">
-                  <ScanSearch className="size-[0.8em] shrink-0 text-primary" strokeWidth={1.5} aria-hidden />
+                  <TrackingScanIcon className="size-[0.8em] shrink-0 text-primary" strokeWidth={1.5} />
                   <RollText text={RECAP_NAME} introDelay={60} wide={[2]} glitch />
                 </h1>
                 <SpotlightText className="max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base" text="Paste a Solana wallet. See what it made, what every sell left on the table, and how much profit it roundtripped." />
