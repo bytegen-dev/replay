@@ -679,7 +679,7 @@ function ProgressLine({ progress, hasTrades, reading, active }: { progress: Prog
 function Stat({ label, dollars, sols, display, pending, signed, about, className, texture, hero, loading, hidden, coverage, what, info }: { info?: string; coverage?: Coverage; what?: "pnl" | "fumble" | "roundtrip"; hidden?: boolean; label: string; dollars: number; sols: number; display: Display; pending: boolean; signed?: boolean; about?: string; className?: string; texture?: boolean; hero?: boolean; loading?: boolean }) {
   // A figure the visitor chose to hide is ***, with no sign, colour or second line. There is no dash. A figure with nothing behind it because nothing was
   // sold reads 0.00 SOL, which is true. One that could not be worked out says so in words (a zero would be false); one that was only partly worked out
-  // shows what was, and a warning mark by its name says how much, in a tooltip.
+  // shows what was, and a warning mark by its name says how much, in a tooltip. The mark's colour is the kind of problem: red when nothing could be worked out, amber when only some of it could.
   const note = !hidden && !pending && coverage && what ? coverageNote(coverage, what) : null;
   const missing = !hidden && !pending && coverage?.kind === "none" && what ? NOT_THERE[what] : null;
   const tone = hidden || missing ? "text-muted-foreground" : hero && !signed && !pending ? "text-destructive" : signed && !pending ? (sols > 0 ? "text-primary" : sols < 0 ? "text-destructive" : "") : "";
@@ -701,7 +701,7 @@ function Stat({ label, dollars, sols, display, pending, signed, about, className
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         {label}
         {note && (
-          <Hint text={note} className="inline-flex items-center text-muted-foreground no-underline hover:text-foreground">
+          <Hint text={note} className={cn("inline-flex items-center no-underline", coverage?.kind === "none" ? "text-destructive" : "text-amber-500")}>
             <TriangleAlert className="size-4" aria-hidden />
             <span className="sr-only">Warning: {note}</span>
           </Hint>
