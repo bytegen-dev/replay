@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fetchHistory } from "../src/lib/fumble/helius.ts";
 import { scanWallet } from "../src/lib/fumble/scan.ts";
-import { memoryStore, type WalletStore } from "../src/lib/fumble/store.ts";
+import { memoryStore } from "../src/lib/fumble/store.ts";
 import type { HeliusTx } from "../src/lib/fumble/trades.ts";
 import type { Candle } from "../src/lib/fumble/types.ts";
 

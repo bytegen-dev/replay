@@ -49,3 +49,6 @@ next-env.d.ts
 
 # A local template of the environment variables for Vercel (placeholders only, but never meant for the repo)
 vercel.env
+
+# personal notes, never published
+/notes/

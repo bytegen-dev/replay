@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+set -e
+
+# Load nvm if available (for GUI apps like GitHub Desktop)
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Nothing goes straight to main: push a branch and open a pull request.
+while IFS= read -r line || [ -n "$line" ]; do
+  [ -z "$line" ] && continue
+  remote_ref=$(echo "$line" | cut -d' ' -f3)
+  if [ "${remote_ref##*/}" = "main" ]; then
+    echo "Direct push to main is not allowed. Push a feature branch and open a pull request."
+    exit 1
+  fi
+done
+
+# The same checks the pull request runs, so a failure shows here first.
+pnpm check
