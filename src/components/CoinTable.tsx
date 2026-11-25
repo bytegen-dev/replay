@@ -1,8 +1,9 @@
 "use client";
 
-import { Eye, EyeOff, Share, Tag } from "lucide-react";
-import { useRef, useState } from "react";
+import { Eye, EyeOff, RotateCw, Share } from "lucide-react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { Hint } from "@/components/Hint";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { coinMoney, compactAmount, type CoinPart, type CoinRow } from "@/lib/fumble/coins.ts";
 import type { Display } from "@/lib/fumble/money.ts";
@@ -20,7 +21,7 @@ const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { year: "
  * stays put when it scrolls sideways. One row per coin: what was bought and sold (money, with the token amounts under), the average entry and exit,
  * what is left, the PnL and the total fumble, and two buttons: hide the coin, and share its PnL as a picture. On a phone the table scrolls sideways, with the token column staying put.
  */
-export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare, onPrice, pricing = false, pnlMode = "show", roundtripMode = "show", fumbleMode = "show" }: {
+export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare, onPrice, pricingMints, pnlMode = "show", roundtripMode = "show", fumbleMode = "show" }: {
   coins: CoinRow[];
   tokens: ApiTrades["tokens"];
   /** The scan has finished: the fumble column can say what it found, and an unworked profit is unknown rather than still coming. */
@@ -33,10 +34,10 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
   onHide: (mint: string) => void;
   onShowHidden: () => void;
   onShare: (coin: CoinRow) => void;
-  /** Tries to price what could not be priced again (the scan is run again, which looks for those coins' prices once more). Without it the "Price" buttons are left out. */
-  onPrice?: () => void;
-  /** A scan is running, so the "Price" buttons wait. */
-  pricing?: boolean;
+  /** Tries to price one coin again (the "Price" button on its row). Without it the buttons are left out. */
+  onPrice?: (mint: string) => void;
+  /** The coins being priced again right now: their Roundtripped and Fumbled cells say "Pricing" with moving dots. */
+  pricingMints?: ReadonlySet<string>;
   /** What to do with the PnL, Roundtripped and Fumbled columns: show the figures, draw them as ***, or leave the column out. */
   pnlMode?: HideMode;
   roundtripMode?: HideMode;
@@ -111,12 +112,12 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
                 )}
                 {roundtripMode !== "hide" && (
                   <TableCell className="text-right whitespace-nowrap">
-                    <Part coin={c} part={c.roundtrip} noun="positions" display={display} done={done} onPrice={onPrice} pricing={pricing} hide={roundtripMode === "mask"} />
+                    <Part coin={c} part={c.roundtrip} noun="positions" display={display} done={done} onPrice={onPrice} pricingMints={pricingMints} hide={roundtripMode === "mask"} />
                   </TableCell>
                 )}
                 {fumbleMode !== "hide" && (
                   <TableCell className="text-right whitespace-nowrap">
-                    <Part coin={c} part={c.fumble} noun="sells" display={display} done={done} onPrice={onPrice} pricing={pricing} hide={fumbleMode === "mask"} />
+                    <Part coin={c} part={c.fumble} noun="sells" display={display} done={done} onPrice={onPrice} pricingMints={pricingMints} hide={fumbleMode === "mask"} />
                   </TableCell>
                 )}
                 <TableCell className="text-right whitespace-nowrap tabular-nums">
@@ -210,10 +211,10 @@ function Pnl({ coin, display, done, hide }: { coin: CoinRow; display: Display; d
  * "Open" while nothing is sold or closed, "Pricing" while prices come, "Not priced" when none could be found, "None" when it came to nothing. A figure
  * that only some of the sells or positions could be priced for says how many, under it.
  */
-function Part({ coin, part, noun, display, done, hide, onPrice, pricing }: { coin: CoinRow; part: CoinPart | null; noun: string; display: Display; done: boolean; hide: boolean; onPrice?: () => void; pricing: boolean }) {
+function Part({ coin, part, noun, display, done, hide, onPrice, pricingMints }: { coin: CoinRow; part: CoinPart | null; noun: string; display: Display; done: boolean; hide: boolean; onPrice?: (mint: string) => void; pricingMints?: ReadonlySet<string> }) {
   const word = (text: string) => <span className="text-muted-foreground">{text}</span>;
   // What could not be priced gets a button to try again, once the scan has finished (while it runs, the coin may still be priced).
-  const priceButton = done && onPrice ? <PriceButton onPrice={onPrice} pricing={pricing} /> : null;
+  const priceButton = done && onPrice ? <PriceButton onPrice={() => onPrice(coin.mint)} /> : null;
   const unpriced = (
     <span className="inline-flex items-center justify-end gap-2">
       {word("Not priced")}
@@ -221,7 +222,9 @@ function Part({ coin, part, noun, display, done, hide, onPrice, pricing }: { coi
     </span>
   );
   if (coin.soldTokens === 0) return word("Open");
-  if (!part) return done ? unpriced : <span className="animate-pulse text-muted-foreground">Pricing</span>;
+  // This coin is being priced again: the cell says so, with the dots moving, until the answer is in.
+  if (pricingMints?.has(coin.mint)) return <PricingDots />;
+  if (!part) return done ? unpriced : <PricingDots />;
   if (part.of === 0) return word(coin.balance > 0 ? "Open" : "None");
   if (part.done === 0) return unpriced;
   if (part.sol <= 0) return word("None");
@@ -237,18 +240,51 @@ function Part({ coin, part, noun, display, done, hide, onPrice, pricing }: { coi
   );
 }
 
-/** A small button that asks for the missing prices again. It looks for them for every coin that lacks one, so any of the buttons does the same. */
-function PriceButton({ onPrice, pricing }: { onPrice: () => void; pricing: boolean }) {
+/** "Pricing" with one, two, then three dots, all the dots on the page moving together. */
+let dotStep = 0;
+const dotListeners = new Set<() => void>();
+let dotTimer: ReturnType<typeof setInterval> | null = null;
+function subscribeDots(listener: () => void) {
+  dotListeners.add(listener);
+  if (!dotTimer)
+    dotTimer = setInterval(() => {
+      dotStep = (dotStep + 1) % 3;
+      dotListeners.forEach((l) => l());
+    }, 350);
+  return () => {
+    dotListeners.delete(listener);
+    if (dotListeners.size === 0 && dotTimer) {
+      clearInterval(dotTimer);
+      dotTimer = null;
+    }
+  };
+}
+function PricingDots() {
+  const step = useSyncExternalStore(subscribeDots, () => dotStep, () => 0);
   return (
-    <button
-      type="button"
-      onClick={onPrice}
-      disabled={pricing}
-      title="Try to find the missing prices again"
-      className="inline-flex h-6 items-center gap-1 border border-border px-2 text-xs font-bold text-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50 disabled:hover:border-border disabled:hover:text-foreground"
-    >
-      <Tag className="size-3" aria-hidden /> Price
-    </button>
+    <span className="text-muted-foreground" role="status" aria-label="Pricing">
+      Pricing
+      {/* A fixed room for the three dots, so the word does not shift as they come and go. */}
+      <span aria-hidden className="inline-block w-[3ch] text-left">
+        {".".repeat(step + 1)}
+      </span>
+    </span>
+  );
+}
+
+/** A small retry icon that asks for this coin's missing prices again; "Refetch price" in a tooltip says what it does. */
+function PriceButton({ onPrice }: { onPrice: () => void }) {
+  return (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button type="button" onClick={onPrice} aria-label="Refetch price" className="inline-flex size-6 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+            <RotateCw className="size-3.5" aria-hidden />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Refetch price</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

@@ -232,11 +232,13 @@ export function sharedPrices(inner: (mint: string, from: number, now: number) =>
   const clock = opts.clock ?? Date.now;
   const entries = new Map<string, { from: number; at: number; promise: Promise<PriceSeries | null>; settled: boolean; found: boolean }>();
 
-  return function get(mint: string, from: number, now: number): Promise<PriceSeries | null> {
+  // `retry` is for someone asking again on purpose (the retry icon on a row): a coin remembered as not found is looked for again at once, instead of
+  // answering "not found" for up to a minute more. A lookup still under way is joined, and a series that was found is still reused.
+  return function get(mint: string, from: number, now: number, retry = false): Promise<PriceSeries | null> {
     const hit = entries.get(mint);
     if (hit && hit.from <= from) {
       // Still being fetched, or fetched recently enough (a coin that was not found is remembered for less time).
-      if (!hit.settled || clock() - hit.at < (hit.found ? ttl : miss)) return hit.promise;
+      if (!hit.settled || (hit.found ? clock() - hit.at < ttl : !retry && clock() - hit.at < miss)) return hit.promise;
     }
     const startFrom = hit && hit.from < from ? hit.from : from;
     const entry = { from: startFrom, at: clock(), settled: false, found: false, promise: null as unknown as Promise<PriceSeries | null> };

@@ -1,7 +1,7 @@
 import { isWalletAddress } from "./helius.ts";
 
 /**
- * "Use my wallet": reads the address of a wallet the visitor has installed, so a recap is one tap instead of a paste. It only reads the public address:
+ * "Connect wallet": reads the address of a wallet the visitor has installed, so a recap is one tap instead of a paste. It only reads the public address:
  * nothing is signed, nothing is sent, and the wallet is disconnected again straight away, so the site keeps no session. The recap itself works from the
  * address alone, as for any pasted address.
  *

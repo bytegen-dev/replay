@@ -8,6 +8,7 @@ import { CoinTable } from "@/components/CoinTable";
 import { Hint } from "@/components/Hint";
 import { Toast } from "@/components/Toast";
 import { tradesWithout, withoutCoins } from "@/lib/fumble/hide.ts";
+import { mergeCoinPricing } from "@/lib/fumble/reprice.ts";
 import { MarkLoader } from "@/components/MarkLoader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { isWalletAddress } from "@/lib/fumble/helius.ts";
 import { WalletCancelled, watchWallets, type WalletHost, type WalletOption } from "@/lib/fumble/injectedWallet.ts";
 import { solName } from "@/lib/fumble/solName.ts";
-import type { ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
+import type { ApiCoinPricing, ApiResult, ApiTrades } from "@/lib/fumble/service.ts";
 import { CurrencyPicker } from "@/components/CurrencyPicker";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { applyChoice, DEFAULT_SETTINGS, PER_LOAD_CHOICES, readSettings, writeSettings, type FumbleSettings, type HideMode } from "@/lib/fumble/settings.ts";
@@ -227,7 +228,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   // text it was asked for, so older answers are never shown against newer text.
   const [kol, setKol] = useState<{ q: string; hits: { name: string; twitter?: string; wallet: string }[] } | null>(null);
   const [kolOpen, setKolOpen] = useState(false);
-  // Wallets installed in this browser, for "Use my wallet": every wallet that announces itself to the page (Phantom, Solflare, Backpack, Jupiter, OKX, Coinbase,
+  // Wallets installed in this browser, for "Connect wallet": every wallet that announces itself to the page (Phantom, Solflare, Backpack, Jupiter, OKX, Coinbase,
   // Glow and the rest), found as they load, and looked for once more a moment later because some put themselves on the page late.
   const [installed, setInstalled] = useState<WalletOption[]>([]);
   const [walletBusy, setWalletBusy] = useState<string | null>(null);
@@ -291,7 +292,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     void scan(wallet);
   }
 
-  // "Use my wallet": reads the address of the wallet chosen (and nothing else: no signature, no transaction) and runs the recap for it like any pasted address.
+  // "Connect wallet": reads the address of the wallet chosen (and nothing else: no signature, no transaction) and runs the recap for it like any pasted address.
   async function connectWith(wallet: WalletOption) {
     if (walletBusy) return;
     setChoosing(false);
@@ -392,6 +393,44 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const viewResult = useMemo(() => (result ? withoutCoins(result, hiddenMints) : null), [result, hiddenMints]);
   const [toast, setToast] = useState<{ mint: string; ticker: string } | null>(null);
   const closeToast = useCallback(() => setToast(null), []);
+  // The coins being priced again (the retry icon on a row): only their Roundtripped and Fumbled cells change, and the totals follow when the answer is in.
+  const [pricingMints, setPricingMints] = useState<ReadonlySet<string>>(new Set());
+  const [priceNote, setPriceNote] = useState<string | null>(null);
+  const closePriceNote = useCallback(() => setPriceNote(null), []);
+  async function priceOne(mint: string) {
+    if (!trades || pricingMints.has(mint)) return;
+    const wallet = trades.wallet;
+    const ticker = tokenLabel(mint, trades.tokens).ticker;
+    setPriceNote(null);
+    setPricingMints((p) => new Set(p).add(mint));
+    try {
+      const res = await fetch("/api/fumble/price", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, token: mint }) });
+      if (res.status === 409) {
+        // Nothing is saved for the wallet on this server (so there is nothing to price from): the whole wallet is scanned again instead.
+        void scan(wallet, false, true);
+        return;
+      }
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        setPriceNote(typeof j?.error === "string" ? j.error : `Couldn't price ${ticker}. Try again shortly.`);
+        return;
+      }
+      const patch = (await res.json()) as ApiCoinPricing;
+      setResult((prev) => (prev && prev.wallet === wallet ? mergeCoinPricing(prev, patch) : prev));
+      // A price that still could not be found is not an error, but the cell looks the same as before, so say so.
+      const pieces = [...patch.sells, ...patch.positions];
+      if (pieces.every((x) => x.status !== "ok")) setPriceNote(`Still no price found for ${ticker}.`);
+      else if (pieces.some((x) => x.status !== "ok")) setPriceNote(`Some of ${ticker}'s prices are still missing.`);
+    } catch {
+      setPriceNote(`Couldn't price ${ticker}. Check your connection and try again.`);
+    } finally {
+      setPricingMints((p) => {
+        const next = new Set(p);
+        next.delete(mint);
+        return next;
+      });
+    }
+  }
   const sharedTicker = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).ticker : "";
   const sharedImage = sharing && trades ? tokenLabel(sharing.mint, trades.tokens).image : undefined;
   const renderShared = useCallback(() => renderTradeCard(sharing!, sharedTicker, display, asOf || Math.floor(Date.now() / 1000), sharedImage, { hidePnl: settings.hidePnl !== "show" }), [sharing, sharedTicker, display, asOf, sharedImage, settings.hidePnl]);
@@ -510,7 +549,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                       className="inline-flex w-fit items-center gap-2 text-sm font-bold text-foreground underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60"
                     >
                       {walletBusy ? <MarkLoader className="size-4" /> : <Wallet className="size-4" aria-hidden />}
-                      {walletBusy ? `Waiting for ${walletBusy}` : "Use my wallet"}
+                      {walletBusy ? `Waiting for ${walletBusy}` : "Connect wallet"}
                     </button>
                     {/* What the button does with the wallet, in a tooltip beside it, not a line under it. */}
                     <Hint text="Reads your address only. Nothing is signed or sent." className="inline-flex items-center text-muted-foreground no-underline hover:text-foreground">
@@ -598,8 +637,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             }}
             onShowHidden={() => setHidden((h) => new Set([...h].filter((k) => !k.startsWith(`${trades.wallet}:`))))}
             onShare={setSharing}
-            onPrice={() => void scan(trades.wallet, false, true)}
-            pricing={scanning}
+            onPrice={(mint) => void priceOne(mint)}
+            pricingMints={pricingMints}
             pnlMode={settings.hidePnl}
             roundtripMode={settings.hideRoundtrip}
             fumbleMode={settings.hideFumble}
@@ -621,7 +660,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             />
           )}
           {/* Heavy usage (a price source over its limits), told once per scan in a quiet toast: the cells that could not be priced say so themselves, so this only says why. It waits for the undo toast to go. */}
-          {!toast && !launch && !busyToldOf && (strained || !!result?.ranOutOfTime) && <Toast warning message="We are facing heavy usage and are working to optimize the system. Results may be slower or slightly off." seconds={8} onClose={() => setBusyToldOf(true)} />}
+          {priceNote && !toast && <Toast warning message={priceNote} seconds={6} onClose={closePriceNote} />}
+          {!toast && !priceNote && !launch && !busyToldOf && (strained || !!result?.ranOutOfTime) && <Toast warning message="We are facing heavy usage and are working to optimize the system. Results may be slower or slightly off." seconds={8} onClose={() => setBusyToldOf(true)} />}
           {sharing && <ImagePreviewDialog open title={`Your ${sharedTicker} trade`} fileName={tradeCardFileName(sharedTicker, sharing.lastAt)} render={renderShared} onClose={() => setSharing(null)} />}
           {/* The wallet has more: another hundred trades are read from where this stopped. */}
           {trades.coverage.extendable && (result || loadingMore) && (

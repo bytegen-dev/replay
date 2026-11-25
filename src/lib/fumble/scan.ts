@@ -24,7 +24,8 @@ export interface ScanDeps {
    */
   store?: WalletStore;
   /** A token's candles from `from` to `now`, or null when no provider has them. */
-  prices: (mint: string, from: number, now: number) => Promise<PriceSeries | null>;
+  /** `retry` asks again for a coin an earlier lookup found nothing for, instead of taking that answer from memory. */
+  prices: (mint: string, from: number, now: number, retry?: boolean) => Promise<PriceSeries | null>;
   /** The SOL price in USD at a time, or null. */
   solUsd: (time: number) => Promise<number | null>;
   now?: () => number;
@@ -158,6 +159,70 @@ export interface ScanOptions {
   more?: boolean;
   /** Stop reading once this many trades of the minimum size have been found (in what is read this time). Default TRADES_PER_LOAD. */
   target?: number;
+}
+
+/**
+ * One sell with its fumble and the dollar value of its profit, from its coin's price series (null: none was found; `timedOut`: time ran out before the coin was
+ * priced). `solAt` answers from the SOL price series fetched for the whole scan; asking `solUsd` for the sale's own hour is only the fallback, because each of
+ * those is a price call and the free tiers allow about one a second.
+ */
+async function pricedSell(lot: SellLot, s: PriceSeries | null, timedOut: boolean, solAt: (time: number) => number | null, solUsd: (time: number) => Promise<number | null>): Promise<ScannedSell> {
+  const rate = solAt(lot.sell.time);
+  const sale = s ? (rate ?? (await solUsd(lot.sell.time))) : null;
+  // The profit's dollar value uses the SOL price at the sale: the main price series if it had one, and otherwise the one the fumble used (its per-hour
+  // fallback), so a missing series does not leave the profit alone in SOL while the fumble has dollars.
+  const usdRate = rate ?? sale;
+  const profitUsd = usdRate ? lot.profitSol * usdRate : null;
+  if (timedOut) return { lot, profitUsd, fumble: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null };
+  if (!s) return { lot, profitUsd, fumble: { status: "no-price", reason: "no price history for this token" }, source: null };
+  if (sale === null) return { lot, profitUsd, fumble: { status: "no-price", reason: "no SOL price at the time of the sale" }, source: s.source };
+  return { lot, profitUsd, fumble: fumbleFor(lot.sell, s.candles, { solUsd: sale }), source: s.source };
+}
+
+/** One closed position with the profit it gave back, from its coin's price series (see `pricedSell` for the two ways there may be none). */
+function pricedPosition(position: Position, s: PriceSeries | null, timedOut: boolean, solSeries: PriceSeries | null): ScannedPosition {
+  if (timedOut) return { position, roundTrip: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null };
+  if (!s) return { position, roundTrip: { status: "no-price", reason: "no price history for this token" }, source: null };
+  return { position, roundTrip: roundTripFor(position, s.candles, solSeries?.candles ?? []), source: s.source };
+}
+
+/** What pricing one coin again works out: its sells and closed positions with their fumbles and round-trips, and the coin's own share of the total fumble. */
+export interface CoinPricing {
+  sells: ScannedSell[];
+  positions: ScannedPosition[];
+  missed: { sol: number; usd: number };
+}
+
+/**
+ * Prices one coin of a wallet again, from the trades saved at its last scan (so no history is read): for the "Price" button on a row that could not be priced.
+ * Works out the same things a scan does for that coin, in the same way, so the page can put them in place of the old ones. Null when nothing is saved for the
+ * wallet (or it was saved before transfers in were kept), or the wallet never traded the coin: the caller then falls back to scanning again.
+ */
+export async function priceCoin(wallet: string, mint: string, deps: Pick<ScanDeps, "store" | "prices" | "solUsd" | "now" | "outOfTime">): Promise<CoinPricing | null> {
+  let saved: SavedWallet | null = null;
+  try {
+    saved = (await deps.store?.load(wallet)) ?? null;
+  } catch {
+    saved = null;
+  }
+  if (!saved || saved.receives === undefined) return null;
+  const now = deps.now ? deps.now() : Math.floor(Date.now() / 1000);
+  const freeLots: Trade[] = saved.receives.map((r) => ({ side: "buy", mint: r.mint, tokens: r.tokens, sol: 0, time: r.time, signature: r.signature, source: "received" }));
+  const lots = matchLots([...saved.trades, ...freeLots])
+    .filter((l) => l.sell.mint === mint && l.sell.sol >= MIN_TRADE_SOL)
+    .sort((a, b) => a.sell.time - b.sell.time);
+  const positions = findPositions(saved.trades).filter((p) => p.mint === mint);
+  if (lots.length === 0 && positions.length === 0) return null;
+
+  const times = [...positions.map((p) => p.openedAt), ...lots.map((l) => l.sell.time)];
+  const timedOut = !!deps.outOfTime?.();
+  const series = timedOut ? null : await deps.prices(mint, Math.min(...times), now, true);
+  const solSeries = !timedOut ? await deps.prices(SOL_MINT, Math.min(...times), now) : null;
+  const solAt = (time: number) => (solSeries ? priceAt(solSeries.candles, time) : null);
+  const sells: ScannedSell[] = [];
+  for (const lot of lots) sells.push(await pricedSell(lot, series, timedOut, solAt, deps.solUsd));
+  const priced = positions.map((p) => pricedPosition(p, series, timedOut, solSeries));
+  return { sells, positions: priced, missed: missedTotals(sells, priced) };
 }
 
 export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptions = {}): Promise<ScanResult> {
@@ -314,21 +379,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
 
   const tokens = await listSent;
   const sells: ScannedSell[] = [];
-  for (const lot of lots) {
-    const s = series.get(lot.sell.mint) ?? null;
-    const rate = solAt(lot.sell.time);
-    // The SOL price series fetched once for the whole scan answers this; asking for the sale's own hour is only the fallback, because each
-    // of those is a price call and the free tiers allow about one a second.
-    const solUsd = s ? (rate ?? (await deps.solUsd(lot.sell.time))) : null;
-    // The profit's dollar value uses the SOL price at the sale: the main price series if it had one, and otherwise the one the fumble used (its per-hour
-    // fallback), so a missing series does not leave the profit alone in SOL while the fumble has dollars.
-    const usdRate = rate ?? solUsd;
-    const profitUsd = usdRate ? lot.profitSol * usdRate : null;
-    if (timedOut.has(lot.sell.mint)) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null });
-    else if (!s) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "no price history for this token" }, source: null });
-    else if (solUsd === null) sells.push({ lot, profitUsd, fumble: { status: "no-price", reason: "no SOL price at the time of the sale" }, source: s.source });
-    else sells.push({ lot, profitUsd, fumble: fumbleFor(lot.sell, s.candles, { solUsd }), source: s.source });
-  }
+  for (const lot of lots) sells.push(await pricedSell(lot, series.get(lot.sell.mint) ?? null, timedOut.has(lot.sell.mint), solAt, deps.solUsd));
   let totalProfitSol = 0;
   let totalProfitUsd = 0;
   for (const x of sells) {
@@ -336,12 +387,7 @@ export async function scanWallet(wallet: string, deps: ScanDeps, opts: ScanOptio
     totalProfitUsd += x.profitUsd ?? 0;
   }
 
-  const scannedPositions: ScannedPosition[] = positions.map((position) => {
-    const s = series.get(position.mint) ?? null;
-    if (timedOut.has(position.mint)) return { position, roundTrip: { status: "no-price", reason: "ran out of time before this token was priced" }, source: null };
-    if (!s) return { position, roundTrip: { status: "no-price", reason: "no price history for this token" }, source: null };
-    return { position, roundTrip: roundTripFor(position, s.candles, solSeries?.candles ?? []), source: s.source };
-  });
+  const scannedPositions: ScannedPosition[] = positions.map((position) => pricedPosition(position, series.get(position.mint) ?? null, timedOut.has(position.mint), solSeries));
   let totalRoundTrip = 0;
   let totalRoundTripUsd = 0;
   for (const p of scannedPositions) {

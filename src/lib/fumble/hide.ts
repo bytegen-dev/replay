@@ -9,11 +9,12 @@ import type { ApiResult, ApiTrades } from "./service.ts";
 export function withoutCoins(r: ApiResult, hidden: ReadonlySet<string>): ApiResult {
   if (hidden.size === 0) return r;
   const keep = <T extends { token: string }>(list: T[]) => list.filter((x) => !hidden.has(x.token));
-  const sells = keep(r.sells);
-  const positions = keep(r.positions);
-  const coins = keep(r.coins);
-  const trades = keep(r.trades);
+  return retotal({ ...r, trades: keep(r.trades), sells: keep(r.sells), positions: keep(r.positions), coins: keep(r.coins) });
+}
 
+/** A scan whose sells, positions and coins have been changed (some taken out, or one coin priced again), with every total worked out again from what it now holds. */
+export function retotal(r: ApiResult): ApiResult {
+  const { sells, positions, coins } = r;
   let fumbleSol = 0;
   let fumbleUsd = 0;
   let profitSol = 0;
@@ -41,10 +42,6 @@ export function withoutCoins(r: ApiResult, hidden: ReadonlySet<string>): ApiResu
   }
   return {
     ...r,
-    trades,
-    sells,
-    positions,
-    coins,
     measured: sells.filter((s) => s.status === "ok").length,
     unknown: sells.filter((s) => s.status !== "ok").length,
     freeSells: sells.filter((s) => s.freeTokens > 0).length,

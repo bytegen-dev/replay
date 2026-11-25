@@ -1,5 +1,5 @@
 import type { TokenInfo } from "./tokens.ts";
-import type { HistorySummary, ScanProgress, ScanResult, ScannedPosition, ScannedSell, TradeList } from "./scan.ts";
+import type { CoinPricing, HistorySummary, ScanProgress, ScanResult, ScannedPosition, ScannedSell, TradeList } from "./scan.ts";
 import type { Trade } from "./types.ts";
 
 /**
@@ -198,6 +198,19 @@ export function toApiResult(r: ScanResult, scannedAt: number): ApiResult {
     coins: r.coins,
     ranOutOfTime: r.ranOutOfTime,
   };
+}
+
+/** What pricing one coin again sends: that coin's sells and closed positions, and its own share of the total fumble (see `mergeCoinPricing` in reprice.ts). */
+export interface ApiCoinPricing {
+  token: string;
+  sells: ApiSell[];
+  positions: ApiPosition[];
+  missedSol: number;
+  missedUsd: number;
+}
+
+export function toApiCoinPricing(token: string, p: CoinPricing): ApiCoinPricing {
+  return { token, sells: p.sells.map(toApiSell), positions: p.positions.map(toApiPosition), missedSol: p.missed.sol, missedUsd: p.missed.usd };
 }
 
 /** Thrown when too many scans are already running. The caller should tell the person to try again shortly. */

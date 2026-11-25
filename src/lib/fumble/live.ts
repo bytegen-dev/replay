@@ -3,9 +3,9 @@ import { fetchHistory } from "./helius.ts";
 import { createKolDirectory, memoryKolStore, sqlKolStore } from "./kols.ts";
 import { birdeyeProvider, firstOf, geckoProvider, pythProvider, sharedPrices, solPriceAt } from "./prices.ts";
 import { savedPrices, sqlPriceStore } from "./priceStore.ts";
-import { scanWallet } from "./scan.ts";
+import { priceCoin, scanWallet } from "./scan.ts";
 import { memoryStore, sqlStore } from "./store.ts";
-import { createScanner, toApiTrades } from "./service.ts";
+import { createScanner, toApiCoinPricing, toApiTrades, type ApiCoinPricing } from "./service.ts";
 import { heliusTokens } from "./tokens.ts";
 
 /**
@@ -45,6 +45,7 @@ function noteLimit(provider: string): void {
 }
 
 let scanner: ReturnType<typeof createScanner> | null | undefined;
+let coinPricer: ((wallet: string, mint: string) => Promise<ApiCoinPricing | null>) | null = null;
 
 export function getScanner(): ReturnType<typeof createScanner> | null {
   if (scanner !== undefined) return scanner;
@@ -65,7 +66,17 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
   const budgetMs = intEnv("FUMBLE_BUDGET_SECONDS", 50) * 1000;
   const historyMs = intEnv("FUMBLE_HISTORY_SECONDS", 20) * 1000;
   // Without a database the history is kept in this server's memory (the most recent wallets), so reading further back still works while the server is up.
-  const store = sqlStore() ?? memoryStore(100);
+  // Kept on `globalThis` so the scan and the "price one coin" routes (which can be built apart from each other) see the same saved wallets.
+  const shared = globalThis as { __fumbleMemoryStore?: ReturnType<typeof memoryStore> };
+  const store = sqlStore() ?? (shared.__fumbleMemoryStore ??= memoryStore(100));
+
+  // Prices one coin again from the saved trades (the "Price" button on a row), with the same price sources and saved prices, and a shorter time to do it in.
+  const coinBudgetMs = intEnv("FUMBLE_COIN_BUDGET_SECONDS", 25) * 1000;
+  coinPricer = async (wallet, mint) => {
+    const deadline = Date.now() + coinBudgetMs;
+    const priced = await priceCoin(wallet, mint, { store, prices, solUsd, outOfTime: () => Date.now() > deadline });
+    return priced ? toApiCoinPricing(mint, priced) : null;
+  };
 
   scanner = createScanner({
     run: (wallet, emit, opts) => {
@@ -91,6 +102,12 @@ export function getScanner(): ReturnType<typeof createScanner> | null {
     },
   });
   return scanner;
+}
+
+/** Prices one coin of a scanned wallet again, or null when this server has nothing saved for the wallet (the page then scans again), or no scanner at all. */
+export function getCoinPricer(): ((wallet: string, mint: string) => Promise<ApiCoinPricing | null>) | null {
+  getScanner();
+  return coinPricer;
 }
 
 let kols: ReturnType<typeof createKolDirectory> | null | undefined;
