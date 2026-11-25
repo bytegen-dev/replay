@@ -1,0 +1,49 @@
+---
+title: Watching wallets
+description: Adding a wallet, what the CoTrader reads from it, your rules and your alerts.
+---
+
+## Add a wallet
+
+Choose **Add a wallet** on the Watch screen, or on the Overview if you have none yet. You can add up to three. There are three ways:
+
+1. **Connect your wallet and sign.** Your wallet extension signs a short message that proves the wallet is yours. Nothing is sent and it costs nothing.
+2. **Watch the wallet you signed in with**, when you signed in with a wallet extension. Signing in already proved it.
+3. **Watch without signing.** Paste an address. No extension needed, and you get the same alerts. This is how you track a wallet that is not yours.
+
+<Callout title="Signing is optional">
+  Everything the CoTrader reads is public on the blockchain, so watching never needs a signature. Signing only shows the wallet is yours.
+</Callout>
+
+## What it reads
+
+- The wallet's transaction history, from [Helius](https://www.helius.dev), and its SOL balance at each check.
+- The **first check is silent.** It learns what the wallet already holds, so adding a wallet never floods you with alerts about old holdings.
+- Later checks read only what is new. A new trade shows up as "Watching ..." and your rules speak when they are met.
+- Positions are rebuilt from the wallet's trades, first in, first out. A coin that was **received free** (an airdrop) counts at zero cost, so a percentage gain is not worked out for it.
+- Dust is left out: a coin you **bought** for less than 0.002 SOL, and a free coin worth less than 0.02 SOL, are not watched.
+- A price comes from public price sources. A position with no recent price is shown without a value and is not run against your rules.
+
+## Your rules
+
+Each rule has a switch. Switching one on gives it a starting number you can change. A rule that is on needs a number above zero.
+
+| Rule | It tells you when |
+|---|---|
+| **Stop alert** | A coin is down this much from what you put in |
+| **Give-back alert** | A coin falls this far from its best profit |
+| **Daily profit target** | Today's result reaches this |
+| **Daily loss limit** | Today's loss reaches this |
+| **Trim plan** | A coin reaches a gain you chose, and how much of it you planned to sell. Up to three levels |
+
+A rule tells you **once** for each time you hold a coin. Sell a coin and buy it again later and it has its own alerts. **The CoTrader never sells for you.** It only tells you.
+
+## Alerts
+
+Every alert lands on the **Alerts** screen, newest first and grouped by day. Each has an icon and a colour for its kind: a new position, a stop, a trim level, a give-back, a daily target, a daily loss.
+
+To get an alert when the app is closed, turn on notifications on the Alerts screen or in [Settings](/docs/cotrader/settings). On an iPhone, add the app to your Home Screen first.
+
+## How often it checks
+
+While the app is open it checks every minute. The server also checks your wallets in the background, so alerts do not depend on the app being open.

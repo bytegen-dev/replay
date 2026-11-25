@@ -1,0 +1,51 @@
+---
+title: Call scorecard
+description: Upload a Telegram chat and see how every coin called in it turned out.
+---
+
+The call scorecard reads a Telegram chat and shows how each coin called in it did afterwards, who calls well, and which exit rule would have worked best.
+
+## Use it
+
+<Steps>
+  <Step>
+    ### Export the chat
+    In Telegram Desktop, open the chat and choose **Export chat history**. Pick the **JSON** format.
+  </Step>
+  <Step>
+    ### Upload the file
+    On the **Call scorecard** screen, choose your chat export and upload the `result.json` it made.
+  </Step>
+  <Step>
+    ### Score the calls
+    Choose **Score** and wait a minute or two while the coins are priced. Results fill in as they arrive.
+  </Step>
+</Steps>
+
+## What happens to your chat
+
+- The file is **read in your browser**. It is never uploaded.
+- Only each coin's **address** and the **time it was called** are sent, to look up prices. The text of the messages and **who said what** stay in your browser.
+- You can hide the callers' names on screen, which is useful before sharing a screenshot.
+
+## How a call is found
+
+A call is the first time a coin's address appears in a message. The person who sent that message is the caller. A chat that only names tickers will not show up, because the address is what identifies a coin. A long chat is scored by its most recent 150 calls.
+
+## What it shows
+
+For every call: the price at the call, how high the price went afterwards and when, where it is now, and how low it dipped. Everything is a multiple of the price at the call, so 2x means it doubled.
+
+It also tries a few simple exit rules on every call and totals what each would have returned:
+
+| Take profit | Stop |
+|---|---|
+| Sell at 1.5x, 2x, 3x or 5x, or hold and never sell | No stop, a stop at -30%, or a stop at -50% |
+
+Callers are ranked by how their calls did.
+
+<Callout type="warn" title="Read it with hindsight in mind">
+  Prices are candles, which are coarse for an old call, so entries and extremes are approximate. A coin with no price history, usually one that no longer trades, cannot be priced and is left out, so the results lean optimistic. The scorecard shows how past calls did. It says nothing about the next one.
+</Callout>
+
+Prices come from public sources: see [where the prices come from](/docs/data-sources).

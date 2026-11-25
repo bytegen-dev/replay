@@ -1,4 +1,19 @@
 {
   "title": "Replay",
-  "pages": ["index", "---Using Replay---", "hindsight", "currencies", "wayback", "export-and-share", "---Data---", "data-sources", "---Build with Replay---", "api", "agent-skill", "self-hosting"]
+  "pages": [
+    "index",
+    "---Using Replay---",
+    "hindsight",
+    "currencies",
+    "wayback",
+    "export-and-share",
+    "---CoTrader---",
+    "cotrader",
+    "---Data---",
+    "data-sources",
+    "---Build with Replay---",
+    "api",
+    "agent-skill",
+    "self-hosting"
+  ]
 }
