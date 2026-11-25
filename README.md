@@ -1,13 +1,16 @@
 # Replay
 
-Replay looks back at money. It has two pages and a public API:
+Replay is a historical price and backtesting tool for stocks, crypto and currencies. It answers two questions: what a purchase made in the past would be worth today, and what an asset cost at a specific moment.
 
-- **Landing page** (`/`): what Replay is, a live demo of both tools, the waitlist, and a FAQ.
-- **Wayback** (`/wayback`), first tab, **What if I had bought** (it used to be called Hindsight, and `/hindsight` still redirects): see what a buy from the past would be worth today. Pick a US stock or ETF (decades of history), a crypto coin or token, or a currency pair, buy once or on a schedule (with or without leverage), and it shows what the buys would have bought and what they are worth now.
-- **Wayback**, second tab, **Timestamp** (`/wayback?view=price`): the price of a token or stock at any past date and time, typed the way people say it.
-- A **public API** and an **AI agent skill** for both.
+## Features
 
-Next.js (App Router), TypeScript, Tailwind. Dark by default, with light and system themes, a reduced-motion switch and a high-contrast mode.
+- **What if I had bought** (`/wayback`): backtest a one-off or recurring purchase of a US stock or ETF, a crypto coin or token, or a currency pair, with optional leverage. The result shows what the purchases bought and what they are worth now.
+- **Timestamp** (`/wayback?view=price`): the price of a token or stock at any past date and time, entered in plain language.
+- **Sharing and export**: public read-only result links, spreadsheet export (`.xlsx`) and a downloadable replay video of the growth chart.
+- **Public API** (`/api/v1`): the same calculations as versioned JSON, with an OpenAPI 3.1 description.
+- **Agent skill**: instructions that let an AI agent use the API.
+
+Built with Next.js (App Router), TypeScript and Tailwind CSS. Dark by default, with light and system themes, a reduced-motion setting and a high-contrast mode. Full documentation lives in [`content/docs`](content/docs).
 
 ## Setup
 
@@ -170,7 +173,7 @@ await ctx.reply(await res.text());
 
 ## Settings
 
-The footer's **Settings** opens a dialog: theme (light, system, dark), **Reduce animations**, **High contrast**, and the optional Tiingo key. Everything is saved in the browser. The footer also has a timeline: click a date on it, then pick Stocks, Bitcoin or a currency to start a Hindsight check from that month.
+The footer's **Settings** opens a dialog: theme (light, system, dark), **Reduce animations**, **High contrast**, and the optional Tiingo key. Everything is saved in the browser. The footer also has a timeline: click a date on it, then pick Stocks, Bitcoin or a currency to start a "What if I had bought" check from that month.
 
 ## Public API
 
@@ -213,6 +216,16 @@ The result has an `answer` sentence that is safe to quote, a `summary`, the `sou
 ## Tests
 
 `pnpm test` runs Node's built-in test runner on the TypeScript files in `tests/` (no extra test dependency): price selection, token and share maths, buy plans, exchange rates, the saved ticker list, the backup sources, filters, settings, URL state, the API and exports.
+
+## Contributing
+
+Changes go through pull requests; direct pushes to `main` are blocked by a pre-push hook (installed by `pnpm install`). Before opening a pull request:
+
+- Run `pnpm check` (lint, typecheck, tests and build). It must pass, and the "PR check" workflow runs the same steps.
+- Run your preferred code review or bug-finding tool on the change and fix what it finds.
+- Keep the pull request clean: only files that belong to the change, no secrets or `.env` files, no leftover debug code.
+
+A pull request that does not meet these will not be merged. The pull request template repeats the list.
 
 ## Limits
 
