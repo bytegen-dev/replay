@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
+    "postinstall": "fumadocs-mdx",
     "prepare": "husky",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
