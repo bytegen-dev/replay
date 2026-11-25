@@ -7,7 +7,7 @@ import { bestTrade, worstFumble, worstRoundtrip } from "./highlights.ts";
 import { figure, type Display } from "./money.ts";
 import type { ApiResult } from "./service.ts";
 import type { HideMode } from "./settings.ts";
-import { countTrades, coverageNote, figureCoverage, NOT_THERE, reachSpan, shortMint, signedSol, tokenLabel, tradeVolume, type Coverage } from "./view.ts";
+import { countTrades, coverageNote, figureCoverage, NOT_THERE, reachDates, reachSpan, shortMint, signedSol, tokenLabel, tradeVolume, type Coverage } from "./view.ts";
 
 /**
  * The recap as a short vertical video (1080 by 1920, about 24 seconds), made in the browser: each scene is drawn onto a canvas frame by frame and the
@@ -31,6 +31,8 @@ export interface VideoScene {
   label: string;
   /** The big figure: money that counts up from zero, or fixed words (***, Not priced) in its place. */
   figure?: { money: { sol: number; usd: number | null; signed: boolean } | null; text: string | null; tone: Tone };
+  /** Where the history this figure covers starts ("Mar 4"), shown small beside the label. */
+  since?: string;
   /** Lines under it. */
   notes: string[];
   /** A moment from the scan: the coin and what happened. */
@@ -45,6 +47,7 @@ const toneOf = (n: number): Tone => (n > 0 ? "up" : n < 0 ? "down" : "plain");
 export function planRecapVideo(r: ApiResult, now: number, display: Display, hide: CardHide = {}): VideoScene[] {
   const scenes: VideoScene[] = [];
   const cover = figureCoverage(r);
+  const since = r.coverage.oldest ? reachDates(r.coverage.oldest, now).since : undefined;
 
   const sells = r.trades.filter((t) => t.side === "sell").length;
   const buys = r.trades.length - sells;
@@ -56,8 +59,8 @@ export function planRecapVideo(r: ApiResult, now: number, display: Display, hide
     label: RECAP_NAME,
     notes: [
       hide.wallet ? "***" : shortMint(r.wallet),
-      `${noun(trades, "trade", "trades")}, ${noun(buys, "buy", "buys")} and ${noun(sells, "sell", "sells")}`,
-      ...(r.coverage.oldest ? [`over ${reachSpan(r.coverage.oldest, now).label}`] : []),
+      `${noun(trades, "trade", "trades")} (${noun(buys, "buy", "buys")}, ${noun(sells, "sell", "sells")})`,
+      ...(r.coverage.oldest ? [reachDates(r.coverage.oldest, now).range, `over ${reachSpan(r.coverage.oldest, now).label}`] : []),
     ],
   });
 
@@ -81,6 +84,7 @@ export function planRecapVideo(r: ApiResult, now: number, display: Display, hide
       id,
       seconds,
       label,
+      since,
       figure: { money: masked || missing ? null : { sol, usd, signed }, text: masked ? "***" : missing ? NOT_THERE[what!] : null, tone: masked || missing ? "muted" : tone },
       notes: note && !missing ? [note] : [],
     };
@@ -275,8 +279,11 @@ export function createRecapPainter(c: Palette, scenes: VideoScene[], display: Di
     scene.notes.forEach((line, i) => {
       const a = easeOut((local - 0.5 - i * 0.2) / 0.5);
       ctx.globalAlpha = a;
-      ctx.fillStyle = i === 0 ? c.muted : c.fg;
-      ctx.font = `${i === 0 ? 400 : 500} ${i === 0 ? 46 : 52}px ${c.body}`;
+      const quiet = i === 0 || i === 3;
+      ctx.fillStyle = quiet ? c.muted : c.fg;
+      // Each line shrinks to fit the width (down to 38px) instead of running past the margin, as a long count or date range would.
+      const size = fitText(ctx, line, c.body, quiet ? 46 : 52, 38, wide, quiet ? 400 : 500);
+      ctx.font = `${quiet ? 400 : 500} ${size}px ${c.body}`;
       ctx.fillText(line, X, 980 + i * 84);
     });
     ctx.globalAlpha = 1;
@@ -304,6 +311,13 @@ export function createRecapPainter(c: Palette, scenes: VideoScene[], display: Di
     ctx.fillStyle = c.muted;
     ctx.font = `400 50px ${c.body}`;
     ctx.fillText(scene.label, X, labelY);
+    if (scene.since) {
+      // The period the figure covers, small and quiet at the right of the label.
+      ctx.font = `400 38px ${c.body}`;
+      ctx.textAlign = "right";
+      ctx.fillText(`since ${scene.since}`, W - X, labelY);
+      ctx.textAlign = "left";
+    }
 
     const p = easeOut(local / 1.7);
     const shown = fig.money ? figure(display, fig.money.sol * p, fig.money.usd === null ? null : fig.money.usd * p, fig.money.signed) : null;

@@ -525,6 +525,23 @@
     lift 1.15s cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: calc(var(--base, 300ms) + var(--i, 0) * 85ms);
 }
+/* A toast leaving: it jumps up and swells a little, then drops away and runs down below the bottom of the screen. */
+@keyframes toast-out {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  28% {
+    transform: translate3d(0, -18px, 0) scale(1.07);
+    animation-timing-function: cubic-bezier(0.5, 0, 0.9, 0.4);
+  }
+  100% {
+    transform: translate3d(0, 140px, 0) scale(0.92);
+  }
+}
+.toast-out {
+  animation: toast-out 0.8s both;
+}
 .enter-card {
   animation:
     fade-in 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) both,
@@ -1046,6 +1063,7 @@ html[data-motion="reduce"] :is(.fx-draw, .fx-draw-fall, .fx-area, .fx-pop, .fx-s
 
 /* Reduced motion: everything is simply there. */
 html[data-motion="reduce"] .enter-up,
+html[data-motion="reduce"] .toast-out,
 html[data-motion="reduce"] .progress-track,
 html[data-motion="reduce"] .progress-sweep,
 html[data-motion="reduce"] .enter-card,
@@ -1061,6 +1079,7 @@ html[data-motion="reduce"] [data-reveal] {
   .progress-track,
   .progress-sweep,
   .enter-up,
+  .toast-out,
   .enter-card,
   .word-rise {
     animation: none !important;

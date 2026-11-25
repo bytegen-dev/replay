@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * A few words with a tooltip: it opens on hover or focus, and a tap or click toggles it, so it works by touch too (the browser's own `title`
  * tooltip is slow to appear and never shows on a phone). The dotted underline says there is more to see.
  */
-export function Hint({ text, children, className }: { text: string; children: React.ReactNode; className?: string }) {
+export function Hint({ text, children, className, oneLine = false }: { text: string; children: React.ReactNode; className?: string; /** Keeps the tooltip on one line (it is otherwise at most 16rem wide and wraps), for a short line that reads badly broken, such as a date range. It still stays inside the screen. */ oneLine?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <TooltipProvider delayDuration={100}>
@@ -25,7 +25,9 @@ export function Hint({ text, children, className }: { text: string; children: Re
             {children}
           </button>
         </TooltipTrigger>
-        <TooltipContent side="top">{text}</TooltipContent>
+        <TooltipContent side="top" className={oneLine ? "max-w-[calc(100vw-1.5rem)] whitespace-nowrap" : undefined}>
+          {text}
+        </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

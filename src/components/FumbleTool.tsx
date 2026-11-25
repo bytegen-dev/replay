@@ -26,7 +26,7 @@ import { fumbleCardFileName, renderFumbleCard } from "@/lib/fumble/card.ts";
 import { coinRows, type CoinRow } from "@/lib/fumble/coins.ts";
 import { renderTradeCard, tradeCardFileName } from "@/lib/fumble/tradeCard.ts";
 import { humanSiteKey, passHumanCheck } from "@/lib/humanClient.ts";
-import { sol, countTrades, coverageNote, earlyProfit, figureCoverage, NOT_THERE, tradeVolume, type Coverage, makeEventReader, tokenLabel, veryActive, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
+import { sol, countTrades, coverageNote, earlyProfit, figureCoverage, NOT_THERE, tradeVolume, type Coverage, makeEventReader, tokenLabel, veryActive, reachDates, reachSpan, parseRecent, rememberWallet, shortMint, RECENT_KEY, type RecentWallet, type StreamEvent } from "@/lib/fumble/view.ts";
 import { cn } from "@/lib/utils";
 
 type Progress = { stage: "history" | "prices" | "done"; done: number; total: number };
@@ -55,6 +55,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
   const [active, setActive] = useState(false);
   // A price source said it is out of room during this scan (told by the server as it happens); the notice also shows when a scan ran out of time pricing.
   const [strained, setStrained] = useState(false);
+  // The "busy right now" toast has been shown (or closed) for this scan, so it appears once, not again for every update.
+  const [busyToldOf, setBusyToldOf] = useState(false);
   // True while "load more" is reading: the table stays, and the progress shows under it.
   const [loadingMore, setLoadingMore] = useState(false);
   // The page's settings (primary currency, second value, sells only, load size), remembered in this browser. The page starts on the defaults and
@@ -132,6 +134,7 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
     }
     setActive(false);
     setStrained(false);
+    setBusyToldOf(false);
     window.history.replaceState(null, "", `/recap?wallet=${wallet}`);
 
     let finished = false;
@@ -498,16 +501,23 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
 
               {installed.length > 0 && status !== "scanning" && (
                 <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={startWallet}
-                    disabled={walletBusy !== null}
-                    aria-expanded={installed.length > 1 ? choosing : undefined}
-                    className="inline-flex w-fit items-center gap-2 text-sm font-bold text-foreground underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60"
-                  >
-                    {walletBusy ? <MarkLoader className="size-4" /> : <Wallet className="size-4" aria-hidden />}
-                    {walletBusy ? `Waiting for ${walletBusy}` : "Use my wallet"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={startWallet}
+                      disabled={walletBusy !== null}
+                      aria-expanded={installed.length > 1 ? choosing : undefined}
+                      className="inline-flex w-fit items-center gap-2 text-sm font-bold text-foreground underline underline-offset-4 transition-colors hover:text-primary disabled:opacity-60"
+                    >
+                      {walletBusy ? <MarkLoader className="size-4" /> : <Wallet className="size-4" aria-hidden />}
+                      {walletBusy ? `Waiting for ${walletBusy}` : "Use my wallet"}
+                    </button>
+                    {/* What the button does with the wallet, in a tooltip beside it, not a line under it. */}
+                    <Hint text="Reads your address only. Nothing is signed or sent." className="inline-flex items-center text-muted-foreground no-underline hover:text-foreground">
+                      <Info className="size-4" aria-hidden />
+                      <span className="sr-only">Reads your address only. Nothing is signed or sent.</span>
+                    </Hint>
+                  </div>
                   {choosing && (
                     <div role="group" aria-label="Choose a wallet" className="flex max-w-xl flex-wrap gap-2">
                       {installed.map((w) => (
@@ -523,7 +533,6 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
                       ))}
                     </div>
                   )}
-                  <span className="text-xs text-muted-foreground">Reads your address only. Nothing is signed or sent.</span>
                   {walletNote && (
                     <p role="status" className="text-sm font-bold">
                       {walletNote}
@@ -566,12 +575,6 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
               )}
 
               {scanning && !launch && !loadingMore && <ProgressLine progress={progress} hasTrades={!!trades} reading={trades?.partial ?? true} active={active} />}
-              {!launch && (strained || !!result?.ranOutOfTime) && (
-                <p role="status" className="mt-4 flex max-w-2xl items-start gap-2.5 border border-amber-500/40 bg-amber-500/10 px-3.5 py-3 text-sm leading-relaxed">
-                  <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-500" aria-hidden />
-                  <span>We are facing heavy usage and are working to optimize the system. In the meantime you might experience slower or slightly inaccurate results.</span>
-                </p>
-              )}
         </div>
         {aside && <div className="hidden lg:order-first lg:block">{aside}</div>}
       </div>
@@ -595,6 +598,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
             }}
             onShowHidden={() => setHidden((h) => new Set([...h].filter((k) => !k.startsWith(`${trades.wallet}:`))))}
             onShare={setSharing}
+            onPrice={() => void scan(trades.wallet, false, true)}
+            pricing={scanning}
             pnlMode={settings.hidePnl}
             roundtripMode={settings.hideRoundtrip}
             fumbleMode={settings.hideFumble}
@@ -615,6 +620,8 @@ export function FumbleTool({ launch = false, className, intro, aside }: {
               onClose={closeToast}
             />
           )}
+          {/* Heavy usage (a price source over its limits), told once per scan in a quiet toast: the cells that could not be priced say so themselves, so this only says why. It waits for the undo toast to go. */}
+          {!toast && !launch && !busyToldOf && (strained || !!result?.ranOutOfTime) && <Toast warning message="We are facing heavy usage and are working to optimize the system. Results may be slower or slightly off." seconds={8} onClose={() => setBusyToldOf(true)} />}
           {sharing && <ImagePreviewDialog open title={`Your ${sharedTicker} trade`} fileName={tradeCardFileName(sharedTicker, sharing.lastAt)} render={renderShared} onClose={() => setSharing(null)} />}
           {/* The wallet has more: another hundred trades are read from where this stopped. */}
           {trades.coverage.extendable && (result || loadingMore) && (
@@ -694,7 +701,7 @@ function Stat({ label, dollars, sols, display, pending, signed, about, className
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
         {label}
         {note && (
-          <Hint text={note} className="inline-flex items-center text-amber-500 no-underline">
+          <Hint text={note} className="inline-flex items-center text-muted-foreground no-underline hover:text-foreground">
             <TriangleAlert className="size-4" aria-hidden />
             <span className="sr-only">Warning: {note}</span>
           </Hint>
@@ -979,7 +986,7 @@ function Summary({ trades, result, kolName, noTrades, asOf, display, settings, o
           {reach && (
             <>
               , over{" "}
-              <Hint text={reach.full}>{reach.label}</Hint>
+              <Hint oneLine text={`${reach.full}, ${reachDates(cov.oldest!, measuredAt!).rangeFull}`}>{reach.label}</Hint>
             </>
           )}
         </p>

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SOL_DISPLAY } from "../src/lib/fumble/money.ts";
 import type { ApiResult } from "../src/lib/fumble/service.ts";
+import { reachDates } from "../src/lib/fumble/view.ts";
 import { planRecapVideo, recapVideoFileName, sceneAt, timeline } from "../src/lib/fumble/video.ts";
 
 const WALLET = "DfMxre4cKmvogbLrPigxmibVTTQDuzjdXojWzjCXXhzj";
@@ -44,8 +45,11 @@ test("the video has an intro, a scene for each figure, and an outro, in that ord
   const [intro, pnl, roundtrip, fumble, volume] = scenes;
   assert.equal(intro.label, "Recap");
   assert.equal(intro.notes[0], "DfMx…Xhzj");
-  assert.equal(intro.notes[1], "2 trades, 2 buys and 3 sells");
-  assert.equal(intro.notes[2], "over 1 week 3 days");
+  assert.equal(intro.notes[1], "2 trades (2 buys, 3 sells)");
+  // NOW is 2026-11-21 (UTC) and the history starts ten days before.
+  assert.equal(intro.notes[2], "Nov 11 – Nov 21, 2026");
+  assert.equal(intro.notes[3], "over 1 week 3 days");
+  assert.deepEqual(scenes.filter((s) => s.figure).map((s) => s.since), ["Nov 11", "Nov 11", "Nov 11", "Nov 11"]);
   assert.deepEqual(pnl.figure?.money, { sol: 2, usd: 200, signed: true });
   assert.equal(pnl.figure?.tone, "up");
   // Coin A made 3 SOL over its two sells, more than anything else, so it is the best trade.
@@ -108,4 +112,11 @@ test("each highlight names its coin's ticker and picture, and a coin with no pic
   assert.deepEqual([by.pnl?.ticker, by.pnl?.image], ["AAA", "https://cdn.helius-rpc.com/cdn-cgi/image/a"]);
   assert.deepEqual([by.fumble?.ticker, by.fumble?.image], ["AAA", "https://cdn.helius-rpc.com/cdn-cgi/image/a"]);
   assert.deepEqual([by.roundtrip?.ticker, by.roundtrip?.image], ["BBB", undefined]);
+});
+
+test("reachDates gives the span as dates in UTC, adding the year to the start only when it is an earlier year", () => {
+  const t = (iso: string) => Date.parse(iso) / 1000;
+  assert.deepEqual(reachDates(t("2026-03-04T10:00:00Z"), t("2026-11-24T10:00:00Z")), { range: "Mar 4 – Nov 24, 2026", rangeFull: "Mar 4, 2026 – Nov 24, 2026", since: "Mar 4" });
+  assert.deepEqual(reachDates(t("2025-12-30T10:00:00Z"), t("2026-01-02T10:00:00Z")), { range: "Dec 30, 2025 – Jan 2, 2026", rangeFull: "Dec 30, 2025 – Jan 2, 2026", since: "Dec 30, 2025" });
+  assert.deepEqual(reachDates(t("2026-11-24T01:00:00Z"), t("2026-11-24T10:00:00Z")), { range: "Nov 24, 2026", rangeFull: "Nov 24, 2026", since: "Nov 24" });
 });

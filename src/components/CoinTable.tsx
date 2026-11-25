@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, Share } from "lucide-react";
+import { Eye, EyeOff, Share, Tag } from "lucide-react";
 import { useRef, useState } from "react";
 import { Hint } from "@/components/Hint";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,7 +20,7 @@ const when = (t: number) => new Date(t * 1000).toLocaleString("en-US", { year: "
  * stays put when it scrolls sideways. One row per coin: what was bought and sold (money, with the token amounts under), the average entry and exit,
  * what is left, the PnL and the total fumble, and two buttons: hide the coin, and share its PnL as a picture. On a phone the table scrolls sideways, with the token column staying put.
  */
-export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare, pnlMode = "show", roundtripMode = "show", fumbleMode = "show" }: {
+export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHide, onShowHidden, onShare, onPrice, pricing = false, pnlMode = "show", roundtripMode = "show", fumbleMode = "show" }: {
   coins: CoinRow[];
   tokens: ApiTrades["tokens"];
   /** The scan has finished: the fumble column can say what it found, and an unworked profit is unknown rather than still coming. */
@@ -33,6 +33,10 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
   onHide: (mint: string) => void;
   onShowHidden: () => void;
   onShare: (coin: CoinRow) => void;
+  /** Tries to price what could not be priced again (the scan is run again, which looks for those coins' prices once more). Without it the "Price" buttons are left out. */
+  onPrice?: () => void;
+  /** A scan is running, so the "Price" buttons wait. */
+  pricing?: boolean;
   /** What to do with the PnL, Roundtripped and Fumbled columns: show the figures, draw them as ***, or leave the column out. */
   pnlMode?: HideMode;
   roundtripMode?: HideMode;
@@ -42,6 +46,11 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
   // A mouse can drag the table sideways, as a finger does.
   useDragScroll(box, '[data-slot="table-container"]', coins.length > 0);
   const head = "sticky top-0 z-10 bg-card text-sm text-muted-foreground shadow-[inset_0_-1px_0_var(--border)]";
+  const total = (
+    <p className="border-t border-border px-4 py-3 text-sm text-muted-foreground tabular-nums">
+      {coins.length.toLocaleString("en-US")} {coins.length === 1 ? "result" : "results"}
+    </p>
+  );
   const hidden =
     hiddenCount > 0 ? (
       <p className="flex items-center gap-2 border-t border-border px-4 py-3 text-sm text-muted-foreground">
@@ -102,12 +111,12 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
                 )}
                 {roundtripMode !== "hide" && (
                   <TableCell className="text-right whitespace-nowrap">
-                    <Part coin={c} part={c.roundtrip} noun="positions" display={display} done={done} hide={roundtripMode === "mask"} />
+                    <Part coin={c} part={c.roundtrip} noun="positions" display={display} done={done} onPrice={onPrice} pricing={pricing} hide={roundtripMode === "mask"} />
                   </TableCell>
                 )}
                 {fumbleMode !== "hide" && (
                   <TableCell className="text-right whitespace-nowrap">
-                    <Part coin={c} part={c.fumble} noun="sells" display={display} done={done} hide={fumbleMode === "mask"} />
+                    <Part coin={c} part={c.fumble} noun="sells" display={display} done={done} onPrice={onPrice} pricing={pricing} hide={fumbleMode === "mask"} />
                   </TableCell>
                 )}
                 <TableCell className="text-right whitespace-nowrap tabular-nums">
@@ -121,6 +130,7 @@ export function CoinTable({ coins, tokens, done, display, now, hiddenCount, onHi
           })}
         </TableBody>
       </Table>
+      {total}
       {hidden}
     </section>
   );
@@ -200,12 +210,20 @@ function Pnl({ coin, display, done, hide }: { coin: CoinRow; display: Display; d
  * "Open" while nothing is sold or closed, "Pricing" while prices come, "Not priced" when none could be found, "None" when it came to nothing. A figure
  * that only some of the sells or positions could be priced for says how many, under it.
  */
-function Part({ coin, part, noun, display, done, hide }: { coin: CoinRow; part: CoinPart | null; noun: string; display: Display; done: boolean; hide: boolean }) {
+function Part({ coin, part, noun, display, done, hide, onPrice, pricing }: { coin: CoinRow; part: CoinPart | null; noun: string; display: Display; done: boolean; hide: boolean; onPrice?: () => void; pricing: boolean }) {
   const word = (text: string) => <span className="text-muted-foreground">{text}</span>;
+  // What could not be priced gets a button to try again, once the scan has finished (while it runs, the coin may still be priced).
+  const priceButton = done && onPrice ? <PriceButton onPrice={onPrice} pricing={pricing} /> : null;
+  const unpriced = (
+    <span className="inline-flex items-center justify-end gap-2">
+      {word("Not priced")}
+      {priceButton}
+    </span>
+  );
   if (coin.soldTokens === 0) return word("Open");
-  if (!part) return done ? word("Not priced") : <span className="animate-pulse text-muted-foreground">Pricing</span>;
+  if (!part) return done ? unpriced : <span className="animate-pulse text-muted-foreground">Pricing</span>;
   if (part.of === 0) return word(coin.balance > 0 ? "Open" : "None");
-  if (part.done === 0) return word("Not priced");
+  if (part.done === 0) return unpriced;
   if (part.sol <= 0) return word("None");
   if (hide) return <span className="block font-bold tabular-nums text-muted-foreground">***</span>;
   const f = figure(display, part.sol, part.usd === null || part.usd === 0 ? null : part.usd);
@@ -214,7 +232,23 @@ function Part({ coin, part, noun, display, done, hide }: { coin: CoinRow; part: 
       <span className="block font-bold tabular-nums text-destructive">{f.main}</span>
       {f.sub && <span className="block text-xs whitespace-nowrap text-muted-foreground">{f.sub}</span>}
       {part.done < part.of && <span className="block text-xs whitespace-nowrap text-muted-foreground">{part.done} of {part.of} {noun} priced</span>}
+      {part.done < part.of && priceButton}
     </>
+  );
+}
+
+/** A small button that asks for the missing prices again. It looks for them for every coin that lacks one, so any of the buttons does the same. */
+function PriceButton({ onPrice, pricing }: { onPrice: () => void; pricing: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onPrice}
+      disabled={pricing}
+      title="Try to find the missing prices again"
+      className="inline-flex h-6 items-center gap-1 border border-border px-2 text-xs font-bold text-foreground transition-colors hover:border-primary hover:text-primary disabled:opacity-50 disabled:hover:border-border disabled:hover:text-foreground"
+    >
+      <Tag className="size-3" aria-hidden /> Price
+    </button>
   );
 }
 

@@ -247,6 +247,24 @@ export function reachSpan(oldest: number, now: number): { label: string; full: s
 }
 
 /**
+ * The dates the history covers, in UTC so everyone sees the same days: `range` is "Mar 4 – Nov 24, 2026" (each end carries its year only when it differs from
+ * the year of `now`, and the start does when it is in an earlier year than the end), `rangeFull` always carries both years ("Mar 4, 2026 – Nov 24, 2026"), and `since` is "Mar 4" or "Mar 4, 2025". Times are seconds since 1970.
+ */
+export function reachDates(oldest: number, now: number): { range: string; rangeFull: string; since: string } {
+  const a = new Date(Math.min(oldest, now) * 1000);
+  const b = new Date(now * 1000);
+  const md = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const full = (d: Date) => `${md(d)}, ${d.getUTCFullYear()}`;
+  const sameYear = a.getUTCFullYear() === b.getUTCFullYear();
+  const startsNow = md(a) === md(b) && sameYear;
+  return {
+    rangeFull: startsNow ? full(b) : `${full(a)} – ${full(b)}`,
+    range: startsNow ? full(b) : sameYear ? `${md(a)} – ${full(b)}` : `${full(a)} – ${full(b)}`,
+    since: sameYear ? md(a) : full(a),
+  };
+}
+
+/**
  * How long ago something happened, in the way it reads best: "just now", "5 minutes ago", "2 hours 15 minutes ago", "3 days 4 hours ago",
  * "2 weeks 6 days ago", "5 months 2 weeks ago", "1 year 3 months ago", and once it is a year and seven months or more, whole years: "2 years ago".
  * `at` is the time of the event and `now` the time it is measured from, both in seconds since 1970.
