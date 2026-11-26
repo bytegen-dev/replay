@@ -1,0 +1,57 @@
+---
+title: Is this safe?
+description: What the CoTrader can and cannot do, what you sign, what it keeps, and how to spot a fake.
+---
+
+Short answer: the CoTrader **reads** a wallet. It has no key to it and no way to move anything.
+
+## What it can and cannot do
+
+| It can | It cannot |
+|---|---|
+| Read a wallet's public transaction history and balance | Move, send or sell anything |
+| Work out positions and compare them with your rules | Ask for, see or store a private key or seed phrase |
+| Tell you when a rule is met | Trade for you. There is no trading in the app yet |
+| Send a notification to a device you turned them on for | Charge you or take a payment. Nothing is on sale yet |
+
+Everything on a blockchain is public. That is why you can watch any wallet address without signing anything: the CoTrader is reading what anyone could read on a block explorer.
+
+## What you sign
+
+Signing in with a wallet, and proving a wallet is yours before you add it, both use a **message signature**:
+
+- It is a short text message, not a transaction. It sends nothing and costs nothing.
+- It names the site, your address, a one-time code and when it expires (five minutes), so it cannot be reused later or on another site.
+- A message for adding a wallet is different from a message for signing in, and one cannot be used as the other.
+
+Your wallet shows you the message before you approve it. If a wallet ever asks you to approve a **transaction** or a **permission** while you are only signing in or adding a wallet, do not approve it.
+
+## Signing in with email or Google
+
+Email and Google sign-in are provided by [Privy](https://www.privy.io), which also creates a Solana wallet for you. The key to that wallet is held by Privy, not by the CoTrader. The app asks that wallet to sign a short message so your login and your wallet are linked. That wallet starts empty; the wallet you actually trade with is the one you add to watch.
+
+## What it keeps
+
+- Your account: the wallet address you signed in with, and your plan.
+- The wallets you watch, the rules you set, and the alerts they raised.
+- For notifications, the address your browser gave for sending them, until you turn them off.
+- A session cookie that keeps you signed in. It is not readable by scripts on the page.
+- A count of recent requests per visitor, to stop abuse. The visitor is stored only as a hash.
+
+Your display settings (theme, currency, hide balances) are kept in your own browser and never sent to a server.
+
+## What it never keeps
+
+- A private key, a seed phrase or a password. It never asks for any of them.
+- The Telegram chat you upload to the call scorecard. See [how the scorecard works](/docs/cotrader/call-scorecard).
+
+## How to spot a fake
+
+- It will **never** ask for your seed phrase or private key, in the app, by message or by email.
+- It will never ask you to send crypto to anyone to "verify" or "activate" anything.
+- Check the address bar before you sign in. The app you are using should be on the address you were given by Replay.
+- Nobody from Replay will message you first about your wallet.
+
+## Open source
+
+Replay's code is public at [github.com/bytegen-dev/replay](https://github.com/bytegen-dev/replay). The CoTrader's code is not public yet. Questions, or something that looks wrong, go to [@bytegen_dev on X](https://x.com/bytegen_dev) or the GitHub page.

@@ -45,3 +45,16 @@ Search shows each token's address, price and liquidity, because copycat tokens a
 ## Choosing a day for each month
 
 Each month targets the last day, the first day, or a chosen day, using the UTC daily point for that date. If it is missing, the nearest day within 3 days is used (ties go to the earlier) and the Note says which. Warnings flag a nearest-day price, very low volume (under $1,000 in 24 hours), and a price more than 50% away from the median of the days around it.
+
+## The CoTrader
+
+| For | Source | Notes |
+|---|---|---|
+| A watched wallet's trades, and its SOL and USDC balances | **Helius** | Public blockchain data. The first sync reads the history, later syncs only what is new |
+| Current prices of the tokens a wallet holds | **DexScreener**, 30 tokens to a request | The deepest pool's price. A token with no pool holding real liquidity has no price and shows as Dead. The candle sources below are only used if DexScreener cannot be reached |
+| Prices of called tokens, and price history | **Pyth**, **Birdeye**, then **GeckoTerminal** | The first that has a price is used. A token with no recent price is shown without a value |
+| Token search and details | **DexScreener** | Solana pools only. The price and changes come from the pool with the most liquidity |
+| Token charts | **DexScreener** | Its own embedded chart for the token's deepest pool |
+| Showing amounts in another currency | **open.er-api.com** exchange rates, with SOL's dollar price | Close, not exact. If the rates cannot be read, amounts stay in SOL |
+| Email and Google sign-in | **Privy** | Creates the Solana wallet linked to a login. Its key is held by Privy, not by the CoTrader |
+

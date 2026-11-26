@@ -1,0 +1,13 @@
+{
+  "title": "CoTrader",
+  "pages": [
+    "index",
+    "safety",
+    "watching",
+    "trades",
+    "call-scorecard",
+    "tokens",
+    "settings",
+    "connections"
+  ]
+}
