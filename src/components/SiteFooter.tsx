@@ -51,6 +51,12 @@ export function SiteFooter() {
             <a href={SUPPORT_HREF} className={link}>
               Support
             </a>
+            <Link href="/privacy" className={link}>
+              Privacy
+            </Link>
+            <Link href="/terms" className={link}>
+              Terms
+            </Link>
           </nav>
         </div>
 

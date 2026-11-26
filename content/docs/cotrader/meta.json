@@ -3,6 +3,8 @@
   "pages": [
     "index",
     "safety",
+    "agents",
+    "account",
     "watching",
     "trades",
     "call-scorecard",
