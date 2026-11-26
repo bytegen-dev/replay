@@ -143,7 +143,7 @@ export function planRecapVideo(r: ApiResult, now: number, display: Display, hide
     scenes.push(figureScene("volume", "Total volume", mode(hide.volume), v.sol, v.usd === null ? null : known(v.usd, v.sol), false, { kind: "full" }, null, "plain", 3.5));
   }
 
-  scenes.push({ id: "outro", seconds: 3, label: "Replay", notes: ["A time machine for your money", "replay.bytegen.dev"] });
+  scenes.push({ id: "outro", seconds: 3, label: "Replay", notes: ["A time machine for your money", "replay.money"] });
   return scenes;
 }
 

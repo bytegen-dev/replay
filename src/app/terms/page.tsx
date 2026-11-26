@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMeta({ title: TITLE, fullTitle: `${TITLE} 
 
 export default function TermsPage() {
   return (
-    <LegalPage title={TITLE} updated="26 November 2026" intro="By using Replay or the CoTrader you agree to these terms. They are written to be read. If you do not agree, do not use them.">
+    <LegalPage title={TITLE} updated="26 November 2026" intro="By using Replay (replay.money) or the CoTrader (app.replay.money) you agree to these terms. They are written to be read. If you do not agree, do not use them.">
       <LegalSection title="What Replay is">
         <p>
           Replay shows what past prices say about money, and the CoTrader follows Solana wallets you choose against rules you set, and answers questions about them. They are information tools. <strong>They do not trade, hold or move your funds.</strong> There is no trading in the app.

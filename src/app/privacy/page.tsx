@@ -11,7 +11,7 @@ export const metadata: Metadata = pageMeta({ title: `${TITLE}: what Replay keeps
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title={TITLE} updated="26 November 2026" intro="Replay's tools work without an account, and keep almost nothing. The CoTrader needs an account, and keeps more. This page says what, in plain words. It covers replay.bytegen.dev and the CoTrader app.">
+    <LegalPage title={TITLE} updated="26 November 2026" intro="Replay's tools work without an account, and keep almost nothing. The CoTrader needs an account, and keeps more. This page says what, in plain words. It covers replay.money and the CoTrader app at app.replay.money.">
       <LegalSection title="What we never collect">
         <ul>
           <li>A private key, a seed phrase or a password. Nothing in Replay asks for one.</li>
