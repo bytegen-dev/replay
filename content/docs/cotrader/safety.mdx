@@ -32,13 +32,20 @@ Email and Google sign-in are provided by [Privy](https://www.privy.io), which al
 
 ## What it keeps
 
-- Your account: the wallet address you signed in with, and your plan.
+- Your account: the wallet address you signed in with, your plan, and the display name and picture you chose, if any.
 - The wallets you watch, the rules you set, and the alerts they raised.
+- Your CoTraders: each one's name, picture, tone and notes.
+- Your chats with them: the newest 200 messages for each CoTrader, until you clear the conversation or delete the CoTrader. See [your CoTraders](/docs/cotrader/agents).
+- If you connect your own model account, its key, stored sealed (encrypted) and used only for your chats.
 - For notifications, the address your browser gave for sending them, until you turn them off.
 - A session cookie that keeps you signed in. It is not readable by scripts on the page.
 - A count of recent requests per visitor, to stop abuse. The visitor is stored only as a hash.
 
 Your display settings (theme, currency, hide balances) are kept in your own browser and never sent to a server.
+
+## What the chat sends out
+
+To answer a question, the CoTrader sends the model provider your messages, its own name and notes, your display name, and the facts it looks up for you: your watched wallets and their names, positions, trades and alerts. On the shared model that is OpenRouter and the model's host; with your own account it is your provider. The model can only ask to read. It has no tool that moves, buys or sells anything. Do not put in a chat or in a CoTrader's notes anything you would not want that provider to see.
 
 ## What it never keeps
 
@@ -51,6 +58,10 @@ Your display settings (theme, currency, hide balances) are kept in your own brow
 - It will never ask you to send crypto to anyone to "verify" or "activate" anything.
 - Check the address bar before you sign in. The app you are using should be on the address you were given by Replay.
 - Nobody from Replay will message you first about your wallet.
+
+## Privacy and terms
+
+The full details are on the [privacy page](/privacy) and the [terms of service](/terms).
 
 ## Open source
 
