@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Chakra_Petch, JetBrains_Mono } from "next/font/google";
 import { AccessPanel } from "@/components/AccessPanel";
 import { SignInDialog } from "@/components/SignInDialog";
+import { SiteAnalytics } from "@/components/SiteAnalytics";
 import { BackgroundMotion } from "@/components/BackgroundMotion";
 import { FloatingScrollTop } from "@/components/FloatingScrollTop";
 import { GameDialog } from "@/components/GameDialog";
@@ -77,6 +78,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <GameDialog />
           <BackgroundMotion />
           <FloatingScrollTop />
+          <SiteAnalytics />
         </SettingsProvider>
       </body>
     </html>
