@@ -135,7 +135,7 @@ export default function LandingPage() {
             </p>
             <SpotlightText
               className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
-              text="Paste a Solana wallet to see what you missed. Or pick any stock, coin or currency and a date to see what a buy would be worth today."
+              text="See what your wallet missed, then let a CoTrader watch the next trade. Reads only, never trades."
             />
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <a href="#recap" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center gap-2.5 px-7 text-base font-bold">
