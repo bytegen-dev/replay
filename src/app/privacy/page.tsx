@@ -16,13 +16,16 @@ export default function PrivacyPage() {
         <ul>
           <li>A private key, a seed phrase or a password. Nothing in Replay asks for one.</li>
           <li>Anything that lets us move, send or sell your funds. The CoTrader only reads public blockchain data.</li>
-          <li>Advertising or tracking profiles. There are no ad trackers on the site.</li>
+          <li>Advertising or tracking profiles. There are no ad trackers on the site, and no cookies for counting visits.</li>
         </ul>
       </LegalSection>
 
       <LegalSection title="When you only use the tools">
         <p>
           The price tools (what-if, Timestamp, Recap) need no account. The tokens, tickers, dates and wallet addresses you type are sent to our server and to the price sources listed on the <Link href="/docs/data-sources">data sources</Link> page, only to answer your question. Your display settings, and a Tiingo key if you add one, stay in your own browser.
+        </p>
+        <p>
+          We count page views with <strong>Vercel Web Analytics</strong>: which pages are opened, from which site, in which country and on what kind of device. It uses no cookies and builds no profile of you. We cut each page address down before it is sent, so anything after a ? or # in a link, such as a wallet in a Recap link, is not included.
         </p>
         <p>To stop abuse we count recent requests per visitor. The visitor is stored only as a hash, not as an address.</p>
       </LegalSection>
@@ -48,7 +51,7 @@ export default function PrivacyPage() {
           <li><strong>Privy</strong> handles email, Google and X sign-in and creates the wallet linked to that login. Its key is held by Privy.</li>
           <li><strong>Helius</strong> reads the public history and balances of the wallets you watch. <strong>DexScreener, Pyth, Birdeye and GeckoTerminal</strong> give prices for tokens. These are public lookups of addresses and tokens.</li>
           <li><strong>The model behind the chat.</strong> To answer, your messages, the CoTrader&apos;s name and notes, your display name, and the facts it looks up for you (your watched wallets and their names, positions, trades and alerts) are sent to the model provider. On the shared model that is OpenRouter and the model&apos;s host. If you connect your own account, it goes to your provider instead, under their terms. Do not put anything in a chat or in a CoTrader&apos;s notes that you would not want that provider to see.</li>
-          <li><strong>Hosting and our database</strong> (Vercel and Neon) store and serve the data above.</li>
+          <li><strong>Hosting, page-view counts and our database</strong> (Vercel and Neon) store and serve the data above.</li>
         </ul>
         <p>We do not sell your data and do not share it for advertising.</p>
       </LegalSection>
