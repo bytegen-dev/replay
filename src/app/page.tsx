@@ -145,9 +145,6 @@ export default function LandingPage() {
               <a href="#cotrader" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
                 Meet the CoTrader
               </a>
-              <Link href="/docs" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
-                Read the docs
-              </Link>
             </div>
             <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
               Data from{" "}
