@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Bot, FlaskConical, ScanSearch, Wallet } from "lucide-react";
+import { BellRing, Bot, FlaskConical, MessagesSquare, ScanSearch, SlidersHorizontal, Wallet } from "lucide-react";
 import Link from "next/link";
 import { BandDots } from "@/components/landing/BandDots";
 import { Faq } from "@/components/landing/Faq";
@@ -18,7 +18,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { CURRENCIES } from "@/lib/fxCurrencies.ts";
 import { heroChecks } from "@/lib/landingData.ts";
 import { limitsFor } from "@/lib/limits.ts";
-import { DESCRIPTION, pageMeta, SITE_NAME, TAGLINE } from "@/lib/site.ts";
+import { APP_URL, DESCRIPTION, pageMeta, SITE_NAME, TAGLINE } from "@/lib/site.ts";
 
 const TITLE = `${SITE_NAME}: ${TAGLINE.toLowerCase()}`;
 
@@ -62,6 +62,21 @@ const faqs = (anon: number, user: number) => [
     a: "Each buy opens its own futures-style position, long or short, up to 100x. The model charges funding (10.95% a year by default) and a 0.045% fee each way, and closes a position when its margin runs out. It uses daily closes, so real trading can be harsher than the result shows.",
   },
   {
+    q: "What is the CoTrader?",
+    topic: "CoTrader",
+    a: "A watcher for your Solana wallets. You set the rules (a stop alert, a give-back alert, a daily profit target, a daily loss limit, a trim plan), and it tells you when one is met, so you do not have to check the chart every minute. You can also ask it about your wallets, positions, trades and alerts in plain words, and give each CoTrader its own name, picture and way of speaking. It lives at app.replay.money.",
+  },
+  {
+    q: "Does the CoTrader trade for me?",
+    topic: "CoTrader",
+    a: "No. It reads public blockchain data and tells you. It has no key to your wallet and no way to move, buy or sell anything. What it says is information, not financial advice.",
+  },
+  {
+    q: "What does the CoTrader cost?",
+    topic: "CoTrader",
+    a: "It is free to start. The chat has 10 free messages a day. Connect your own OpenRouter account to chat without that limit, and your provider bills you for what you use.",
+  },
+  {
     q: "Is it free?",
     topic: "Account",
     a: `Yes. Without an account you get ${anon} checks a day, and a free account raises that to ${user}.`,
@@ -69,7 +84,7 @@ const faqs = (anon: number, user: number) => [
   {
     q: "What is coming next?",
     topic: "Coming",
-    a: "Three things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. None of them is open yet.",
+    a: "The CoTrader is live at app.replay.money, and Telegram alerts for it are next. Three more things are being built on top of Replay: clean price data prepared for training and testing AI agents, paper trading so you can try a strategy with practice money first, and live trading, where you deposit stablecoins (USDC or USDG) and trade any asset or market, yourself or through an agent you give access to. None of those three is open yet.",
   },
   {
     q: "Do you keep my searches?",
@@ -127,9 +142,9 @@ export default function LandingPage() {
                 <ScanSearch className="size-5" aria-hidden />
                 Check your wallet
               </a>
-              <Link href="/docs" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
-                Read the docs
-              </Link>
+              <a href="#cotrader" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+                Meet the CoTrader
+              </a>
             </div>
             <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
               Data from{" "}
@@ -170,6 +185,42 @@ export default function LandingPage() {
               />
             </div>
           </div>
+        </section>
+
+        {/* The launch: the CoTrader is live. Said as what it does for you, and what it does not do. */}
+        <section id="cotrader" className={`${section} scroll-mt-20 py-10 sm:py-16`}>
+          <div className="flex max-w-3xl flex-col gap-4" data-reveal-on-scroll style={later()}>
+            <h2 className={h2}>Stop checking the chart every minute.</h2>
+            <SpotlightText
+              className="text-base leading-relaxed text-muted-foreground sm:text-lg"
+              text="The CoTrader is live. Teach it how you trade with rules and notes of your own, and it watches your Solana wallets for you, tells you when a rule is met, and answers questions about your positions in plain words."
+            />
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 pt-2">
+              <a href={APP_URL} className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center gap-2.5 px-7 text-base font-bold">
+                <Bot className="size-5" aria-hidden />
+                Open the CoTrader
+              </a>
+              <Link href="/docs/cotrader" className="text-sm text-muted-foreground underline underline-offset-4 transition-colors hover:text-foreground">
+                How it works
+              </Link>
+            </div>
+          </div>
+          <ul className="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-3">
+            {[
+              { Icon: SlidersHorizontal, t: "Your rules, not its opinions", d: "Set a stop alert, a give-back alert, a daily profit target, a daily loss limit and a trim plan for each wallet. The CoTrader holds you to them." },
+              { Icon: MessagesSquare, t: "Ask in plain words", d: "What does this wallet hold, what did each position cost, what changed today? It looks the numbers up and answers. Make up to five CoTraders, each with its own name and manner." },
+              { Icon: BellRing, t: "Alerts where you look", d: "When a rule is met you hear about it in the app, or as a notification on your device. Telegram alerts are next." },
+            ].map(({ Icon, t, d }, i) => (
+              <li key={t} className="tex-hover flex flex-col gap-3 border border-border bg-secondary p-5 transition-colors duration-300 hover:border-primary/50" data-reveal-on-scroll style={later(i * 120)}>
+                <Icon className="size-7 text-primary" strokeWidth={1.5} aria-hidden />
+                <h3 className="text-lg font-bold">{t}</h3>
+                <SpotlightText className="text-sm leading-relaxed text-muted-foreground" text={d} />
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 max-w-3xl text-sm leading-relaxed text-muted-foreground" data-reveal-on-scroll style={later()}>
+            It only reads and tells. It has no key to your wallet and cannot trade, buy or sell. Free to start, with 10 chat messages a day, or connect your own OpenRouter account to chat without that limit. Not financial advice.
+          </p>
         </section>
 
         {/* How it works. */}

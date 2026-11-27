@@ -30,3 +30,15 @@ export function pageMeta(o: { title: string; description: string; path: string; 
     twitter: { card: "summary_large_image", site: X_HANDLE, creator: X_HANDLE, title: o.title, description: o.description },
   };
 }
+
+/** Where the CoTrader app is when nothing is set. */
+export const DEFAULT_APP_URL = "https://app.replay.money";
+
+/** The address of the CoTrader app from what was set: an http or https address without a trailing slash, else the default. */
+export function appUrlFrom(raw: string | undefined): string {
+  const v = (raw ?? "").trim().replace(/\/+$/, "");
+  return /^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(v) ? v : DEFAULT_APP_URL;
+}
+
+/** The CoTrader app, a separate site from this one. Set NEXT_PUBLIC_APP_URL to change it. */
+export const APP_URL = appUrlFrom(process.env.NEXT_PUBLIC_APP_URL);
