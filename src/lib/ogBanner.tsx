@@ -61,7 +61,7 @@ function Chart({ check, w, h }: { check: DemoCheck; w: number; h: number }) {
   );
 }
 
-export function OgBanner({ headline, sub, body, card, footer, cta = "Join the waitlist" }: { headline: string[]; sub: string; body: string; card: OgCard; footer?: string; cta?: string }) {
+export function OgBanner({ headline, sub, body, card, footer, cta = "Try it free" }: { headline: string[]; sub: string; body: string; card: OgCard; footer?: string; cta?: string }) {
   const CARD_W = 520;
   const CARD_H = 470;
   return (

@@ -18,7 +18,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { CURRENCIES } from "@/lib/fxCurrencies.ts";
 import { heroChecks } from "@/lib/landingData.ts";
 import { limitsFor } from "@/lib/limits.ts";
-import { APP_URL, DESCRIPTION, pageMeta, SITE_NAME, TAGLINE } from "@/lib/site.ts";
+import { APP_URL, DESCRIPTION, HERO_DESCRIPTION, pageMeta, SITE_NAME, TAGLINE } from "@/lib/site.ts";
 
 const TITLE = `${SITE_NAME}: ${TAGLINE.toLowerCase()}`;
 
@@ -135,7 +135,7 @@ export default function LandingPage() {
             </p>
             <SpotlightText
               className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
-              text="See what your wallet missed, then let a CoTrader watch the next trade. Reads only, never trades."
+              text={HERO_DESCRIPTION}
             />
             <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               <a href="#recap" className="cut-btn cut-btn-solid inline-flex h-12 items-center justify-center gap-2.5 px-7 text-base font-bold">
