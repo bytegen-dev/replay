@@ -9,6 +9,8 @@ export const SITE_NAME = "Replay";
 export const TAGLINE = "A time machine for your money";
 /** The default description (search results, link previews). Under 160 characters. */
 export const DESCRIPTION = "See what a stock, coin or currency buy from the past would be worth today, or its price on any day. Real daily prices, no sign-up to try.";
+/** The line under the brand line on the landing page and the share image: what Replay does for you now. */
+export const HERO_DESCRIPTION = "See what your wallet missed, then let a CoTrader watch the next trade. Reads only, never trades.";
 /** The line the landing page and the share image open with. */
 export const BRAND_LINE = "You can't change the past. You can learn from it.";
 /** Where people find the project. */
